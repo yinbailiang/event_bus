@@ -396,6 +396,7 @@ async def test_graceful_shutdown_and_cleanup(event_bus: EventBus) -> None:
     assert event_bus.get_queue_size() == 0
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_long_running_stability(event_bus_factory: Callable[..., EventBus]) -> None:
     """长时间运行压力测试：验证无资源泄漏和队列溢出"""

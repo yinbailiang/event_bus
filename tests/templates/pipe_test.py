@@ -381,14 +381,6 @@ async def test_pipe_id_collision_prevention(event_bus: EventBus) -> None:
 # 边界条件测试
 # ------------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_send_unsupported_payload_type() -> None:
-    """虽然类型检查会在静态层面阻止，但运行时也应能处理非 BaseModel？"""
-    # 由于 send 注解为 BaseModel，传入非 BaseModel 在运行时不会有额外检查，
-    # 但这是 Python 动态性的体现。我们不测试违反类型契约的行为。
-    pass
-
-
-@pytest.mark.asyncio
 async def test_receive_after_remote_close_with_remaining_data(
     pipe_pair: tuple[Pipe, Pipe],
 ) -> None:

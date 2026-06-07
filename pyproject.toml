@@ -1,6 +1,31 @@
 [project]
 name = "event_bus"
 version = "1.0.0"
+description = "基于 asyncio 的轻量级事件总线，支持发布/订阅、正则匹配、背压控制与优雅停机"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "EventBus Authors" }
+]
+keywords = [
+    "event-bus",
+    "async",
+    "asyncio",
+    "pub-sub",
+    "publish-subscribe",
+    "event-driven",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Framework :: AsyncIO",
+]
 requires-python = ">=3.12"
 
 dependencies = [
@@ -12,11 +37,16 @@ dependencies = [
     "pydantic",
 ]
 
+[project.urls]
+Repository = "https://github.com/user/event_bus"
+
 [project.optional-dependencies]
-dev = [
-    "event_bus[test]"
-]
 test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-asyncio",
+]
+dev = [
     "pytest",
     "pytest-cov",
     "pytest-asyncio",
@@ -24,6 +54,10 @@ test = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+addopts = "-m 'not slow'"
+markers = [
+    "slow: long-running stress / stability tests",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]
