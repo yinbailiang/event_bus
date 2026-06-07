@@ -139,7 +139,7 @@ async def expect_pipe(
 | `bus_proxy` | `EventBus.Proxy` | 事件总线代理，用于监听请求和发送响应。 |
 | `req_event` | `str` | 期望监听的握手请求事件名。 |
 | `resp_event` | `str` | 用于回复握手结果的事件名。 |
-| `session_id` | `Optionale[str]` | 用于筛选的会话id，只响应指定会话id的请求 |
+| `session_id` | `Optional[str]` | 用于筛选的会话 id，只响应指定会话 id 的请求 |
 | `timeout` | `float` | 等待握手请求的超时时间（秒）。超时抛出 `PipeHandshakeError`。 |
 
 **Yields**  

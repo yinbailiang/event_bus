@@ -186,6 +186,6 @@ async def request(
 
 ## 完整示例
 
-参见 `src/tests/core/event_bus/templates/request_test.py`
+参见 `tests/templates/request_test.py`
 
 其中包含了正常请求、超时、取消、类型错误等场景的测试用例，可作为使用参考。

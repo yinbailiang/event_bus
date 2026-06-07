@@ -153,4 +153,4 @@ async with expect(bus_proxy, r"notify\..*") as future:
 
 ## 完整示例
 
-参考测试文件 `src/tests/core/event_bus/templates/expect_test.py`，其中包含了正常匹配、过滤器、超时、多模式、正则、异常传递等场景的完整用例。
+参考测试文件 `tests/templates/expect_test.py`，其中包含了正常匹配、过滤器、超时、多模式、正则、异常传递等场景的完整用例。

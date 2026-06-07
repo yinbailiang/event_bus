@@ -98,13 +98,6 @@ class InProcessPipe(Pipe):
         await self._queue.put(data)
 
     async def receive(self) -> BaseModel:
-        if self._queue.qsize() != 0:
-            data: BaseModel = await self._queue.get()
-            self._queue.task_done()
-            return data
-        if self._closed.is_set():
-            raise PipeClosedError("Pipe is closed")
-
         get_task: asyncio.Task[BaseModel] = asyncio.create_task(self._queue.get())
         wait_task: asyncio.Task[Literal[True]] = asyncio.create_task(self._closed.wait())
         done, _ = await asyncio.wait([get_task, wait_task], return_when=asyncio.FIRST_COMPLETED)

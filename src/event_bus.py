@@ -25,6 +25,13 @@ class EventDeclaration(ABC):
     name: ClassVar[str]
     payload_type: ClassVar[Optional[Type[BaseModel]]] = None
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if not hasattr(cls, 'name') or not isinstance(cls.name, str) or not cls.name.strip(): # type: ignore
+            raise TypeError(f"事件声明类 {cls.__name__} 必须定义非空的 `name` 属性")
+        if cls.payload_type is not None and not (isinstance(cls.payload_type, type) and issubclass(cls.payload_type, BaseModel)): # type: ignore
+            raise TypeError(f"事件声明类 {cls.__name__} 的 `payload_type` 必须是 BaseModel 子类或 None")
+
 class EventRegistry:
     """事件注册表"""
 
@@ -287,7 +294,7 @@ class EventBus:
             async with self._handler_semaphore: # 控制并发处理器数量，避免过载
                 async with asyncio.timeout(handler.handle_timeout):
                     await handler(bus_proxy, event)
-        except BaseException as e:
+        except Exception as e:
             if "EventBusErrorReporter" not in event.sources:
                 try:
                     await self._publish(
@@ -356,7 +363,7 @@ class EventBus:
                                 await task
                             except asyncio.CancelledError:
                                 pass
-            except BaseException as e:
+            except Exception as e:
                 logger.exception("Unexpected error in wait all task done")
                 raise e
 

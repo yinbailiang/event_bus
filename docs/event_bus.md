@@ -114,6 +114,7 @@ h_reg.register(MyHandler())
 
 async with EventBus(reg, h_reg) as bus:   # 上下文管理器自动启停
     await bus.proxy("cli").publish("my.event", {"message": "Hello"})
+    await asyncio.sleep(1)  # 等待处理器输出
 ```
 
 ### 正则订阅与链式发布
