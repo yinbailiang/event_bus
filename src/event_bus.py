@@ -8,6 +8,8 @@ from typing import Any, ClassVar, Dict, List, Optional, Set, Type, Pattern, Unio
 from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
 
+__version__ = "1.0.0"
+
 logger = logging.getLogger(__name__)
 
 class Event(BaseModel):
@@ -280,9 +282,16 @@ class EventBus:
         return self
 
     async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[BaseException], exc_tb: Optional[types.TracebackType]) -> Optional[bool]:
-        """异步上下文管理器出口"""
-        await self.stop()
-        return None
+        """异步上下文管理器出口，确保总线资源被释放且不吞没异常"""
+        try:
+            await self.stop()
+        except Exception as stop_err:
+            if exc_val is not None:
+                # 上下文体中已有异常——记录 stop 错误但不掩盖原始异常
+                logger.error(f"Error during EventBus shutdown (original exception will propagate): {stop_err}")
+            else:
+                raise
+        return None  # 不抑制上下文体中的异常
 
     def proxy(self, source: str, raw_event: Optional[Event] = None) -> Proxy:
         """创建一个事件总线代理实例，供事件处理器调用"""

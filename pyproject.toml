@@ -38,7 +38,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/user/event_bus"
+Repository = "https://github.com/yin_bailiang/event_bus"
 
 [project.optional-dependencies]
 test = [
