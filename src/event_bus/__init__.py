@@ -14,7 +14,7 @@ from .core import (
     TaskErrorEvent,
 )
 
-__all__ = [
+__all__: list[str] = [
     "__version__",
     "Event",
     "EventDeclaration",

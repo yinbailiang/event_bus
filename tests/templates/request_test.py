@@ -89,8 +89,8 @@ def mock_bus_proxy(event_registry: EventRegistry, handler_registry: EventHandler
 # ---------------------------------------------------------------------------
 async def trigger_response(handler_registry: EventHandlerRegistry, resp_event: str, payload: BaseModel) -> None:
     """手动触发已注册的响应处理器，模拟事件总线分发"""
-    handlers: List[EventHandler] = handler_registry.get_handlers(resp_event)
-    for handler in handlers:
+    handlers: List[tuple[str, EventHandler]] = handler_registry.get_handlers(resp_event)
+    for _, handler in handlers:
         # 构造一个模拟的 Event 和 Proxy
         event = Event(name=resp_event, data=payload)
         bus_proxy = MagicMock(spec=EventBus.Proxy)

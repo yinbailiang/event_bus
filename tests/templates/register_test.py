@@ -266,8 +266,8 @@ class TestModuleHandlerRegister:
         assert empty_handler_registry.get_handlers_count() == 1
         handlers = empty_handler_registry.get_handlers("test.event")
         assert len(handlers) == 1
-        assert isinstance(handlers[0], _SimpleHandler)
-        assert handlers[0].extra == "test"
+        assert isinstance(handlers[0][1], _SimpleHandler)
+        assert handlers[0][1].extra == "test"
 
     def test_register_all_handlers_passes_dependencies(
         self,
@@ -282,7 +282,7 @@ class TestModuleHandlerRegister:
         module_handlers.register_all_handlers(empty_handler_registry)
 
         handlers = empty_handler_registry.get_handlers("test.another")
-        assert cast(_AnotherHandler, handlers[0]).db is fake_db
+        assert cast(_AnotherHandler, handlers[0][1]).db is fake_db
 
     def test_register_all_handlers_multiple_handlers(
         self,
@@ -318,7 +318,7 @@ class TestModuleHandlerRegister:
         reg.register_all_handlers(empty_handler_registry)
 
         handlers = empty_handler_registry.get_handlers("test.event")
-        assert cast(_SimpleHandler, handlers[0]).extra == "default"
+        assert cast(_SimpleHandler, handlers[0][1]).extra == "default"
 
     def test_register_all_handlers_depends_factory_called_per_registration(
         self,
@@ -343,7 +343,7 @@ class TestModuleHandlerRegister:
         assert call_count == 2
         # 第二次调用时 extra 应为 "2"
         handlers = reg2.get_handlers("test.event")
-        assert cast(_SimpleHandler, handlers[0]).extra == "2"
+        assert cast(_SimpleHandler, handlers[0][1]).extra == "2"
 
     # ---- __repr__ ----
     def test_repr(self, module_handlers: ModuleHandlerRegister) -> None:

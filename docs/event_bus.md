@@ -247,7 +247,7 @@ class EventHandlerRegistry:
     def register(self, handler: EventHandler) -> str
     def unregister(self, handler_id: str) -> bool
     def get(self, handler_id: str) -> Optional[EventHandler]
-    def get_handlers(self, event_type: str) -> List[EventHandler]
+    def get_handlers(self, event_type: str) -> List[Tuple[str, EventHandler]]
     def get_handlers_count(self) -> int
 ```
 
@@ -256,7 +256,7 @@ class EventHandlerRegistry:
 | `register(handler)` | 注册处理器实例，返回唯一 handler ID（UUID hex）。 |
 | `unregister(handler_id)` | 注销处理器。返回 `True` 表示成功，`False` 表示 ID 不存在。 |
 | `get(handler_id)` | 按 ID 获取处理器实例。 |
-| `get_handlers(event_type)` | 获取所有订阅匹配 `event_type` 的处理器列表。 |
+| `get_handlers(event_type)` | 获取匹配 `event_type` 的 `(handler_id, handler)` 元组列表。 |
 | `get_handlers_count()` | 返回当前注册的处理器总数。 |
 
 ---

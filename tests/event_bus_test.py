@@ -285,11 +285,11 @@ async def publish_many(
 # 测试用例
 # ============================================================================
 @pytest.mark.asyncio
-async def test_high_concurrency_throughput(event_bus_factory: Callable[..., EventBus]) -> None:
+async def test_high_concurrency_throughput(event_bus_factory: Callable[..., EventBus], handler_registry: EventHandlerRegistry) -> None:
     """验证高并发下无事件丢失"""
     event_bus = event_bus_factory(max_queue_size=1024, max_handler_semaphore=256)
     handler = CountingHandler()
-    event_bus.register_handler(handler)
+    handler_registry.register(handler)
 
     N = 65536
     async with event_bus:
@@ -302,12 +302,12 @@ async def test_high_concurrency_throughput(event_bus_factory: Callable[..., Even
 
 
 @pytest.mark.asyncio
-async def test_backpressure_no_deadlock(event_bus_factory: Callable[..., EventBus]) -> None:
+async def test_backpressure_no_deadlock(event_bus_factory: Callable[..., EventBus], handler_registry: EventHandlerRegistry) -> None:
     """测试并发限流：当活跃 Handler 超过 Semaphore 限制时，新任务应等待"""
     # 构建具有较小 Semaphore 的总线
     bus = event_bus_factory(max_handler_semaphore=2)
     handler = ConcurrentTrackingHandler(subscriptions=["test.block"])
-    bus.register_handler(handler)
+    handler_registry.register(handler)
 
     N = 10
     async with bus:
@@ -328,12 +328,12 @@ async def test_backpressure_no_deadlock(event_bus_factory: Callable[..., EventBu
 
 
 @pytest.mark.asyncio
-async def test_error_isolation_and_propagation(event_bus: EventBus) -> None:
+async def test_error_isolation_and_propagation(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """验证单个 Handler 错误不影响其他 Handler，且错误被正确上报"""
     counter = CountingHandler()
     spy = ErrorSpyHandler()
-    event_bus.register_handler(counter)
-    event_bus.register_handler(spy)
+    handler_registry.register(counter)
+    handler_registry.register(spy)
 
     tasks: List[Awaitable[Any]] = await publish_many(
         event_bus,
@@ -349,12 +349,12 @@ async def test_error_isolation_and_propagation(event_bus: EventBus) -> None:
 
 
 @pytest.mark.asyncio
-async def test_handler_timeout_handling(event_bus: EventBus) -> None:
+async def test_handler_timeout_handling(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """验证 Handler 超时后触发错误事件，且不影响总线运行"""
     slow = SlowHandler(delay=0.5, subscriptions=["test.slow"])
     spy = ErrorSpyHandler()
-    event_bus.register_handler(slow)
-    event_bus.register_handler(spy)
+    handler_registry.register(slow)
+    handler_registry.register(spy)
 
     await event_bus.proxy("timeout_pub").publish("test.slow", None)
 
@@ -365,10 +365,10 @@ async def test_handler_timeout_handling(event_bus: EventBus) -> None:
 
 
 @pytest.mark.asyncio
-async def test_pattern_matching_routing(event_bus: EventBus) -> None:
+async def test_pattern_matching_routing(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """验证正则表达式订阅的路由正确性"""
     spy = PatternSpyHandler(pattern=r"user\..*")
-    event_bus.register_handler(spy)
+    handler_registry.register(spy)
 
     await event_bus.proxy("route_pub").publish("user.login", None)
     await event_bus.proxy("route_pub").publish("user.logout", None)
@@ -379,10 +379,10 @@ async def test_pattern_matching_routing(event_bus: EventBus) -> None:
 
 
 @pytest.mark.asyncio
-async def test_graceful_shutdown_and_cleanup(event_bus: EventBus) -> None:
+async def test_graceful_shutdown_and_cleanup(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """验证总线优雅停止后资源清理完全"""
     handler = CountingHandler()
-    event_bus.register_handler(handler)
+    handler_registry.register(handler)
 
     # 发布一个事件并等待处理
     await event_bus.proxy("shut_pub").publish("test.event", {"value": 1})
@@ -392,17 +392,17 @@ async def test_graceful_shutdown_and_cleanup(event_bus: EventBus) -> None:
     await event_bus.stop()
 
     assert not event_bus.is_running
-    assert event_bus.get_active_task_count() == 0
-    assert event_bus.get_queue_size() == 0
+    assert event_bus.active_task_count == 0
+    assert event_bus.queue_size == 0
 
 
 @pytest.mark.slow
 @pytest.mark.asyncio
-async def test_long_running_stability(event_bus_factory: Callable[..., EventBus]) -> None:
+async def test_long_running_stability(event_bus_factory: Callable[..., EventBus], handler_registry: EventHandlerRegistry) -> None:
     """长时间运行压力测试：验证无资源泄漏和队列溢出"""
     bus: EventBus = event_bus_factory(max_queue_size=10, max_handler_semaphore=25)
     handler = CountingHandler()
-    bus.register_handler(handler)
+    handler_registry.register(handler)
 
     duration = 10  # 秒
     rate = 512  # 每秒事件数
@@ -418,22 +418,22 @@ async def test_long_running_stability(event_bus_factory: Callable[..., EventBus]
             await asyncio.gather(*batch)
             await asyncio.sleep(1.0)
 
-            active = bus.get_active_task_count()
-            qsize = bus.get_queue_size()
+            active = bus.active_task_count
+            qsize = bus.queue_size
             assert active <= 25, f"任务泄漏: active={active}"
             assert qsize <= 10, f"队列溢出: qsize={qsize}"
 
     # 最终计数应接近期望值（允许少许误差）
     assert handler.count >= expected * 0.95
-    assert bus.get_active_task_count() == 0
+    assert bus.active_task_count == 0
 
 
 @pytest.mark.asyncio
-async def test_shutting_down_exception(event_bus: EventBus) -> None:
+async def test_shutting_down_exception(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """验证总线停止过程中新发布事件应抛出 BusShuttingDown 或 RuntimeError"""
     # 注册一个慢 Handler 使停止过程持续一段时间
     slow = SlowHandler(delay=2.0, subscriptions=["test.slow"])
-    event_bus.register_handler(slow)
+    handler_registry.register(slow)
 
     # 发布一个慢事件
     asyncio.create_task(event_bus.proxy("slow_pub").publish("test.slow", None))

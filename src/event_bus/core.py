@@ -3,12 +3,13 @@ import logging
 import re
 import types
 import uuid
+from collections import OrderedDict
 from datetime import datetime
 from typing import Any, ClassVar, Dict, List, Optional, Set, Type, Pattern, Union
 from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,8 @@ class EventDeclaration(ABC):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if not hasattr(cls, 'name') or not isinstance(cls.name, str) or not cls.name.strip(): # type: ignore
+        if not cls.name.strip():
             raise TypeError(f"事件声明类 {cls.__name__} 必须定义非空的 `name` 属性")
-        if cls.payload_type is not None and not (isinstance(cls.payload_type, type) and issubclass(cls.payload_type, BaseModel)): # type: ignore
-            raise TypeError(f"事件声明类 {cls.__name__} 的 `payload_type` 必须是 BaseModel 子类或 None")
 
 class EventRegistry:
     """事件注册表"""
@@ -75,8 +74,9 @@ class EventHandler(ABC):
 class EventHandlerRegistry:
     """事件处理器注册表，负责管理事件类型与处理器的映射关系"""
     
-    def __init__(self) -> None:
-        self.regex_cache: Dict[str, Pattern[str]] = {}
+    def __init__(self, regex_cache_maxsize: int = 256) -> None:
+        self._regex_cache: OrderedDict[str, Pattern[str]] = OrderedDict()
+        self._regex_cache_maxsize: int = regex_cache_maxsize
         self._handlers: Dict[str, EventHandler] = {}
 
     def register(self, handler: EventHandler) -> str:
@@ -96,24 +96,28 @@ class EventHandlerRegistry:
             return True
         return False
 
-    def get_handlers(self, event_type: str) -> List[EventHandler]:
-        """获取匹配事件类型的所有处理器实例"""
-        matched_handlers: List[EventHandler] = []
-        for _, handler in self._handlers.items():
+    def get_handlers(self, event_type: str) -> List[tuple[str, EventHandler]]:
+        """获取匹配事件类型的所有处理器实例及其注册ID"""
+        matched: List[tuple[str, EventHandler]] = []
+        for handler_id, handler in self._handlers.items():
             for pattern in handler.subscriptions:
                 if self._match_pattern(event_type, pattern):
-                    matched_handlers.append(handler)
+                    matched.append((handler_id, handler))
                     break
-        return matched_handlers
+        return matched
     
     def get_handlers_count(self) -> int:
         return len(self._handlers)
 
     def _match_pattern(self, event_type: str, pattern: str) -> bool:
-        """使用正则表达式匹配事件类型"""
-        if pattern not in self.regex_cache:
-            self.regex_cache[pattern] = re.compile(pattern)
-        return re.fullmatch(self.regex_cache[pattern], event_type) is not None
+        """使用正则表达式匹配事件类型（LRU 缓存编译结果，防止无限膨胀）"""
+        if pattern not in self._regex_cache:
+            if len(self._regex_cache) >= self._regex_cache_maxsize:
+                self._regex_cache.popitem(last=False)  # 淘汰最旧条目
+            self._regex_cache[pattern] = re.compile(pattern)
+        else:
+            self._regex_cache.move_to_end(pattern)  # 命中则标记为最近使用
+        return re.fullmatch(self._regex_cache[pattern], event_type) is not None
 
 class BusShuttingDown(Exception):
     """总线正在停止，拒绝新发布，请求处理器执行清理并退出"""
@@ -124,13 +128,21 @@ class ShutdownEvent(EventDeclaration):
 
 class TaskErrorPayload(BaseModel):
     error_event: Event = Field(description="发生异常的事件")
-    handler_name: str = Field(description="发生异常的处理器")
+    handler_id: Optional[str] = Field(default=None, description="发生异常的处理器内部ID")
+    handler_name: str = Field(description="发生异常的处理器类名")
     error_type: str = Field(description="异常类型")
     error_message: str = Field(description="异常消息")
 
 class TaskErrorEvent(EventDeclaration):
     name = "event_bus.__task_error__"
     payload_type = TaskErrorPayload
+
+class ShutdownConfig(BaseModel):
+    """总线停机配置"""
+    queue_timeout_min: float = Field(default=1.0, description="队列排空最小等待时间（秒）")
+    queue_timeout_max: float = Field(default=15.0, description="队列排空最大等待时间（秒）")
+    tasks_timeout: float = Field(default=15.0, description="活跃任务完成等待时间（秒）")
+    avg_wait_time: float = Field(default=0.05, description="每个事件平均处理时间估算（秒）")
 
 class EventBus:
     """
@@ -140,12 +152,6 @@ class EventBus:
     event_bus.__task_error__ 任务执行失败时发送，载荷为 TaskErrorPayload，发布者为 EventBusErrorReporter
     event_bus.__shutdown__ 总线将要关闭时发送, 无载荷, 发布者为 EventBus
     """
-
-    events_avg_wait_time: ClassVar[float] = 0.05
-    events_wait_timeout_min: ClassVar[float] = 1.0
-    events_wait_timeout_max: ClassVar[float] = 15.0
-
-    tasks_wait_timeout: ClassVar[float] = 15.0
 
     class Proxy:
         """事件总线代理，提供给处理器调用以访问总线功能"""
@@ -170,7 +176,7 @@ class EventBus:
             return self._bus
 
 
-    def __init__(self, event_registry: EventRegistry, handler_registry: EventHandlerRegistry, max_queue_size: int = 1024, max_handler_semaphore: int = 256) -> None:
+    def __init__(self, event_registry: EventRegistry, handler_registry: EventHandlerRegistry, max_queue_size: int = 1024, max_handler_semaphore: int = 256, shutdown: ShutdownConfig = ShutdownConfig()) -> None:
         self._events: EventRegistry = event_registry
         self._handlers: EventHandlerRegistry = handler_registry
         
@@ -187,6 +193,8 @@ class EventBus:
 
         self._handler_semaphore = asyncio.Semaphore(max_handler_semaphore)
         self._active_tasks: Set[asyncio.Task[Any]] = set()
+
+        self._shutdown: ShutdownConfig = shutdown
 
     async def _publish(self, name: str, source: str, data: Optional[Union[Dict[str, Any], BaseModel]] = None, old_event: Optional[Event] = None) -> None:
         """发布事件到总线"""
@@ -258,7 +266,7 @@ class EventBus:
             self._enable_publish.clear() # 阻止新消息入队
 
             try:
-                timeout: float = max(self.events_wait_timeout_min,min(self.events_wait_timeout_max,self._queue.qsize() * self.events_avg_wait_time))
+                timeout: float = max(self._shutdown.queue_timeout_min,min(self._shutdown.queue_timeout_max,self._queue.qsize() * self._shutdown.avg_wait_time))
                 await asyncio.wait_for(self._queue.join(), timeout=timeout) # 等待队列处理完毕，避免丢失事件
             except asyncio.TimeoutError:
                 logger.warning("Timeout while waiting for event queue to drain during shutdown")
@@ -297,7 +305,7 @@ class EventBus:
         """创建一个事件总线代理实例，供事件处理器调用"""
         return EventBus.Proxy(self, source, raw_event)
 
-    async def _handler_wrapper(self, handler: EventHandler, bus_proxy: 'EventBus.Proxy', event: Event) -> None:
+    async def _handler_wrapper(self, handler: EventHandler, handler_id: str, bus_proxy: 'EventBus.Proxy', event: Event) -> None:
         """事件处理器包装器"""
         try:
             async with self._handler_semaphore: # 控制并发处理器数量，避免过载
@@ -311,6 +319,7 @@ class EventBus:
                         source="EventBusErrorReporter", 
                         data=TaskErrorPayload(
                             error_event=event, 
+                            handler_id=handler_id,
                             handler_name=handler.__class__.__name__, 
                             error_type=type(e).__name__, 
                             error_message=str(e) 
@@ -330,8 +339,8 @@ class EventBus:
             event: Optional[Event] = None
             try:
                 event = await self._queue.get()
-                for handler in self._handlers.get_handlers(event.name):
-                    self._register_task(asyncio.create_task(self._handler_wrapper(handler, self.proxy(handler.__class__.__name__, event), event)))
+                for handler_id, handler in self._handlers.get_handlers(event.name):
+                    self._register_task(asyncio.create_task(self._handler_wrapper(handler, handler_id, self.proxy(handler.__class__.__name__, event), event)))
             except Exception:
                 logger.exception("Unexpected error in dispatch loop")
             finally:
@@ -361,7 +370,7 @@ class EventBus:
         if self._active_tasks:
             try:
                 logger.info(f"Waiting for {len(self._active_tasks)} active handler tasks to complete...")
-                done, pending = await asyncio.wait(self._active_tasks.copy(), return_when=asyncio.ALL_COMPLETED, timeout=self.tasks_wait_timeout)
+                done, pending = await asyncio.wait(self._active_tasks.copy(), return_when=asyncio.ALL_COMPLETED, timeout=self._shutdown.tasks_timeout)
                 logger.info(f"All handler tasks completed. Total: {len(done)}")
                 if pending:
                     logger.warning(f"Timeout: {len(pending)} tasks pending, cancelling...")
@@ -380,6 +389,7 @@ class EventBus:
     def is_running(self) -> bool: return self._running.is_set()
     @property
     def is_publishing_enabled(self) -> bool: return self._enable_publish.is_set()
-    def get_active_task_count(self) -> int: return len(self._active_tasks)
-    def get_queue_size(self) -> int: return self._queue.qsize()
-    def register_handler(self, handler: EventHandler) -> str: return self._handlers.register(handler)
+    @property
+    def active_task_count(self) -> int: return len(self._active_tasks)
+    @property
+    def queue_size(self) -> int: return self._queue.qsize()
