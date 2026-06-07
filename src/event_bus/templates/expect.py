@@ -13,7 +13,7 @@ from typing import (
 import asyncio
 
 from pydantic import BaseModel
-from event_bus import (
+from .. import (
     EventBus,
     EventHandlerRegistry,
     EventHandler,

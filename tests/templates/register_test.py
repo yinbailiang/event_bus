@@ -10,7 +10,7 @@ from event_bus import (
     EventHandlerRegistry,
     EventRegistry
 )
-from templates.register import ModuleEventRegister, ModuleHandlerRegister
+from event_bus.templates.register import ModuleEventRegister, ModuleHandlerRegister
 
 
 # ============================================================================

@@ -5,11 +5,9 @@ from typing import Dict, Any, Optional, Type, cast
 
 from pydantic import BaseModel, Field
 
-from event_bus import EventDeclaration
+from .. import EventDeclaration, EventBus, Event
 
 from .expect import expect
-
-from event_bus import EventBus, Event
 
 logger = logging.getLogger(__name__)
 

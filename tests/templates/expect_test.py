@@ -12,7 +12,7 @@ from event_bus import (
     EventRegistry,
     Event,
 )
-from templates.expect import expect, OneShotEventHandler
+from event_bus.templates.expect import expect, OneShotEventHandler
 
 
 # ---------------------------------------------------------------------------

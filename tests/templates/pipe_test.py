@@ -5,7 +5,7 @@ import pytest
 from pydantic import BaseModel
 
 from event_bus import EventBus, EventDeclaration, EventRegistry, EventHandlerRegistry
-from templates.pipe import (
+from event_bus.templates.pipe import (
     InProcessPipe,
     Pipe,
     PipeRegistry,

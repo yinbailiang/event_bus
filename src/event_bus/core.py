@@ -8,7 +8,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Set, Type, Pattern, Unio
 from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 logger = logging.getLogger(__name__)
 

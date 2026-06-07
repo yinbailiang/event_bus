@@ -1,5 +1,5 @@
 from typing import Any, Callable, Dict, Set, Type, TypeVar, Tuple, List
-from event_bus import EventDeclaration, EventHandler, EventHandlerRegistry, EventRegistry
+from .. import EventDeclaration, EventHandler, EventHandlerRegistry, EventRegistry
 
 EventDeclT = TypeVar('EventDeclT', bound=Type[EventDeclaration])
 class ModuleEventRegister:

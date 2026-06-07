@@ -39,8 +39,8 @@
 
 ```python
 from pydantic import BaseModel, Field
-from core.event_bus import EventDeclaration
-from core.event_bus.templates.request import RequestProtocol, ResponseProtocol
+from event_bus import EventDeclaration
+from event_bus.templates.request import RequestProtocol, ResponseProtocol
 
 # 定义负载
 class GetUserRequest(RequestProtocol):
@@ -103,7 +103,7 @@ class GetUserHandler(EventHandler):
 客户端通过 `request` 函数发起调用，等待响应。
 
 ```python
-from core.event_bus.templates.request import request
+from event_bus.templates.request import request
 
 # 假设已获得 EventBus.Proxy 实例（通常由总线注入或创建）
 proxy = bus.proxy(source="UserServiceClient")

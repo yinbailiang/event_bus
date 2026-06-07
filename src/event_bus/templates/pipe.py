@@ -8,7 +8,7 @@ from typing import AsyncIterator, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from event_bus import EventBus, Event
+from .. import EventBus, Event
 from .expect import expect
 from .request import RequestProtocol, ResponseProtocol, request
 

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import BaseModel, Field
 
-from templates.request import (
+from event_bus.templates.request import (
     request,
     RequestProtocol,
     ResponseProtocol,
