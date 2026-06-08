@@ -1,7 +1,8 @@
 """event_bus - 基于 asyncio 的轻量级事件总线"""
 
+__version__ = "1.2.0"
+
 from .core import (
-    __version__,
     Event,
     EventDeclaration,
     EventRegistry,

@@ -9,8 +9,6 @@ from typing import Any, ClassVar, Dict, List, Optional, Set, Type, Pattern, Unio
 from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
 
-__version__ = "1.2.0"
-
 logger = logging.getLogger(__name__)
 
 class Event(BaseModel):

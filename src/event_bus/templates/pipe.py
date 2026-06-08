@@ -147,7 +147,7 @@ async def open_pipe(
 ) -> AsyncIterator[Pipe]:
     registry: PipeRegistry = await PipeRegistry.get_instance()
     session_id = session_id or uuid.uuid4().hex
-    pipe_id: str = session_id
+    pipe_id: str = uuid.uuid4().hex
     pipe: Pipe = pipe_type(maxsize=maxsize)
 
     # 将管道注册到全局表
