@@ -230,7 +230,7 @@ class EventHandler(ABC):
 
 | 参数 / 方法 | 说明 |
 | - | - |
-| `subscriptions` | 订阅的事件名模式列表，支持正则表达式。如 `[r"user\..*"]` 匹配所有 `user.*` 事件。 |
+| `subscriptions` | 订阅的事件名模式列表，正则表达式。如 `["user\..*"]` 匹配所有 `user.*` 事件。 |
 | `handle_timeout` | 单次 `handle` 调用的超时时间（秒）。`None` 表示无限等待。默认 `1.0`。 |
 | `__call__` | 总线内部入口，自动解包 `Event` 后调用 `handle(payload, bus_proxy, raw_event)`。 |
 | `handle(payload, bus_proxy, raw_event)` | **子类必须实现**。`payload` 为已解包的负载（可能为 `None`）。`bus_proxy` 提供受限的总线访问。`raw_event` 为完整事件对象。 |
@@ -358,8 +358,6 @@ class Proxy:
     def handlers_registry(self) -> EventHandlerRegistry
     @property
     def events_registry(self) -> EventRegistry
-    @property
-    def bus(self) -> EventBus
 ```
 
 | 成员 | 说明 |
@@ -367,7 +365,6 @@ class Proxy:
 | `publish(name, data=None)` | 发布一个事件。`data` 可为字典或 Pydantic 模型实例。总线未运行时抛 `RuntimeError`，停止中抛 `BusShuttingDown`，未知事件抛 `ValueError`，负载类型不匹配抛 `TypeError`。 |
 | `handlers_registry` | 只读访问处理器注册表。 |
 | `events_registry` | 只读访问事件注册表。 |
-| `bus` | 只读访问总线实例。 |
 
 ---
 
