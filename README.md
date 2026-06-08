@@ -19,7 +19,7 @@
 ## 📦 安装
 
 ```bash
-pip install event_bus
+pip install git+https://github.com/yinbailiang/event_bus.git
 ```
 
 或从源码安装：
