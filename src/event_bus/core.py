@@ -66,8 +66,7 @@ class EventHandler(ABC):
         await self.handle(event.data, bus_proxy, event)
     
     @abstractmethod
-    async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
-        pass
+    async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None: pass
 
 class EventHandlerRegistry:
     """事件处理器注册表，负责管理事件类型与处理器的映射关系"""
@@ -103,9 +102,6 @@ class EventHandlerRegistry:
                     matched.append((handler_id, handler))
                     break
         return matched
-    
-    def get_handlers_count(self) -> int:
-        return len(self._handlers)
 
     def _match_pattern(self, event_type: str, pattern: str) -> bool:
         """使用正则表达式匹配事件类型（LRU 缓存编译结果，防止无限膨胀）"""
@@ -116,6 +112,23 @@ class EventHandlerRegistry:
         else:
             self._regex_cache.move_to_end(pattern)  # 命中则标记为最近使用
         return re.fullmatch(self._regex_cache[pattern], event_type) is not None
+    
+    @property
+    def handlers_count(self) -> int:
+        return len(self._handlers)
+
+    @property
+    def all_handlers(self) -> Dict[str, EventHandler]:
+        """获取所有注册的事件处理器实例"""
+        return self._handlers.copy()
+    
+    @property
+    def regex_cache_info(self) -> Dict[str, Any]:
+        """获取正则表达式缓存的当前状态"""
+        return {
+            "size": len(self._regex_cache),
+            "max_size": self._regex_cache_maxsize,
+        }
 
 class BusShuttingDown(Exception):
     """总线正在停止，拒绝新发布，请求处理器执行清理并退出"""
@@ -168,11 +181,6 @@ class EventBus:
         @property
         def events_registry(self) -> EventRegistry:
             return self._bus._events
-        
-        @property
-        def bus(self) -> 'EventBus':
-            return self._bus
-
 
     def __init__(self, event_registry: EventRegistry, handler_registry: EventHandlerRegistry, max_queue_size: int = 1024, max_handler_semaphore: int = 256, shutdown: ShutdownConfig = ShutdownConfig()) -> None:
         self._events: EventRegistry = event_registry
@@ -269,8 +277,6 @@ class EventBus:
             except asyncio.TimeoutError:
                 logger.warning("Timeout while waiting for event queue to drain during shutdown")
 
-
-            self._running.clear()
             if self._dispatch_task:
                 self._dispatch_task.cancel()
                 try:
@@ -279,7 +285,8 @@ class EventBus:
                     pass
 
             await self._wait_all_tasks_done() # 等待所有处理器任务完成
-        
+            
+            self._running.clear()
             logger.info("EventBus stopped")
     
     async def __aenter__(self) -> "EventBus":
@@ -293,7 +300,6 @@ class EventBus:
             await self.stop()
         except Exception as stop_err:
             if exc_val is not None:
-                # 上下文体中已有异常——记录 stop 错误但不掩盖原始异常
                 logger.error(f"Error during EventBus shutdown (original exception will propagate): {stop_err}")
             else:
                 raise

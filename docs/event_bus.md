@@ -243,21 +243,30 @@ class EventHandler(ABC):
 
 ```python
 class EventHandlerRegistry:
-    def __init__(self) -> None
+    def __init__(self, regex_cache_maxsize: int = 256) -> None
     def register(self, handler: EventHandler) -> str
     def unregister(self, handler_id: str) -> bool
     def get(self, handler_id: str) -> Optional[EventHandler]
-    def get_handlers(self, event_type: str) -> List[Tuple[str, EventHandler]]
-    def get_handlers_count(self) -> int
+    def get_handlers(self, event_type: str) -> List[tuple[str, EventHandler]]
+
+    @property
+    def handlers_count(self) -> int
+    @property
+    def all_handlers(self) -> Dict[str, EventHandler]
+    @property
+    def regex_cache_info(self) -> Dict[str, Any]
 ```
 
-| 方法 | 说明 |
+| 方法 / 属性 | 说明 |
 | - | - |
+| `__init__(regex_cache_maxsize=256)` | 构造注册表。`regex_cache_maxsize` 限制正则编译缓存条目数，超出后 LRU 淘汰。 |
 | `register(handler)` | 注册处理器实例，返回唯一 handler ID（UUID hex）。 |
 | `unregister(handler_id)` | 注销处理器。返回 `True` 表示成功，`False` 表示 ID 不存在。 |
 | `get(handler_id)` | 按 ID 获取处理器实例。 |
 | `get_handlers(event_type)` | 获取匹配 `event_type` 的 `(handler_id, handler)` 元组列表。 |
-| `get_handlers_count()` | 返回当前注册的处理器总数。 |
+| `handlers_count` | （属性）当前注册的处理器总数。 |
+| `all_handlers` | （属性）返回所有注册处理器的副本 `Dict[str, EventHandler]`。 |
+| `regex_cache_info` | （属性）返回正则缓存状态 `{"size": int, "max_size": int}`。 |
 
 ---
 
@@ -267,18 +276,13 @@ class EventHandlerRegistry:
 
 ```python
 class EventBus:
-    # 类变量（所有实例共享）
-    events_avg_wait_time: ClassVar[float] = 0.05
-    events_wait_timeout_min: ClassVar[float] = 1.0
-    events_wait_timeout_max: ClassVar[float] = 15.0
-    tasks_wait_timeout: ClassVar[float] = 15.0
-
     def __init__(
         self,
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
         max_queue_size: int = 1024,
-        max_handler_semaphore: int = 256
+        max_handler_semaphore: int = 256,
+        shutdown: ShutdownConfig = ShutdownConfig()
     ) -> None
 
     # 生命周期
@@ -290,16 +294,15 @@ class EventBus:
     # 创建代理
     def proxy(self, source: str, raw_event: Optional[Event] = None) -> Proxy
 
-    # 便捷方法
-    def register_handler(self, handler: EventHandler) -> str
-
     # 可观测性
     @property
     def is_running(self) -> bool
     @property
     def is_publishing_enabled(self) -> bool
-    def get_active_task_count(self) -> int
-    def get_queue_size(self) -> int
+    @property
+    def active_task_count(self) -> int
+    @property
+    def queue_size(self) -> int
 ```
 
 **构造参数：**
@@ -310,6 +313,7 @@ class EventBus:
 | `handler_registry` | `EventHandlerRegistry` | (必需) | 处理器注册表实例。 |
 | `max_queue_size` | `int` | `1024` | 事件队列最大容量，超出后 `put` 阻塞。 |
 | `max_handler_semaphore` | `int` | `256` | 最大并发处理器数量（信号量）。 |
+| `shutdown` | `ShutdownConfig` | `ShutdownConfig()` | 停机行为配置，参见 [ShutdownConfig](#shutdownconfig)。 |
 
 构造时自动注册 `ShutdownEvent` 和 `TaskErrorEvent`（若注册表中不存在）。
 
@@ -329,12 +333,12 @@ class EventBus:
 
 **可观测性：**
 
-| 属性 / 方法 | 类型 | 说明 |
+| 属性 | 类型 | 说明 |
 | - | - | - |
 | `is_running` | `bool` | 总线是否在运行。 |
 | `is_publishing_enabled` | `bool` | 是否允许发布新事件（停止过程中为 `False`）。 |
-| `get_active_task_count()` | `int` | 当前活跃的处理器任务数。 |
-| `get_queue_size()` | `int` | 事件队列中待处理的事件数。 |
+| `active_task_count` | `int` | 当前活跃的处理器任务数。 |
+| `queue_size` | `int` | 事件队列中待处理的事件数。 |
 
 ---
 
@@ -367,6 +371,29 @@ class Proxy:
 
 ---
 
+### ShutdownConfig
+
+总线停机行为配置，用于控制优雅停止过程中的超时参数。
+
+```python
+class ShutdownConfig(BaseModel):
+    queue_timeout_min: float = 1.0
+    queue_timeout_max: float = 15.0
+    tasks_timeout: float = 15.0
+    avg_wait_time: float = 0.05
+```
+
+| 字段 | 类型 | 默认值 | 说明 |
+| - | - | - | - |
+| `queue_timeout_min` | `float` | `1.0` | 队列排空最小等待时间（秒）。 |
+| `queue_timeout_max` | `float` | `15.0` | 队列排空最大等待时间（秒）。 |
+| `tasks_timeout` | `float` | `15.0` | 活跃处理器任务完成等待时间（秒）。 |
+| `avg_wait_time` | `float` | `0.05` | 每个事件平均处理时间估算（秒），用于动态计算队列排空超时。 |
+
+实际队列排空超时 = `max(queue_timeout_min, min(queue_timeout_max, queue_size × avg_wait_time))`。
+
+---
+
 ### 异常
 
 | 异常类 | 说明 |
@@ -387,6 +414,7 @@ class Proxy:
 | 字段 | 类型 | 说明 |
 | - | - | - |
 | `error_event` | `Event` | 触发异常的事件实例。 |
+| `handler_id` | `Optional[str]` | 发生异常的处理器内部注册 ID。 |
 | `handler_name` | `str` | 发生异常的处理器类名。 |
 | `error_type` | `str` | 异常类型名（如 `"ValueError"`）。 |
 | `error_message` | `str` | 异常消息。 |

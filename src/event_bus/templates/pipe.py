@@ -22,7 +22,6 @@ class Pipe(ABC):
 
     def __init__(self, maxsize: Optional[int] = None) -> None:
         super().__init__()
-        pass
 
     async def __aenter__(self) -> "Pipe":
         await self.open()

@@ -3,7 +3,7 @@ import time
 import pytest
 import logging
 from typing import List, Dict, Optional, Type, Any, Callable, Awaitable
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from event_bus import (
     EventBus,
@@ -16,6 +16,7 @@ from event_bus import (
     TaskErrorEvent,
     BusShuttingDown,
 )
+from event_bus.core import ShutdownConfig
 
 # 抑制日志噪音
 logging.getLogger("core.event_bus").setLevel(logging.WARNING)
@@ -285,6 +286,108 @@ async def publish_many(
 # 测试用例
 # ============================================================================
 @pytest.mark.asyncio
+async def test_empty_event_name():
+    """验证定义空事件名时抛出 TypeError"""
+    with pytest.raises(TypeError):
+        class EmptyNameEvent(EventDeclaration): # pyright: ignore[reportUnusedClass]
+            name = ""
+
+@pytest.mark.asyncio
+async def test_event_register_crud(empty_event_registry: EventRegistry):
+    """测试事件注册表的增删查功能"""
+    class SampleEvent(EventDeclaration):
+        name = "sample.event"
+
+    empty_event_registry.register(SampleEvent)
+    assert empty_event_registry.get(SampleEvent.name) == SampleEvent
+
+    empty_event_registry.unregister(SampleEvent.name)
+    assert empty_event_registry.get(SampleEvent.name) is None
+
+@pytest.mark.asyncio
+async def test_handler_register_crud(handler_registry: EventHandlerRegistry):
+    """测试 Handler 注册表的增删查功能"""
+    class SampleHandler(EventHandler):
+        def __init__(self):
+            super().__init__(["sample.event"])
+
+        async def handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event) -> None:
+            pass
+
+    handler = SampleHandler()
+    id = handler_registry.register(handler)
+    assert handler_registry.get_handlers("sample.event") == [(id, handler)]
+    assert handler_registry.get_handlers("nonexistent.event") == []
+    assert handler_registry.handlers_count == 1
+    assert handler_registry.all_handlers == {id: handler}
+    assert handler_registry.get(id) == handler
+
+    assert handler_registry.unregister(id) == True
+    assert handler_registry.get(id) == None
+    assert handler_registry.get_handlers("sample.event") == []
+    assert handler_registry.handlers_count == 0
+
+    assert handler_registry.unregister("invalid_id") == False
+
+@pytest.mark.asyncio
+async def test_handler_pattern_matching(handler_registry: EventHandlerRegistry):
+    """测试 Handler 的正则表达式订阅功能"""
+    class PatternHandler(EventHandler):
+        def __init__(self):
+            super().__init__(["user\\..*"])
+
+        async def handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event) -> None:
+            pass
+
+    handler = PatternHandler()
+    id = handler_registry.register(handler)
+
+    assert handler_registry.get_handlers("user.login") == [(id, handler)]
+    assert handler_registry.get_handlers("user.logout") == [(id, handler)]
+    assert handler_registry.get_handlers("admin.login") == []
+
+@pytest.mark.asyncio
+async def test_unknown_event_publish(event_bus: EventBus):
+    """验证发布未注册事件时抛出 ValueError"""
+    with pytest.raises(ValueError):
+        await event_bus.proxy("test_pub").publish("unknown.event", None)
+
+@pytest.mark.asyncio
+async def test_payload_check(event_bus: EventBus):
+    """验证发布事件时负载类型检查功能"""
+
+    # 声明需要负载但未提供
+    with pytest.raises(ValueError):
+        await event_bus.proxy("test_pub").publish("test.event", None)
+
+    # 声明需要负载但提供了错误负载
+    with pytest.raises(ValidationError):
+        await event_bus.proxy("test_pub").publish("test.event", {"value": "not an int"})
+
+    class ErrorPayload(BaseModel): pass 
+
+    # 声明需要负载且提供了错误BaseModel负载
+    with pytest.raises(TypeError):
+        await event_bus.proxy("test_pub").publish("test.event", ErrorPayload())
+
+    # 声明不需要负载但提供了负载
+    with pytest.raises(ValueError):
+        await event_bus.proxy("test_pub").publish("test.slow", {"unexpected": "data"})
+
+@pytest.mark.asyncio
+async def test_double_start_stop(event_bus_factory: Callable[..., EventBus]):
+    """验证重复启动或停止幂等"""
+    bus = event_bus_factory()
+    await bus.start()
+    assert bus.is_running
+    await bus.start()
+    assert bus.is_running
+    await bus.stop()
+    assert not bus.is_running
+    await bus.stop()
+    assert not bus.is_running
+
+@pytest.mark.asyncio
 async def test_high_concurrency_throughput(event_bus_factory: Callable[..., EventBus], handler_registry: EventHandlerRegistry) -> None:
     """验证高并发下无事件丢失"""
     event_bus = event_bus_factory(max_queue_size=1024, max_handler_semaphore=256)
@@ -396,6 +499,63 @@ async def test_graceful_shutdown_and_cleanup(event_bus: EventBus, handler_regist
     assert event_bus.queue_size == 0
 
 
+@pytest.mark.asyncio
+async def test_regex_cache_lru_eviction(handler_registry: EventHandlerRegistry) -> None:
+    """正则缓存达到上限时应淘汰最旧条目（LRU 淘汰 + move_to_end 刷新）"""
+    # 构造一个小缓存（maxsize=2），方便触发淘汰
+    small_registry = EventHandlerRegistry(regex_cache_maxsize=2)
+
+    class PatternHandler(EventHandler):
+        def __init__(self, pattern: str):
+            super().__init__([pattern])
+
+        async def handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event) -> None:
+            pass
+
+    # 注册 3 个不同正则 pattern 的 handler，触发 LRU 淘汰
+    small_registry.register(PatternHandler(r"user\..*"))
+    small_registry.register(PatternHandler(r"admin\..*"))
+    small_registry.register(PatternHandler(r"order\..*"))  # 此时应淘汰 user\..*
+
+    # 验证缓存上限
+    info = small_registry.regex_cache_info
+    assert info["size"] <= info["max_size"]
+
+    # 重新查询 user\..* —— 缓存未命中，应重新编译
+    small_registry.get_handlers("user.login")
+    info = small_registry.regex_cache_info
+    assert info["size"] <= info["max_size"]
+
+
+@pytest.mark.asyncio
+async def test_shutdown_cancels_pending_tasks(
+    handler_registry: EventHandlerRegistry,
+    base_event_registry: EventRegistry,
+) -> None:
+    """关闭时若 handler 执行超时，应取消 pending 任务并完成关闭"""
+    bus = EventBus(
+        base_event_registry,
+        handler_registry,
+        max_queue_size=10,
+        max_handler_semaphore=2,
+        shutdown=ShutdownConfig(tasks_timeout=0.3),
+    )
+    handler = BlockingHandler(subscriptions=["test.block"])
+    handler_registry.register(handler)
+
+    async with bus:
+        # 发布一个会永久阻塞的事件
+        await bus.proxy("test").publish("test.block", None)
+        await handler.wait_started()
+
+        # async with 退出时会调用 bus.stop()，
+        # _wait_all_tasks_done 等待 tasks_timeout 后应取消 pending 任务
+
+    # 总线已停止，pending 任务被取消
+    assert not bus.is_running
+    assert bus.active_task_count == 0
+
+
 @pytest.mark.slow
 @pytest.mark.asyncio
 async def test_long_running_stability(event_bus_factory: Callable[..., EventBus], handler_registry: EventHandlerRegistry) -> None:
@@ -431,6 +591,7 @@ async def test_long_running_stability(event_bus_factory: Callable[..., EventBus]
 @pytest.mark.asyncio
 async def test_shutting_down_exception(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """验证总线停止过程中新发布事件应抛出 BusShuttingDown 或 RuntimeError"""
+
     # 注册一个慢 Handler 使停止过程持续一段时间
     slow = SlowHandler(delay=2.0, subscriptions=["test.slow"])
     handler_registry.register(slow)
@@ -443,17 +604,10 @@ async def test_shutting_down_exception(event_bus: EventBus, handler_registry: Ev
     stop_task = asyncio.create_task(event_bus.stop())
 
     # 在停止过程中尝试发布新事件，应触发异常
-    caught_exception = None
-    for _ in range(20):  # 重试最多 1 秒
-        try:
+    with pytest.raises(BusShuttingDown):
+        for _ in range(20):  # 重试最多 1 秒
             await event_bus.proxy("probe").publish("test.event", {"value": 1})
             await asyncio.sleep(0.05)
-        except (BusShuttingDown, RuntimeError) as e:
-            caught_exception = type(e)
-            break
-
-    assert caught_exception in (BusShuttingDown, RuntimeError), \
-        f"Expected BusShuttingDown or RuntimeError, got {caught_exception}"
 
     # 等待完全停止
     await stop_task

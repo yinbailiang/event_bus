@@ -263,7 +263,7 @@ class TestModuleHandlerRegister:
         module_handlers.add_handler(_SimpleHandler, depends=lambda: {"extra": "test"})
         module_handlers.register_all_handlers(empty_handler_registry)
 
-        assert empty_handler_registry.get_handlers_count() == 1
+        assert empty_handler_registry.handlers_count == 1
         handlers = empty_handler_registry.get_handlers("test.event")
         assert len(handlers) == 1
         assert isinstance(handlers[0][1], _SimpleHandler)
@@ -295,7 +295,7 @@ class TestModuleHandlerRegister:
 
         module_handlers.register_all_handlers(empty_handler_registry)
 
-        assert empty_handler_registry.get_handlers_count() == 2
+        assert empty_handler_registry.handlers_count == 2
         assert len(empty_handler_registry.get_handlers("test.event")) == 1
         assert len(empty_handler_registry.get_handlers("test.another")) == 1
 
@@ -306,7 +306,7 @@ class TestModuleHandlerRegister:
     ) -> None:
         """空注册器调用 register_all_handlers 不应报错"""
         module_handlers.register_all_handlers(empty_handler_registry)
-        assert empty_handler_registry.get_handlers_count() == 0
+        assert empty_handler_registry.handlers_count == 0
 
     def test_register_all_handlers_default_depends_empty_dict(
         self,

@@ -154,7 +154,6 @@ async def test_request_timeout(mock_bus_proxy: EventBus.Proxy) -> None:
             timeout=0.1,
         )
 
-
 @pytest.mark.asyncio
 async def test_request_bus_shutting_down(mock_bus_proxy: EventBus.Proxy) -> None:
     """总线关闭时发布请求应抛出 BusShuttingDown"""
@@ -188,7 +187,7 @@ async def test_request_cancelled(mock_bus_proxy: EventBus.Proxy, handler_registr
         await req_task
 
     # 验证临时处理器已注销（通过检查 handler_registry 中无处理器）
-    assert len(handler_registry._handlers) == 0
+    assert handler_registry.handlers_count == 0
 
 
 @pytest.mark.asyncio
@@ -293,6 +292,48 @@ async def test_request_unregistered_event(mock_bus_proxy: EventBus.Proxy) -> Non
             req_data={"data": "test"},
             resp_event="test.response",
         )
+    with pytest.raises(ValueError):
+        await request(
+            bus_proxy=mock_bus_proxy,
+            req_event="test.request",
+            req_data={"data": "test"},
+            resp_event="nonexistent.response",
+        )
+
+
+@pytest.mark.asyncio
+async def test_request_no_timeout(
+    mock_bus_proxy: EventBus.Proxy,
+    handler_registry: EventHandlerRegistry,
+) -> None:
+    """timeout=None 时直接 await future，不经过 asyncio.wait_for 包装"""
+    req_task: asyncio.Task[ResponseProtocol] = asyncio.create_task(
+        request(
+            bus_proxy=mock_bus_proxy,
+            req_event="test.request",
+            req_data={"data": "no_timeout_test"},
+            resp_event="test.response",
+            timeout=None,
+        )
+    )
+
+    await asyncio.sleep(0.01)
+    call_args = mock_bus_proxy.publish.call_args
+    published_data = call_args[0][1]
+    session_id = published_data["session_id"]
+    request_id = published_data["request_id"]
+
+    response_payload = SimpleResponsePayload(
+        session_id=session_id,
+        request_id=request_id,
+        success=True,
+        result="no_timeout_ok",
+    )
+    await trigger_response(handler_registry, "test.response", response_payload)
+
+    result: ResponseProtocol = await req_task
+    assert isinstance(result, SimpleResponsePayload)
+    assert result.result == "no_timeout_ok"
 
 
 @pytest.mark.asyncio

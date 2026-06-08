@@ -197,16 +197,16 @@ async def test_expect_cleans_up_handler_after_context(running_bus: EventBus, han
     """上下文退出后，临时处理器应从注册表中注销"""
     proxy = running_bus.proxy("test")
 
-    initial_count = handler_registry.get_handlers_count()
+    initial_count = handler_registry.handlers_count
 
     async with expect(proxy, "test.event") as future:
         # 处理器应被注册
-        assert handler_registry.get_handlers_count() == initial_count + 1
+        assert handler_registry.handlers_count == initial_count + 1
         await proxy.publish("test.event", {"value": 1, "msg": "done"})
         await future
 
     # 退出后应注销
-    assert handler_registry.get_handlers_count() == initial_count
+    assert handler_registry.handlers_count == initial_count
 
 
 @pytest.mark.asyncio
@@ -259,6 +259,24 @@ async def test_expect_without_payload(running_bus: EventBus) -> None:
         result = await asyncio.wait_for(future, timeout=1.0)
 
     assert result.data is None
+
+
+@pytest.mark.asyncio
+async def test_one_shot_handler_filter_exception_without_on_error() -> None:
+    """OneShotEventHandler 未设置 on_error 回调时，过滤器异常应直接 raise"""
+    def bad_filter(event: Event) -> bool:
+        raise ValueError("filter exploded without handler")
+
+    handler = OneShotEventHandler(
+        event_patterns=["test.event"],
+        on_match=lambda e: None,
+        filter_func=bad_filter,
+        # 不传 on_error —— 异常应向上传播
+    )
+
+    event = Event(name="test.event", data=SimpleTestPayload(value=1, msg="test"))
+    with pytest.raises(ValueError, match="filter exploded without handler"):
+        await handler.handle(None, MagicMock(), event)
 
 
 @pytest.mark.asyncio

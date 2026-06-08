@@ -43,6 +43,10 @@ class TestPipeLinkedFailResponse(EventDeclaration):
     name = "test.linked.fail"
     payload_type = PipeLinkedResponse
 
+class NoPayloadPipeEvent(EventDeclaration):
+    name = "test.pipe.no_payload"
+    payload_type = None
+
 # ------------------------------------------------------------------------------
 # 测试用的 Payload 模型
 # ------------------------------------------------------------------------------
@@ -53,7 +57,6 @@ class SimplePayload(BaseModel):
 
 class AnotherPayload(BaseModel):
     data: list[int]
-
 
 # ------------------------------------------------------------------------------
 # Fixtures
@@ -111,6 +114,20 @@ async def _expect_pipe_async(
         bus_proxy=bus.proxy("server"),
         req_event=req_event,
         resp_event=resp_event,
+        timeout=2.0,
+    ) as pipe:
+        return pipe
+
+
+async def _expect_pipe_with_session(
+    bus: EventBus, req_event: str, resp_event: str, session_id: str
+) -> Pipe:
+    """辅助函数：使用指定 session_id 等待管道。"""
+    async with expect_pipe(
+        bus_proxy=bus.proxy("server"),
+        req_event=req_event,
+        resp_event=resp_event,
+        session_id=session_id,
         timeout=2.0,
     ) as pipe:
         return pipe
@@ -358,6 +375,56 @@ async def test_open_pipe_handshake_failure(event_bus: EventBus) -> None:
             handshake_timeout=0.1,
         ):
             pass
+
+
+@pytest.mark.asyncio
+async def test_expect_pipe_with_session_id(event_bus: EventBus) -> None:
+    """expect_pipe 指定 session_id 时仅匹配对应会话的管道请求"""
+    req_event = "test.pipe.open"
+    resp_event = "test.pipe.linked"
+    target_session = "my-custom-session"
+
+    # 服务端：用指定 session_id 等待管道
+    server_task = asyncio.create_task(
+        _expect_pipe_with_session(event_bus, req_event, resp_event, target_session)
+    )
+
+    # 客户端：发起连接，携带匹配的 session_id
+    async with open_pipe(
+        bus_proxy=event_bus.proxy("client"),
+        req_event=req_event,
+        resp_event=resp_event,
+        session_id=target_session,
+        handshake_timeout=2.0,
+        pipe_type=InProcessPipe,
+        maxsize=10,
+    ) as client_pipe:
+        server_pipe = await server_task
+        await client_pipe.send(SimplePayload(value=42, msg="session_match"))
+        received = await server_pipe.receive()
+        assert isinstance(received, SimplePayload)
+        assert received.value == 42
+
+
+@pytest.mark.asyncio
+async def test_expect_pipe_request_filter_rejects_non_pipe_payload(
+    event_bus: EventBus,
+) -> None:
+    """request_filter 中 isinstance 检查失败时返回 False，expect_pipe 应超时"""
+    # 注册一个无 payload 类型的事件用于测试
+
+    with pytest.raises(PipeHandshakeError, match="Handshake timeout"):
+        async with expect_pipe(
+            bus_proxy=event_bus.proxy("server"),
+            req_event="test.pipe.no_payload",
+            resp_event="test.pipe.linked",
+            timeout=0.3,
+        ):
+            # 发布一个无 payload 的事件 → request_filter 中
+            # isinstance(None, PipeOpenRequest) 为 False → return False
+            await event_bus.proxy("test").publish("test.pipe.no_payload", None)
+            # give some time for the event to be dispatched and filtered
+            await asyncio.sleep(0.1)
 
 
 @pytest.mark.asyncio
