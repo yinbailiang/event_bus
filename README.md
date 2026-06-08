@@ -108,6 +108,7 @@ resp.raise_if_failed()
 - [Expect 一次性监听器](docs/templates/expect.md)
 - [Request 请求-响应模板](docs/templates/request.md)
 - [Pipe 双向管道](docs/templates/pipe.md)
+- [Register 模块事件注册器](docs/templates/register.md)
 
 ## 🧪 测试
 
