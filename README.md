@@ -51,6 +51,9 @@
 | 优雅停机 | ✅ 排空队列 + 等待活跃任务 | ✅ wait_until_idle + 队列关闭 | ⚠️ `wait_for_complete` + `cancel` | N/A（同步） |
 | 超时保护 | ✅ 每 handler 独立超时 | ✅ event_result.timeout | ❌ | N/A |
 | 错误隔离 | ✅ TaskErrorEvent 统一上报 | ✅ 错误记录不中断总线 | ❌ | N/A |
+| FIFO 处理 | ❌ | ✅ 全局锁保证 | ❌ | N/A |
+| 慢 handler 告警 | ❌ | ✅ 15s 超时告警 | ❌ | N/A |
+| 防递归 | ✅ 中间件（可配置） | ✅ 内置（不可配置） | ❌ | N/A |
 | 日志与审计 | ✅ JSONL + SQLite（中间件） | ✅ 内置 WAL 日志 | ❌ 无内置 | ⚠️ 调试追踪 |
 | 测试覆盖 | ✅ 94%（147 tests） | ✅ 83%（138 tests） | ✅ 94%（43 tests） | ✅ 86%（167 tests） |
 | Python 版本 | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
