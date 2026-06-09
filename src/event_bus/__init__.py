@@ -1,6 +1,6 @@
 """event_bus - 基于 asyncio 的轻量级事件总线"""
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 
 from .event import (
     Event,
