@@ -1,4 +1,4 @@
-# EventBus — 异步事件总线
+# InfinityBus — 异步事件总线
 
 [![Test](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml/badge.svg)](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
@@ -19,13 +19,13 @@
 ## 📦 安装
 
 ```bash
-pip install git+https://github.com/yinbailiang/event_bus.git
+pip install git+https://github.com/yinbailiang/infinity_bus.git
 ```
 
 或从源码安装：
 
 ```bash
-git clone https://github.com/yinbailiang/event_bus.git
+git clone https://github.com/yinbailiang/infinity_bus.git
 cd event_bus
 pip install -e ".[test]"
 ```
