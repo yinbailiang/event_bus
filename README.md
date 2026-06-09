@@ -1,8 +1,10 @@
 # InfinityBus — 异步事件总线
 
 [![Test](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml/badge.svg)](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml)
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
+[![PyPI Version](https://img.shields.io/pypi/v/infinity_bus)](https://pypi.org/project/infinity_bus/)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/infinity_bus)](https://pypi.org/project/infinity_bus/)
+[![Supported Python](https://img.shields.io/pypi/pyversions/infinity_bus)](https://pypi.org/project/infinity_bus/)
 
 基于 **asyncio** 的轻量级事件总线，实现发布/订阅模式，用于在异步应用中解耦组件间的通信。
 
