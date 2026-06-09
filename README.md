@@ -9,6 +9,18 @@
 
 **强类型、可扩展的异步事件总线——中间件管道 + 高级模板。**
 
+## 📑 目录
+
+- [✨ 特性](#-特性)
+- [🔍 同类对比](#-同类对比)
+- [📦 安装](#-安装)
+- [🚀 快速开始](#-快速开始)
+- [🧱 架构](#-架构)
+- [📚 文档](#-文档)
+- [🧪 测试](#-测试)
+- [🧑‍💻 开发](#-开发)
+- [📄 许可证](#-许可证)
+
 ## ✨ 特性
 
 | 类别 | 能力 |
@@ -22,6 +34,41 @@
 
 > 和同类项目不同：InfinityBus 是**可扩展的**（中间件洋葱管道），而非把所有功能硬编码在核心类里。
 > 详见 [中间件系统](docs/middleware.md)。
+
+## 🔍 同类对比
+
+| 特性 | InfinityBus | [bubus](https://github.com/browser-use/bubus) | [pyee](https://github.com/jfhbrook/pyee) | [PyPubSub](https://github.com/schollii/pypubsub) |
+| - | - | - | - | - |
+| 异步原生 | ✅ asyncio | ✅ asyncio / anyio | ✅ asyncio / trio | ❌ 纯同步 |
+| 类型安全 | ✅ pyright strict · 业务零 `type: ignore` | ⚠️ pyright strict · 业务 ~30 处遮蔽 | ✅ mypy + pyright | ❌ 无类型注解 |
+| 负载校验 | ✅ Pydantic 自动校验 | ✅ Pydantic 自动校验 | ❌ 无 | ❌ 无（任意对象） |
+| 订阅方式 | 正则表达式 | 类名 + 通配符 `*` | 字符串精确匹配 | 主题层级（`a.b.c`） |
+| 中间件管道 | ✅ 洋葱模型双钩子 | ❌ | ❌ | ❌ |
+| 高级模板 | ✅ expect/request/pipe/register | ⚠️ 仅 `bus.expect()` | ❌ | ❌ |
+| 事件返回值 | ⚠️ 通过 `request` 模板 | ✅ 内置 `event.event_result()` | ❌ | ❌ |
+| 事件转发 | ❌ | ✅ 内置 `event.forward_to()` | ❌ | ❌ |
+| 依赖数量 | 1 核心（pydantic） | 6（anyio, aiofiles...） | 0 | 0 |
+| 优雅停机 | ✅ 排空队列 + 等待活跃任务 | ✅ wait_until_idle + 队列关闭 | ⚠️ `wait_for_complete` + `cancel` | N/A（同步） |
+| 超时保护 | ✅ 每 handler 独立超时 | ✅ event_result.timeout | ❌ | N/A |
+| 错误隔离 | ✅ TaskErrorEvent 统一上报 | ✅ 错误记录不中断总线 | ❌ | N/A |
+| 日志与审计 | ✅ JSONL + SQLite（中间件） | ✅ 内置 WAL 日志 | ❌ 无内置 | ⚠️ 调试追踪 |
+| 测试覆盖 | ✅ 94%（147 tests） | ✅ 83%（138 tests） | ✅ 94%（43 tests） | ✅ 86%（167 tests） |
+| Python 版本 | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
+| 基准版本 | v1.3.6 `0b7f50f` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
+
+> **选择 InfinityBus 的理由**：你需要通过中间件扩展功能而非修改核心代码；你无法容忍生产代码中出现 `# type: ignore`；你想用最少的依赖获得完整的生产级特性（背压、优雅停机、正则订阅）。
+>
+> **选择 bubus 的理由**：你需要事件自带返回值、事件转发这类开箱即用的功能；你需要支持 Python 3.11；你偏好 `bus.on(EventClass, fn)` 这种类驱动的 API 风格。
+>
+> **选择 pyee 的理由**：你熟悉 Node.js EventEmitter 风格；你需要同时支持 asyncio 和 trio；你偏好极简 API（`ee.on('event', fn)`）；v13 起类型系统大幅增强，同时通过 mypy 和 pyright 检查。
+>
+> **选择 PyPubSub 的理由**：你不使用 asyncio；你需要极宽的 Python 版本兼容（3.7–3.14）；你偏好传统的主题层级字符串匹配。
+>
+> 完整 commit：
+> · [InfinityBus `0b7f50f`](https://github.com/yinbailiang/event_bus/commit/0b7f50f)
+> · [bubus `7c09342`](https://github.com/browser-use/bubus/commit/7c09342)
+> · [pyee `5157de2`](https://github.com/jfhbrook/pyee/commit/5157de2)（官方 CI 无覆盖率，此处为手动 `pytest-cov` 测量）
+> · [PyPubSub `4ec2c47`](https://github.com/schollii/pypubsub/commit/4ec2c47)
 
 ## 📦 安装
 
