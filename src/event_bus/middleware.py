@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List
 
 from pydantic import BaseModel
 
@@ -25,6 +25,7 @@ OnPublishNext = Callable[
     Any,
 ]
 """on_publish 链中 next 回调的签名"""
+
 
 class Middleware(ABC):
     """事件总线中间件基类。"""
@@ -73,27 +74,24 @@ class Middleware(ABC):
         """发布流程中发生异常时回调。"""
         pass
 
+
 class MiddlewareChain:
     """中间件链管理器。"""
 
     def __init__(self) -> None:
         self._middlewares: list[Middleware] = []
 
-    def add(self, middleware: Middleware) -> "MiddlewareChain":
+    def add(self, middleware: Middleware) -> 'MiddlewareChain':
         """在链**末尾**追加一个中间件。"""
         if middleware in self._middlewares:
-            raise ValueError(
-                f"Middleware {middleware.__class__.__name__} is already in the chain"
-            )
+            raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
         self._middlewares.append(middleware)
         return self
 
-    def insert(self, index: int, middleware: Middleware) -> "MiddlewareChain":
+    def insert(self, index: int, middleware: Middleware) -> 'MiddlewareChain':
         """在指定位置插入中间件。"""
         if middleware in self._middlewares:
-            raise ValueError(
-                f"Middleware {middleware.__class__.__name__} is already in the chain"
-            )
+            raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
         self._middlewares.insert(index, middleware)
         return self
 
@@ -118,9 +116,7 @@ class MiddlewareChain:
                 await mw.on_setup(bus)
             except Exception:
                 error_middlewares.append(mw)
-                logger.exception(
-                    "Middleware %s on_setup failed", mw.__class__.__name__
-                )
+                logger.exception('Middleware %s on_setup failed', mw.__class__.__name__)
         for error_mw in error_middlewares:
             self._middlewares.remove(error_mw)
         return error_middlewares
@@ -131,9 +127,7 @@ class MiddlewareChain:
             try:
                 await mw.on_teardown(bus)
             except Exception:
-                logger.exception(
-                    "Middleware %s on_teardown failed", mw.__class__.__name__
-                )
+                logger.exception('Middleware %s on_teardown failed', mw.__class__.__name__)
 
     def build_before_publish(
         self,
@@ -168,7 +162,7 @@ class MiddlewareChain:
                 await mw.on_publish_error(error, name, source, data)
             except Exception:
                 logger.exception(
-                    "Middleware %s on_publish_error failed",
+                    'Middleware %s on_publish_error failed',
                     mw.__class__.__name__,
                 )
 
@@ -187,7 +181,12 @@ class MiddlewareChain:
             old_event: Event | None,
         ) -> None:
             await middleware.before_publish(
-                event_registry, name, source, data, old_event, next_handler,
+                event_registry,
+                name,
+                source,
+                data,
+                old_event,
+                next_handler,
             )
 
         return wrapped
@@ -203,7 +202,8 @@ class MiddlewareChain:
             event: Event,
         ) -> None:
             await middleware.on_publish(
-                event, next_handler,
+                event,
+                next_handler,
             )
 
         return wrapped

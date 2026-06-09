@@ -85,7 +85,7 @@ class GetUserHandler(EventHandler):
 
         # 业务逻辑：查询用户
         user = await db.get_user(payload.user_id)
-        
+
         # 构造响应负载（session_id 和 request_id 必须原样带回）
         response = GetUserResponse(
             session_id=payload.session_id,

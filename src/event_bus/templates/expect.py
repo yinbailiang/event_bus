@@ -1,23 +1,24 @@
+import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from inspect import isawaitable
 from typing import (
+    Any,
     AsyncGenerator,
+    Awaitable,
+    Callable,
     Generator,
-    Union,
     List,
     Optional,
-    Callable,
-    Awaitable,
-    Any,
+    Union,
 )
-import asyncio
 
 from pydantic import BaseModel
+
 from .. import (
-    EventBus,
-    EventHandlerRegistry,
-    EventHandler,
     Event,
+    EventBus,
+    EventHandler,
+    EventHandlerRegistry,
 )
 
 
@@ -29,7 +30,7 @@ class OneShotEventHandler(EventHandler):
         event_patterns: List[str],
         on_match: Callable[[Event], Any],
         filter_func: Optional[Callable[[Event], Union[Awaitable[bool], bool]]] = None,
-        on_error: Optional[Callable[[Exception],Any]] = None,
+        on_error: Optional[Callable[[Exception], Any]] = None,
         handle_timeout: Optional[float] = None,
     ) -> None:
         # 若需要监听关闭事件，自动添加内置事件名
@@ -37,7 +38,7 @@ class OneShotEventHandler(EventHandler):
 
         self._on_match: Callable[[Event], Any] = on_match
         self._filter: Optional[Callable[[Event], Union[Awaitable[bool], bool]]] = filter_func
-        self._on_error: Optional[Callable[[Exception],Any]] = on_error
+        self._on_error: Optional[Callable[[Exception], Any]] = on_error
 
         # 用于逻辑停用：即使处理器尚未从注册表移除，也阻止其继续执行回调
         self._active = asyncio.Event()
@@ -51,7 +52,7 @@ class OneShotEventHandler(EventHandler):
         # 过滤
         if self._filter is not None:
             try:
-                result: Union[Awaitable[bool],bool] = self._filter(raw_event)
+                result: Union[Awaitable[bool], bool] = self._filter(raw_event)
                 if isawaitable(result):
                     result = await result
                 if not result:
@@ -67,7 +68,6 @@ class OneShotEventHandler(EventHandler):
         if self._active.is_set():
             self._active.clear()
             self._on_match(raw_event)
-        
 
 
 @contextmanager
@@ -87,12 +87,10 @@ def temporary_handler(
 async def expect(
     bus_proxy: EventBus.Proxy,
     event_patterns: Union[str, List[str]],
-    filter_func: Optional[Callable[[Event], Union[Awaitable[bool], bool]]] = None
+    filter_func: Optional[Callable[[Event], Union[Awaitable[bool], bool]]] = None,
 ) -> AsyncGenerator[asyncio.Future[Event], None]:
     """异步上下文管理器：注册一个一次性事件监听器，返回一个 Future 用于等待匹配的事件。"""
-    patterns: List[str] = (
-        [event_patterns] if isinstance(event_patterns, str) else list(event_patterns)
-    )
+    patterns: List[str] = [event_patterns] if isinstance(event_patterns, str) else list(event_patterns)
     future: asyncio.Future[Event] = asyncio.Future()
 
     def on_error(exc: BaseException) -> None:
@@ -127,4 +125,4 @@ async def expect(
             yield future
         finally:
             if not future.done():
-                    future.cancel()
+                future.cancel()

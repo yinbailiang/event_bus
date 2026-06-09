@@ -127,10 +127,10 @@ async def open_pipe(
 | `allocator` | `Optional[InProcessPipeAllocator]` | 管道分配器实例。若未提供则使用模块级默认实例（`get_default_allocator()`）。 |
 | `pipe_kargs` | `Optional[Dict[str, Any]]` | 传递给管道构造函数的关键字参数字典（如 `{"maxsize": 10}`），会透传给 `allocator.allocate(**pipe_kargs)`。 |
 
-**Yields**  
+**Yields**
 一个已握手成功并处于打开状态的 `Pipe` 实例。退出上下文时自动关闭管道并从分配器中释放。
 
-**异常**  
+**异常**
 
 - `PipeHandshakeError`：握手超时、响应失败或响应表示拒绝。
 - 其他由 `request` 模板抛出的异常（如总线关闭）。
@@ -158,10 +158,10 @@ async def expect_pipe(
 | `timeout` | `float` | 等待握手请求的超时时间（秒）。超时抛出 `PipeHandshakeError`。 |
 | `allocator` | `Optional[InProcessPipeAllocator]` | 管道分配器实例。若未提供则使用模块级默认实例（`get_default_allocator()`）。 |
 
-**Yields**  
+**Yields**
 握手成功后，返回从分配器中取出的 `Pipe` 实例。退出上下文时自动关闭管道。
 
-**握手流程**  
+**握手流程**
 
 1. 使用 `expect` 监听 `req_event`，等待 `PipeOpenRequest` 事件，并通过 `session_id` 筛选（若提供）。
 2. 收到请求后，根据 `pipe_id` 从 `InProcessPipeAllocator` 中获取对应的管道。

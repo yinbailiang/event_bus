@@ -1,5 +1,4 @@
 import asyncio
-import aiosqlite
 import json
 import logging
 import time
@@ -7,12 +6,13 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set
 
+import aiosqlite
 from pydantic import BaseModel
 
 from ..event import Event, EventRegistry
-from ..middleware import Middleware, BeforePublishNext, MiddlewareChain, OnPublishNext
+from ..middleware import BeforePublishNext, Middleware, MiddlewareChain, OnPublishNext
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     from ..bus import EventBus  # pragma: no cover
 
 logger = logging.getLogger(__name__)
@@ -67,47 +67,45 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
 
     def __init__(
         self,
-        db_path: str = ":memory:",
+        db_path: str = ':memory:',
         *,
-        table_name: str = "event_log",
+        table_name: str = 'event_log',
         extra_columns: Optional[List[str]] = None,
         fallback: Optional[LogFallback] = None,
     ) -> None:
         self._db_path = db_path
         self._table = table_name
         self._extra_columns = extra_columns or []
-        self._fallback: LogFallback = fallback or (
-            lambda line: logger.warning("SQLiteLog fallback: %s", line)
-        )
+        self._fallback: LogFallback = fallback or (lambda line: logger.warning('SQLiteLog fallback: %s', line))
 
         self._conn: Any = None  # aiosqlite.Connection
         self._ready: bool = False
-        self._ddl: str = ""
-        self._insert_sql: str = ""
+        self._ddl: str = ''
+        self._insert_sql: str = ''
 
     # ------------------------------------------------------------------
     # 生命周期
     # ------------------------------------------------------------------
 
-    async def on_setup(self, bus: "EventBus") -> None:
+    async def on_setup(self, bus: 'EventBus') -> None:
         try:
             self._conn = await aiosqlite.connect(self._db_path)
-            await self._conn.execute("PRAGMA journal_mode=WAL;")
-            await self._conn.execute("PRAGMA synchronous=NORMAL;")
+            await self._conn.execute('PRAGMA journal_mode=WAL;')
+            await self._conn.execute('PRAGMA synchronous=NORMAL;')
             self._conn.row_factory = aiosqlite.Row
             await self._ensure_table()
             self._ready = True
-            logger.info("SQLiteLoggingMiddleware 就绪: %s", self._db_path)
+            logger.info('SQLiteLoggingMiddleware 就绪: %s', self._db_path)
         except Exception:
-            logger.exception("SQLiteLoggingMiddleware 初始化失败，降级运行")
+            logger.exception('SQLiteLoggingMiddleware 初始化失败，降级运行')
             self._ready = False
 
-    async def on_teardown(self, bus: "EventBus") -> None:
+    async def on_teardown(self, bus: 'EventBus') -> None:
         if self._conn is not None:
             try:
                 await self._conn.close()
             except Exception:
-                logger.exception("关闭 SQLite 连接失败")
+                logger.exception('关闭 SQLite 连接失败')
 
     # ------------------------------------------------------------------
     # 钩子
@@ -141,13 +139,13 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
     ) -> None:
         # 错误事件也记录
         record: Dict[str, Any] = {
-            "name": name,
-            "sources": json.dumps([source], ensure_ascii=False),
-            "data": _serialize_data(data),
-            "event_id": "ERROR",
-            "event_ids": "[]",
-            "timestamps": json.dumps([datetime.now(timezone.utc).isoformat()], ensure_ascii=False),
-            "error": f"{type(error).__name__}: {error}",
+            'name': name,
+            'sources': json.dumps([source], ensure_ascii=False),
+            'data': _serialize_data(data),
+            'event_id': 'ERROR',
+            'event_ids': '[]',
+            'timestamps': json.dumps([datetime.now(timezone.utc).isoformat()], ensure_ascii=False),
+            'error': f'{type(error).__name__}: {error}',
         }
         self._fallback(json.dumps(record, ensure_ascii=False))
 
@@ -159,8 +157,8 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
         columns_def = self.DEFAULT_DDL
         if self._extra_columns:
             # 在默认 DDL 末尾插入额外列
-            base = self.DEFAULT_DDL.rstrip(")")
-            columns_def = base + ",\n    " + ",\n    ".join(self._extra_columns) + "\n)"
+            base = self.DEFAULT_DDL.rstrip(')')
+            columns_def = base + ',\n    ' + ',\n    '.join(self._extra_columns) + '\n)'
         self._ddl = columns_def.format(table=self._table)
         await self._conn.execute(self._ddl)
         await self._conn.commit()
@@ -169,14 +167,12 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
 
     async def _log_event(self, event: Event) -> None:
         row: Dict[str, Any] = {
-            "name": event.name,
-            "sources": json.dumps(event.sources, ensure_ascii=False),
-            "data": _serialize_data(event.data),
-            "event_id": event.id,
-            "event_ids": json.dumps(event.event_ids, ensure_ascii=False),
-            "timestamps": json.dumps(
-                [t.isoformat() for t in event.timestamps], ensure_ascii=False
-            ),
+            'name': event.name,
+            'sources': json.dumps(event.sources, ensure_ascii=False),
+            'data': _serialize_data(event.data),
+            'event_id': event.id,
+            'event_ids': json.dumps(event.event_ids, ensure_ascii=False),
+            'timestamps': json.dumps([t.isoformat() for t in event.timestamps], ensure_ascii=False),
         }
         if self._ready and self._conn is not None:
             try:
@@ -184,7 +180,7 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
                 await self._conn.commit()
                 return
             except Exception:
-                logger.exception("SQLite 写入失败，降级处理")
+                logger.exception('SQLite 写入失败，降级处理')
                 self._ready = False  # 一次失败后全部降级
         self._fallback(json.dumps(row, ensure_ascii=False))
 
@@ -228,10 +224,10 @@ class RateLimitMiddleware(Middleware):
         self._buckets: Dict[str, List[float]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
-    async def on_setup(self, bus: "EventBus") -> None:
+    async def on_setup(self, bus: 'EventBus') -> None:
         pass
 
-    async def on_teardown(self, bus: "EventBus") -> None:
+    async def on_teardown(self, bus: 'EventBus') -> None:
         pass
 
     async def before_publish(
@@ -243,7 +239,7 @@ class RateLimitMiddleware(Middleware):
         old_event: Event | None,
         next: BeforePublishNext,
     ) -> None:
-        key = name if self._per_event else "__global__"
+        key = name if self._per_event else '__global__'
         now = time.monotonic()
 
         async with self._lock:
@@ -255,7 +251,7 @@ class RateLimitMiddleware(Middleware):
 
             if len(bucket) >= self._max:
                 logger.warning(
-                    "RateLimit 触发: event=%s, limit=%d/%ds",
+                    'RateLimit 触发: event=%s, limit=%d/%ds',
                     name,
                     self._max,
                     self._window,
@@ -278,10 +274,7 @@ class RateLimitMiddleware(Middleware):
         """返回当前各窗口的请求计数快照。"""
         now = time.monotonic()
         cutoff = now - self._window
-        return {
-            k: sum(1 for t in v if t >= cutoff)
-            for k, v in self._buckets.items()
-        }
+        return {k: sum(1 for t in v if t >= cutoff) for k, v in self._buckets.items()}
 
 
 # ============================================================================
@@ -315,10 +308,10 @@ class EventTransformMiddleware(Middleware):
     def __init__(self, transform: TransformFunc) -> None:
         self._transform = transform
 
-    async def on_setup(self, bus: "EventBus") -> None:
+    async def on_setup(self, bus: 'EventBus') -> None:
         pass
 
-    async def on_teardown(self, bus: "EventBus") -> None:
+    async def on_teardown(self, bus: 'EventBus') -> None:
         pass
 
     async def before_publish(
@@ -391,7 +384,7 @@ def make_field_inject_transform(
 
 def make_field_redact_transform(
     *fields: str,
-    replacement: str = "***",
+    replacement: str = '***',
 ) -> TransformFunc:
     """创建一个脱敏转换，将指定字段替换为 ``replacement``。
 
@@ -445,16 +438,16 @@ class EventBlockMiddleware(Middleware):
         self,
         block_predicate: BlockPredicate,
         *,
-        block_reason: str = "blocked by predicate",
+        block_reason: str = 'blocked by predicate',
     ) -> None:
         self._predicate = block_predicate
         self._reason = block_reason
         self._blocked_count: int = 0
 
-    async def on_setup(self, bus: "EventBus") -> None:
+    async def on_setup(self, bus: 'EventBus') -> None:
         pass
 
-    async def on_teardown(self, bus: "EventBus") -> None:
+    async def on_teardown(self, bus: 'EventBus') -> None:
         pass
 
     async def before_publish(
@@ -469,7 +462,7 @@ class EventBlockMiddleware(Middleware):
         if self._predicate(name, data):
             self._blocked_count += 1
             logger.debug(
-                "EventBlock: 屏蔽事件 %s (reason=%s, total_blocked=%d)",
+                'EventBlock: 屏蔽事件 %s (reason=%s, total_blocked=%d)',
                 name,
                 self._reason,
                 self._blocked_count,
@@ -565,6 +558,7 @@ def _serialize_data(data: dict[str, Any] | BaseModel | None) -> Optional[str]:
 
 class RecursionDetectedError(RuntimeError):
     """事件发布递归调用被检测并拦截。"""
+
     pass
 
 
@@ -602,10 +596,10 @@ class RecursionGuardMiddleware(Middleware):
         self.max_chain_length = max_chain_length  # None → 禁用链长检查
         self._ignore = ignore_sources or set()
 
-    async def on_setup(self, bus: "EventBus") -> None:
+    async def on_setup(self, bus: 'EventBus') -> None:
         pass
 
-    async def on_teardown(self, bus: "EventBus") -> None:
+    async def on_teardown(self, bus: 'EventBus') -> None:
         pass
 
     async def before_publish(
@@ -623,8 +617,8 @@ class RecursionGuardMiddleware(Middleware):
                 chain_len = len(old_event.event_ids) + 1  # +1 计入当前事件
                 if chain_len > self.max_chain_length:
                     raise RecursionDetectedError(
-                        f"Chain length exceeded: {chain_len} > {self.max_chain_length} "
-                        f"(max_chain_length={self.max_chain_length})"
+                        f'Chain length exceeded: {chain_len} > {self.max_chain_length} '
+                        f'(max_chain_length={self.max_chain_length})'
                     )
 
             # 第二层：per-source 计数（防范自递归）
@@ -633,8 +627,8 @@ class RecursionGuardMiddleware(Middleware):
                 if count > self.max_depth:
                     raise RecursionDetectedError(
                         f"Recursion detected: source '{source}' appears "
-                        f"{count} times in the event chain "
-                        f"(max_depth={self.max_depth})"
+                        f'{count} times in the event chain '
+                        f'(max_depth={self.max_depth})'
                     )
 
         await next(event_registry, name, source, data, old_event)
@@ -653,7 +647,7 @@ class RecursionGuardMiddleware(Middleware):
 
 
 def production_chain(
-    db_path: str = "event_bus.db",
+    db_path: str = 'event_bus.db',
     *,
     rate_limit: int = 1000,
     rate_window: float = 1.0,
@@ -671,11 +665,13 @@ def production_chain(
     chain = chain or MiddlewareChain()
     chain.add(SQLiteLoggingMiddleware(db_path))
     chain.add(RateLimitMiddleware(max_requests=rate_limit, window_seconds=rate_window))
-    chain.add(RecursionGuardMiddleware(
-        max_depth=max_depth,
-        max_chain_length=max_chain_length,
-        ignore_sources={"EventBus", "EventBusErrorReporter"},
-    ))
+    chain.add(
+        RecursionGuardMiddleware(
+            max_depth=max_depth,
+            max_chain_length=max_chain_length,
+            ignore_sources={'EventBus', 'EventBusErrorReporter'},
+        )
+    )
     return chain
 
 
@@ -688,11 +684,13 @@ def development_chain(
     适用场景：本地开发，快速发现逻辑 bug（递归、死循环）。
     """
     chain = chain or MiddlewareChain()
-    chain.add(SQLiteLoggingMiddleware(":memory:"))
-    chain.add(RecursionGuardMiddleware(
-        max_depth=2,
-        max_chain_length=20,
-    ))
+    chain.add(SQLiteLoggingMiddleware(':memory:'))
+    chain.add(
+        RecursionGuardMiddleware(
+            max_depth=2,
+            max_chain_length=20,
+        )
+    )
     return chain
 
 
@@ -712,16 +710,20 @@ def secure_chain(
     """
     chain = chain or MiddlewareChain()
     chain.add(RateLimitMiddleware(max_requests=rate_limit, window_seconds=rate_window))
-    chain.add(RecursionGuardMiddleware(
-        max_depth=max_depth,
-        max_chain_length=max_depth * 10,
-        ignore_sources={"EventBus", "EventBusErrorReporter"},
-    ))
+    chain.add(
+        RecursionGuardMiddleware(
+            max_depth=max_depth,
+            max_chain_length=max_depth * 10,
+            ignore_sources={'EventBus', 'EventBusErrorReporter'},
+        )
+    )
     if block_events:
-        chain.add(EventBlockMiddleware(
-            make_blocklist_predicate(*block_events),
-            block_reason="blocked by secure_chain preset",
-        ))
+        chain.add(
+            EventBlockMiddleware(
+                make_blocklist_predicate(*block_events),
+                block_reason='blocked by secure_chain preset',
+            )
+        )
     return chain
 
 
@@ -737,8 +739,10 @@ def minimal_chain(
     ``chain`` 参数允许传入已有的链，预设将追加到末尾。
     """
     chain = chain or MiddlewareChain()
-    chain.add(RecursionGuardMiddleware(
-        max_depth=max_depth,
-        max_chain_length=None,  # 仅靠 per-source 计数
-    ))
+    chain.add(
+        RecursionGuardMiddleware(
+            max_depth=max_depth,
+            max_chain_length=None,  # 仅靠 per-source 计数
+        )
+    )
     return chain

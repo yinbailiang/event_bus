@@ -5,7 +5,7 @@ description = "基于 asyncio 的轻量级事件总线，支持发布/订阅、�
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
-    { name = "EventBus Authors" }
+    { name = "infinity_system: yin_bailiang" }
 ]
 keywords = [
     "event-bus",
@@ -46,6 +46,7 @@ test = [
     "pytest-asyncio",
 ]
 dev = [
+    "pre-commit",
     "pytest",
     "pytest-cov",
     "pytest-asyncio",
@@ -67,3 +68,37 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = ["tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+    "I",      # isort
+    "ASYNC",  # async/await best practices
+    "PLE",    # pylint errors
+]
+ignore = [
+    "E501",     # line too long (handled by formatter)
+    "ASYNC109", # async function with timeout parameter (intentional API design)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["event_bus"]
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "single"
+line-ending = "lf"
+
+[tool.pyright]
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportMissingImports = "error"
+exclude = ["tests", "**/node_modules", "**/__pycache__", "**/.*", ".venv"]
+venvPath = "."
+venv = ".venv"

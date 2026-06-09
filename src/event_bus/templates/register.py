@@ -1,7 +1,10 @@
-from typing import Any, Callable, Dict, Set, Type, TypeVar, Tuple, List
+from typing import Any, Callable, Dict, List, Set, Tuple, Type, TypeVar
+
 from .. import EventDeclaration, EventHandler, EventHandlerRegistry, EventRegistry
 
 EventDeclT = TypeVar('EventDeclT', bound=Type[EventDeclaration])
+
+
 class ModuleEventRegister:
     """
     模块事件注册器，用于收集并统一向 EventRegistry 注册事件声明。
@@ -60,10 +63,12 @@ class ModuleEventRegister:
         return [e.name for e in self.events]
 
     def __repr__(self) -> str:
-        return f"<ModuleEventRegister name={self.name} events={len(self.events)}>"
-    
+        return f'<ModuleEventRegister name={self.name} events={len(self.events)}>'
+
 
 HandlerT = TypeVar('HandlerT', bound=Type[EventHandler])
+
+
 class ModuleHandlerRegister:
     """
     模块处理器注册器，用于收集并统一向 EventHandlerRegistry 注册处理器。
@@ -87,11 +92,7 @@ class ModuleHandlerRegister:
         # 存储 (处理器类, 依赖工厂函数) 的元组
         self.handlers: Set[Tuple[Type[EventHandler], Callable[[], Dict[str, Any]]]] = set()
 
-    def add_handler(
-        self,
-        handler_type: Type[EventHandler],
-        depends: Callable[[], Dict[str, Any]]
-    ) -> None:
+    def add_handler(self, handler_type: Type[EventHandler], depends: Callable[[], Dict[str, Any]]) -> None:
         """
         手动添加处理器类型及其依赖工厂函数。
 
@@ -121,9 +122,11 @@ class ModuleHandlerRegister:
                     super().__init__(["ui.input.submit"])
                     self.conv_manager = conv_manager
         """
+
         def decorator(cls: HandlerT) -> HandlerT:
             self.add_handler(cls, depends)
             return cls
+
         return decorator
 
     def register_all_handlers(self, handler_registry: EventHandlerRegistry) -> None:
@@ -141,4 +144,4 @@ class ModuleHandlerRegister:
             handler_registry.register(handler_instance)
 
     def __repr__(self) -> str:
-        return f"<ModuleHandlerRegister name={self.name} handlers={len(self.handlers)}>"
+        return f'<ModuleHandlerRegister name={self.name} handlers={len(self.handlers)}>'

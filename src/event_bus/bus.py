@@ -2,7 +2,8 @@ import asyncio
 import logging
 import types
 from datetime import datetime, timezone
-from typing import Any, Dict,  Optional, Set, Type, Union
+from typing import Any, Dict, Optional, Set, Type, Union
+
 from pydantic import BaseModel, Field
 
 from .event import Event, EventDeclaration, EventRegistry
@@ -11,30 +12,38 @@ from .middleware import MiddlewareChain, OnPublishNext
 
 logger = logging.getLogger(__name__)
 
+
 class BusShuttingDown(Exception):
     """总线正在停止，拒绝新发布，请求处理器执行清理并退出"""
+
     pass
 
+
 class ShutdownEvent(EventDeclaration):
-    name = "event_bus.__shutdown__"
+    name = 'event_bus.__shutdown__'
+
 
 class TaskErrorPayload(BaseModel):
-    error_event: Event = Field(description="发生异常的事件")
-    handler_id: Optional[str] = Field(default=None, description="发生异常的处理器内部ID")
-    handler_name: str = Field(description="发生异常的处理器类名")
-    error_type: str = Field(description="异常类型")
-    error_message: str = Field(description="异常消息")
+    error_event: Event = Field(description='发生异常的事件')
+    handler_id: Optional[str] = Field(default=None, description='发生异常的处理器内部ID')
+    handler_name: str = Field(description='发生异常的处理器类名')
+    error_type: str = Field(description='异常类型')
+    error_message: str = Field(description='异常消息')
+
 
 class TaskErrorEvent(EventDeclaration):
-    name = "event_bus.__task_error__"
+    name = 'event_bus.__task_error__'
     payload_type = TaskErrorPayload
+
 
 class ShutdownConfig(BaseModel):
     """总线停机配置"""
-    queue_timeout_min: float = Field(default=1.0, description="队列排空最小等待时间（秒）")
-    queue_timeout_max: float = Field(default=15.0, description="队列排空最大等待时间（秒）")
-    tasks_timeout: float = Field(default=15.0, description="活跃任务完成等待时间（秒）")
-    avg_wait_time: float = Field(default=0.05, description="每个事件平均处理时间估算（秒）")
+
+    queue_timeout_min: float = Field(default=1.0, description='队列排空最小等待时间（秒）')
+    queue_timeout_max: float = Field(default=15.0, description='队列排空最大等待时间（秒）')
+    tasks_timeout: float = Field(default=15.0, description='活跃任务完成等待时间（秒）')
+    avg_wait_time: float = Field(default=0.05, description='每个事件平均处理时间估算（秒）')
+
 
 class EventBus:
     """
@@ -47,7 +56,7 @@ class EventBus:
 
     class Proxy:
         """事件总线代理，提供给处理器调用以访问总线功能"""
-        
+
         def __init__(self, bus: 'EventBus', source: str, raw_event: Optional[Event] = None) -> None:
             self._bus: EventBus = bus
             self._source: str = source
@@ -55,20 +64,28 @@ class EventBus:
 
         async def publish(self, name: str, data: Optional[Union[Dict[str, Any], BaseModel]] = None) -> None:
             await self._bus._publish(name, self._source, data, self._raw_event)
-        
+
         @property
         def handlers_registry(self) -> EventHandlerRegistry:
             return self._bus._handlers
-        
+
         @property
         def events_registry(self) -> EventRegistry:
             return self._bus._events
 
-    def __init__(self, event_registry: EventRegistry, handler_registry: EventHandlerRegistry, max_queue_size: int = 1024, max_handler_semaphore: int = 256, shutdown: ShutdownConfig = ShutdownConfig(), middleware_chain: Optional[MiddlewareChain] = None) -> None:
+    def __init__(
+        self,
+        event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+        max_queue_size: int = 1024,
+        max_handler_semaphore: int = 256,
+        shutdown: ShutdownConfig = ShutdownConfig(),
+        middleware_chain: Optional[MiddlewareChain] = None,
+    ) -> None:
         self._events: EventRegistry = event_registry
         self._handlers: EventHandlerRegistry = handler_registry
         self._mw_chain: MiddlewareChain = middleware_chain or MiddlewareChain()
-        
+
         if self._events.get(ShutdownEvent.name) is None:
             self._events.register(ShutdownEvent)
         if self._events.get(TaskErrorEvent.name) is None:
@@ -89,15 +106,21 @@ class EventBus:
         self._before_publish_chain = self._mw_chain.build_before_publish(self._core_publish)
         self._on_publish_chain: OnPublishNext = self._mw_chain.build_on_publish(self._noop_on_publish)
 
-    async def _publish(self, name: str, source: str, data: Optional[Union[Dict[str, Any], BaseModel]] = None, old_event: Optional[Event] = None) -> None:
+    async def _publish(
+        self,
+        name: str,
+        source: str,
+        data: Optional[Union[Dict[str, Any], BaseModel]] = None,
+        old_event: Optional[Event] = None,
+    ) -> None:
         """发布事件到总线（经过中间件链）"""
         if not self._enable_publish.is_set():
             if self._running.is_set():
-                logger.warning("EventBus is stopping, cannot publish new events")
-                raise BusShuttingDown("EventBus is stopping, cannot publish new events")
+                logger.warning('EventBus is stopping, cannot publish new events')
+                raise BusShuttingDown('EventBus is stopping, cannot publish new events')
             else:
-                logger.warning("EventBus is not running, cannot publish events")
-                raise RuntimeError("EventBus is not running, cannot publish events")
+                logger.warning('EventBus is not running, cannot publish events')
+                raise RuntimeError('EventBus is not running, cannot publish events')
 
         try:
             await self._before_publish_chain(self._events, name, source, data, old_event)
@@ -116,19 +139,19 @@ class EventBus:
         """before_publish 链的末端处理器：校验 → 构造 Event → 入队 → 触发 on_publish 链"""
         event_declaration: Optional[Type[EventDeclaration]] = event_registry.get(name)
         if not event_declaration:
-            logger.error(f"Unknown event type: {name}")
-            raise ValueError(f"Unknown event type: {name}")
+            logger.error(f'Unknown event type: {name}')
+            raise ValueError(f'Unknown event type: {name}')
 
         payload: Optional[BaseModel] = None
         if event_declaration.payload_type:
             if data is None:
-                raise ValueError(f"Event {name} requires payload data, but none provided")
+                raise ValueError(f'Event {name} requires payload data, but none provided')
 
             elif isinstance(data, BaseModel):
                 if not isinstance(data, event_declaration.payload_type):
                     raise TypeError(
                         f"Payload type mismatch for event '{name}': "
-                        f"expected {event_declaration.payload_type.__name__}, got {type(data).__name__}"
+                        f'expected {event_declaration.payload_type.__name__}, got {type(data).__name__}'
                     )
                 payload = data.model_copy()
 
@@ -136,7 +159,7 @@ class EventBus:
                 payload = event_declaration.payload_type(**data)
         else:
             if data is not None:
-                raise ValueError(f"Event {name} does not accept payload data")
+                raise ValueError(f'Event {name} does not accept payload data')
 
         event = Event(
             name=name,
@@ -149,7 +172,7 @@ class EventBus:
         event.timestamps.append(datetime.now(timezone.utc))
         event.event_ids.append(event.id)
         await self._queue.put(event)
-        logger.debug(f"Event published: {event.name} (id={event.id})")
+        logger.debug(f'Event published: {event.name} (id={event.id})')
 
         # 发布成功后，运行 on_publish 中间件链
         await self._on_publish_chain(event)
@@ -168,28 +191,31 @@ class EventBus:
             try:
                 self._dispatch_task = asyncio.create_task(self._dispatch_loop())
             except Exception:
-                logger.exception("Error occurred while starting event bus")
+                logger.exception('Error occurred while starting event bus')
                 raise
             self._running.set()
             self._enable_publish.set()
             await self._mw_chain.setup(self)
-            logger.info("EventBus started")
-    
+            logger.info('EventBus started')
+
     async def stop(self) -> None:
         """停止事件总线"""
         async with self._state_lock:
             if not self._running.is_set():
                 return
-        
-            await self._publish(ShutdownEvent.name, source="EventBus", data=None)
 
-            self._enable_publish.clear() # 阻止新消息入队
+            await self._publish(ShutdownEvent.name, source='EventBus', data=None)
+
+            self._enable_publish.clear()  # 阻止新消息入队
 
             try:
-                timeout: float = max(self._shutdown.queue_timeout_min,min(self._shutdown.queue_timeout_max,self._queue.qsize() * self._shutdown.avg_wait_time))
-                await asyncio.wait_for(self._queue.join(), timeout=timeout) # 等待队列处理完毕，避免丢失事件
+                timeout: float = max(
+                    self._shutdown.queue_timeout_min,
+                    min(self._shutdown.queue_timeout_max, self._queue.qsize() * self._shutdown.avg_wait_time),
+                )
+                await asyncio.wait_for(self._queue.join(), timeout=timeout)  # 等待队列处理完毕，避免丢失事件
             except asyncio.TimeoutError:
-                logger.warning("Timeout while waiting for event queue to drain during shutdown")
+                logger.warning('Timeout while waiting for event queue to drain during shutdown')
 
             if self._dispatch_task:
                 self._dispatch_task.cancel()
@@ -198,24 +224,26 @@ class EventBus:
                 except asyncio.CancelledError:
                     pass
 
-            await self._wait_all_tasks_done() # 等待所有处理器任务完成
-            
+            await self._wait_all_tasks_done()  # 等待所有处理器任务完成
+
             self._running.clear()
             await self._mw_chain.teardown(self)
-            logger.info("EventBus stopped")
-    
-    async def __aenter__(self) -> "EventBus":
+            logger.info('EventBus stopped')
+
+    async def __aenter__(self) -> 'EventBus':
         """异步上下文管理器入口"""
         await self.start()
         return self
 
-    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[BaseException], exc_tb: Optional[types.TracebackType]) -> Optional[bool]:
+    async def __aexit__(
+        self, exc_type: Optional[type], exc_val: Optional[BaseException], exc_tb: Optional[types.TracebackType]
+    ) -> Optional[bool]:
         """异步上下文管理器出口，确保总线资源被释放且不吞没异常"""
         try:
             await self.stop()
         except Exception as stop_err:
             if exc_val is not None:
-                logger.error(f"Error during EventBus shutdown (original exception will propagate): {stop_err}")
+                logger.error(f'Error during EventBus shutdown (original exception will propagate): {stop_err}')
             else:
                 raise
         return None  # 不抑制上下文体中的异常
@@ -224,33 +252,35 @@ class EventBus:
         """创建一个事件总线代理实例，供事件处理器调用"""
         return EventBus.Proxy(self, source, raw_event)
 
-    async def _handler_wrapper(self, handler: EventHandler, handler_id: str, bus_proxy: 'EventBus.Proxy', event: Event) -> None:
+    async def _handler_wrapper(
+        self, handler: EventHandler, handler_id: str, bus_proxy: 'EventBus.Proxy', event: Event
+    ) -> None:
         """事件处理器包装器"""
         try:
-            async with self._handler_semaphore: # 控制并发处理器数量，避免过载
+            async with self._handler_semaphore:  # 控制并发处理器数量，避免过载
                 async with asyncio.timeout(handler.handle_timeout):
                     await handler(bus_proxy, event)
         except Exception as e:
-            if "EventBusErrorReporter" not in event.sources:
+            if 'EventBusErrorReporter' not in event.sources:
                 try:
                     await self._publish(
-                        name=TaskErrorEvent.name, 
-                        source="EventBusErrorReporter", 
+                        name=TaskErrorEvent.name,
+                        source='EventBusErrorReporter',
                         data=TaskErrorPayload(
-                            error_event=event, 
+                            error_event=event,
                             handler_id=handler_id,
-                            handler_name=handler.__class__.__name__, 
-                            error_type=type(e).__name__, 
-                            error_message=str(e) 
+                            handler_name=handler.__class__.__name__,
+                            error_type=type(e).__name__,
+                            error_message=str(e),
                         ),
-                        old_event = event
+                        old_event=event,
                     )
                 except BusShuttingDown as err:
-                    logger.warning(f"Skipping task_error publish during shutdown: {err}")
+                    logger.warning(f'Skipping task_error publish during shutdown: {err}')
                 except Exception:
-                    logger.exception("Failed to publish task_error event")
+                    logger.exception('Failed to publish task_error event')
             raise e
-            
+
     async def _dispatch_loop(self) -> None:
         """事件分发主循环"""
         await self._running.wait()  # 等待事件总线启动
@@ -259,9 +289,15 @@ class EventBus:
             try:
                 event = await self._queue.get()
                 for handler_id, handler in self._handlers.get_handlers(event.name):
-                    self._register_task(asyncio.create_task(self._handler_wrapper(handler, handler_id, self.proxy(handler.__class__.__name__, event), event)))
+                    self._register_task(
+                        asyncio.create_task(
+                            self._handler_wrapper(
+                                handler, handler_id, self.proxy(handler.__class__.__name__, event), event
+                            )
+                        )
+                    )
             except Exception:
-                logger.exception("Unexpected error in dispatch loop")
+                logger.exception('Unexpected error in dispatch loop')
             finally:
                 if event:
                     self._queue.task_done()
@@ -278,21 +314,23 @@ class EventBus:
             if exc := task.exception():
                 raise exc
         except asyncio.CancelledError:
-            logger.debug(f"Handler task cancelled: {task.get_name()}")
+            logger.debug(f'Handler task cancelled: {task.get_name()}')
         except asyncio.InvalidStateError:
-            logger.warning(f"Task {task.get_name()} callback triggered in invalid state")
+            logger.warning(f'Task {task.get_name()} callback triggered in invalid state')
         except Exception:
-            logger.exception(f"Handler task failed: {task.get_name()}")
-    
+            logger.exception(f'Handler task failed: {task.get_name()}')
+
     async def _wait_all_tasks_done(self) -> None:
         """等待所有未完成的任务完成，适用于事件总线停止时调用"""
         if self._active_tasks:
             try:
-                logger.info(f"Waiting for {len(self._active_tasks)} active handler tasks to complete...")
-                done, pending = await asyncio.wait(self._active_tasks.copy(), return_when=asyncio.ALL_COMPLETED, timeout=self._shutdown.tasks_timeout)
-                logger.info(f"All handler tasks completed. Total: {len(done)}")
+                logger.info(f'Waiting for {len(self._active_tasks)} active handler tasks to complete...')
+                done, pending = await asyncio.wait(
+                    self._active_tasks.copy(), return_when=asyncio.ALL_COMPLETED, timeout=self._shutdown.tasks_timeout
+                )
+                logger.info(f'All handler tasks completed. Total: {len(done)}')
                 if pending:
-                    logger.warning(f"Timeout: {len(pending)} tasks pending, cancelling...")
+                    logger.warning(f'Timeout: {len(pending)} tasks pending, cancelling...')
                     for task in pending:
                         if not task.done():
                             task.cancel()
@@ -301,14 +339,21 @@ class EventBus:
                             except asyncio.CancelledError:
                                 pass
             except Exception as e:
-                logger.exception("Unexpected error in wait all task done")
+                logger.exception('Unexpected error in wait all task done')
                 raise e
 
     @property
-    def is_running(self) -> bool: return self._running.is_set()
+    def is_running(self) -> bool:
+        return self._running.is_set()
+
     @property
-    def is_publishing_enabled(self) -> bool: return self._enable_publish.is_set()
+    def is_publishing_enabled(self) -> bool:
+        return self._enable_publish.is_set()
+
     @property
-    def active_task_count(self) -> int: return len(self._active_tasks)
+    def active_task_count(self) -> int:
+        return len(self._active_tasks)
+
     @property
-    def queue_size(self) -> int: return self._queue.qsize()
+    def queue_size(self) -> int:
+        return self._queue.qsize()
