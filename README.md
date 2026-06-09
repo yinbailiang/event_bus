@@ -19,13 +19,13 @@
 ## 📦 安装
 
 ```bash
-pip install git+https://github.com/yinbailiang/infinity_bus.git
+pip install infinity_bus
 ```
 
 或从源码安装：
 
 ```bash
-git clone https://github.com/yinbailiang/infinity_bus.git
+git clone https://github.com/yinbailiang/event_bus.git
 cd event_bus
 pip install -e ".[test]"
 ```
