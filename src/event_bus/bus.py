@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import types
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict,  Optional, Set, Type, Union
 from pydantic import BaseModel, Field
 
@@ -143,9 +143,11 @@ class EventBus:
             data=payload,
             sources=old_event.sources.copy() if old_event else [],
             timestamps=old_event.timestamps.copy() if old_event else [],
+            event_ids=old_event.event_ids.copy() if old_event else [],
         )
         event.sources.append(source)
-        event.timestamps.append(datetime.now())
+        event.timestamps.append(datetime.now(timezone.utc))
+        event.event_ids.append(event.id)
         await self._queue.put(event)
         logger.debug(f"Event published: {event.name} (id={event.id})")
 

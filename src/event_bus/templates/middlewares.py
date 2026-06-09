@@ -43,7 +43,7 @@ class SQLiteLoggingMiddleware(Middleware):
     table_name:
         表名，默认 ``"event_log"``。
     extra_columns:
-        除 ``(name, source, data, event_id, timestamp)`` 之外的额外列定义。
+        除 ``(name, sources, data, event_id, event_ids, timestamps)`` 之外的额外列定义。
         例如 ``["user_agent TEXT", "trace_id TEXT"]``。
     fallback:
         降级回调。接收一条 JSON 字符串。为 ``None`` 时使用 ``logging.warning``。
@@ -52,17 +52,18 @@ class SQLiteLoggingMiddleware(Middleware):
     # 默认表 DDL
     DEFAULT_DDL = """\
 CREATE TABLE IF NOT EXISTS {table} (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT    NOT NULL,
-    source     TEXT    NOT NULL,
-    data       TEXT,
-    event_id   TEXT    NOT NULL,
-    timestamp  TEXT    NOT NULL
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL,
+    sources     TEXT    NOT NULL DEFAULT '[]',
+    data        TEXT,
+    event_id    TEXT    NOT NULL,
+    event_ids   TEXT    NOT NULL DEFAULT '[]',
+    timestamps  TEXT    NOT NULL DEFAULT '[]'
 )"""
 
     DEFAULT_INSERT = """\
-INSERT INTO {table} (name, source, data, event_id, timestamp)
-VALUES (:name, :source, :data, :event_id, :timestamp)"""
+INSERT INTO {table} (name, sources, data, event_id, event_ids, timestamps)
+VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
 
     def __init__(
         self,
@@ -141,10 +142,11 @@ VALUES (:name, :source, :data, :event_id, :timestamp)"""
         # 错误事件也记录
         record: Dict[str, Any] = {
             "name": name,
-            "source": source,
+            "sources": json.dumps([source], ensure_ascii=False),
             "data": _serialize_data(data),
             "event_id": "ERROR",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event_ids": "[]",
+            "timestamps": json.dumps([datetime.now(timezone.utc).isoformat()], ensure_ascii=False),
             "error": f"{type(error).__name__}: {error}",
         }
         self._fallback(json.dumps(record, ensure_ascii=False))
@@ -166,15 +168,15 @@ VALUES (:name, :source, :data, :event_id, :timestamp)"""
         self._insert_sql = self.DEFAULT_INSERT.format(table=self._table)
 
     async def _log_event(self, event: Event) -> None:
-        ts = datetime.now(timezone.utc).isoformat()
         row: Dict[str, Any] = {
             "name": event.name,
-            "source": (
-                event.sources[-1] if event.sources else "unknown"
-            ),
+            "sources": json.dumps(event.sources, ensure_ascii=False),
             "data": _serialize_data(event.data),
             "event_id": event.id,
-            "timestamp": ts,
+            "event_ids": json.dumps(event.event_ids, ensure_ascii=False),
+            "timestamps": json.dumps(
+                [t.isoformat() for t in event.timestamps], ensure_ascii=False
+            ),
         }
         if self._ready and self._conn is not None:
             try:

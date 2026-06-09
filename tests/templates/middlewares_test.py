@@ -83,12 +83,13 @@ class TestSQLiteLoggingMiddleware:
             # 查询 SQLite 确认写入（在连接关闭前查询）
             assert mw._conn is not None
             cursor = await mw._conn.execute(
-                f"SELECT name, source, data FROM {mw._table}"
+                f"SELECT name, sources, data FROM {mw._table}"
             )
             rows = await cursor.fetchall()
             assert len(rows) >= 1
             assert rows[0]["name"] == "mw.ping"
-            assert "test_src" in rows[0]["source"]
+            sources = json.loads(rows[0]["sources"])
+            assert "test_src" in sources
 
     @pytest.mark.asyncio
     async def test_logs_to_file_db(

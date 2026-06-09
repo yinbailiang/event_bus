@@ -15,7 +15,8 @@ class Event(BaseModel):
     # metadata
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, description="事件UUID")
     sources: List[str] = Field(default_factory=list, description="事件处理链")
-    timestamps: List[datetime] = Field(default_factory=lambda:[], description="事件时间戳")
+    timestamps: List[datetime] = Field(default_factory=lambda: [], description="事件时间戳")
+    event_ids: List[str] = Field(default_factory=list, description="因果事件ID链，支持精准重建事件流转路径")
 
 class EventDeclaration(ABC):
     """事件声明抽象基类"""
