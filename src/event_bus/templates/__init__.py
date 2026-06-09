@@ -2,19 +2,16 @@ from .expect import expect
 from .middlewares import (
     EventBlockMiddleware,
     EventTransformMiddleware,
+    JSONLLoggingMiddleware,
     RateLimitMiddleware,
     RecursionDetectedError,
     RecursionGuardMiddleware,
     SQLiteLoggingMiddleware,
-    development_chain,
     make_allowlist_predicate,
     make_blocklist_predicate,
     make_field_inject_transform,
     make_field_redact_transform,
     make_rename_transform,
-    minimal_chain,
-    production_chain,
-    secure_chain,
 )
 from .pipe import InProcessPipe, InProcessPipeAllocator, Pipe, PipeAllocator, expect_pipe, open_pipe
 from .register import ModuleEventRegister, ModuleHandlerRegister
@@ -24,6 +21,7 @@ __all__ = [
     'expect',
     # middlewares
     'SQLiteLoggingMiddleware',
+    'JSONLLoggingMiddleware',
     'RateLimitMiddleware',
     'EventTransformMiddleware',
     'EventBlockMiddleware',
@@ -34,10 +32,6 @@ __all__ = [
     'make_field_redact_transform',
     'make_blocklist_predicate',
     'make_allowlist_predicate',
-    'production_chain',
-    'development_chain',
-    'secure_chain',
-    'minimal_chain',
     # pipe
     'Pipe',
     'InProcessPipe',

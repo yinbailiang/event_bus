@@ -41,7 +41,6 @@ async def request(
     session_id: Optional[str] = None,
     timeout: Optional[float] = 60.0,
 ) -> ResponseProtocol:
-    # ----- 1. 校验事件声明 -----
     req_decl: Optional[Type[EventDeclaration]] = bus_proxy.events_registry.get(req_event)
     if req_decl is None:
         raise ValueError(f"请求事件 '{req_event}' 未注册")
@@ -54,30 +53,25 @@ async def request(
     if resp_decl.payload_type is None or not issubclass(resp_decl.payload_type, ResponseProtocol):
         raise TypeError(f"响应事件 '{resp_event}' 负载必须继承 ResponseProtocol")
 
-    # ----- 2. 准备请求数据 -----
     payload_data: Dict[str, Any] = req_data.copy()
     session_id = session_id if session_id is not None else uuid.uuid4().hex
     request_id: str = uuid.uuid4().hex
     payload_data['session_id'] = session_id
     payload_data['request_id'] = request_id
 
-    # ----- 3. 定义响应过滤器（匹配会话和请求ID）-----
     def response_filter(event: Event) -> bool:
         payload: Optional[BaseModel] = event.data
         if not isinstance(payload, ResponseProtocol):
             raise TypeError(f'响应 payload 应为 ResponseProtocol，实际为 {type(payload)}')
         return payload.session_id == session_id and payload.request_id == request_id
 
-    # ----- 4. 使用 expect 等待响应，并发布请求 -----
     async with expect(
         bus_proxy=bus_proxy,
         event_patterns=resp_event,
         filter_func=response_filter,
     ) as future:
-        # 发布请求事件（可能抛出 BusShuttingDown）
         await bus_proxy.publish(req_event, payload_data)
 
-        # 等待响应（带超时控制）
         if timeout is None:
             resp: Event = await future
         else:

@@ -20,8 +20,10 @@ from .handler import (
     EventHandlerRegistry,
 )
 from .middleware import (
+    BeforePublishNext,
     Middleware,
     MiddlewareChain,
+    OnPublishNext,
 )
 
 __all__: list[str] = [
@@ -33,6 +35,8 @@ __all__: list[str] = [
     'EventHandlerRegistry',
     'Middleware',
     'MiddlewareChain',
+    'BeforePublishNext',
+    'OnPublishNext',
     'EventBus',
     'BusShuttingDown',
     'ShutdownEvent',

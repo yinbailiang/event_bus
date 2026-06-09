@@ -1,4 +1,4 @@
-"""模板中间件测试：SQLiteLogging / RateLimit / EventTransform / EventBlock / RecursionGuard。"""
+"""模板中间件测试：SQLiteLogging / JSONLLogging / RateLimit / EventTransform / EventBlock / RecursionGuard。"""
 
 import asyncio
 import json
@@ -21,6 +21,7 @@ from event_bus import (
 from event_bus.templates.middlewares import (
     EventBlockMiddleware,
     EventTransformMiddleware,
+    JSONLLoggingMiddleware,
     RateLimitMiddleware,
     RecursionDetectedError,
     RecursionGuardMiddleware,
@@ -887,3 +888,140 @@ class TestRecursionGuardMiddleware:
 
         # 链长上限 5，handler 最多执行 5 次（第 6 次发布被拦截）
         assert handler.publish_count <= 5
+
+
+# ============================================================================
+# JSONLLoggingMiddleware
+# ============================================================================
+
+
+class TestJSONLLoggingMiddleware:
+    """JSONL 文件日志中间件（含降级）"""
+
+    @pytest.mark.asyncio
+    async def test_logs_event_to_file(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """事件发布后被记录到 JSONL 文件"""
+        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
+            file_path = f.name
+
+        try:
+            mw = JSONLLoggingMiddleware(file_path)
+            chain = MiddlewareChain()
+            chain.add(mw)
+
+            handler = SimplePingHandler()
+            handler_registry.register(handler)
+
+            bus = EventBus(
+                base_event_registry,
+                handler_registry,
+                max_queue_size=10,
+                middleware_chain=chain,
+            )
+            async with bus:
+                await bus.proxy('test_src').publish(
+                    'mw.ping', {'key': 'hello', 'count': 1},
+                )
+                await handler.wait_received(timeout=2.0)
+
+            # 文件应该存在且非空
+            assert os.path.exists(file_path)
+            assert os.path.getsize(file_path) > 0
+
+            # 验证 JSONL 内容
+            with open(file_path, encoding='utf-8') as f:
+                lines = f.readlines()
+            assert len(lines) >= 1
+            record = json.loads(lines[0])
+            assert record['name'] == 'mw.ping'
+            assert 'test_src' in record['sources']
+        finally:
+            try:
+                os.unlink(file_path)
+            except OSError:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_fallback_on_unwritable_path(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """当目标路径的父目录是一个文件（非目录）时，降级到 fallback"""
+        fallback_lines: List[str] = []
+
+        def fake_fallback(line: str) -> None:
+            fallback_lines.append(line)
+
+        # 创建临时文件，然后将其作为"目录"使用，触发 os.makedirs 失败
+        with tempfile.NamedTemporaryFile(delete=False) as parent_file:
+            parent_path = parent_file.name
+
+        try:
+            # 把 JSONL 路径指向 parent_file/sub.jsonl，但 parent_file 是文件不是目录
+            jsonl_path = os.path.join(parent_path, 'sub.jsonl')
+            mw = JSONLLoggingMiddleware(
+                jsonl_path,
+                fallback=fake_fallback,
+            )
+            chain = MiddlewareChain()
+            chain.add(mw)
+
+            handler = SimplePingHandler()
+            handler_registry.register(handler)
+
+            bus = EventBus(
+                base_event_registry,
+                handler_registry,
+                max_queue_size=10,
+                middleware_chain=chain,
+            )
+            async with bus:
+                await bus.proxy('src').publish(
+                    'mw.ping', {'key': 'fallback', 'count': 99},
+                )
+                await handler.wait_received(timeout=2.0)
+
+            assert len(fallback_lines) >= 1
+            record = json.loads(fallback_lines[0])
+            assert record['name'] == 'mw.ping'
+        finally:
+            try:
+                os.unlink(parent_path)
+            except OSError:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_on_publish_error_logs_fallback(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """发布异常时 on_publish_error 写入 fallback"""
+        fallback_lines: List[str] = []
+
+        def fake_fallback(line: str) -> None:
+            fallback_lines.append(line)
+
+        mw = JSONLLoggingMiddleware(':memory:', fallback=fake_fallback)
+        chain = MiddlewareChain()
+        chain.add(mw)
+
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            await chain.on_publish_error(
+                ValueError('boom'), 'test.event', 'src', {'key': 'v'},
+            )
+
+        assert len(fallback_lines) >= 1
+        record = json.loads(fallback_lines[0])
+        assert 'ValueError' in record['error']
