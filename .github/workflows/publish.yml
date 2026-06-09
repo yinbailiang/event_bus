@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to PyPI & Release
 
 on:
   push:
@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write  # PyPI 受信发布必需
+      contents: write  # 创建 GitHub Release 必需
 
     steps:
       - uses: actions/checkout@v4
@@ -23,6 +24,14 @@ jobs:
 
       - name: Build package
         run: uv build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to PyPI
         run: uv publish
