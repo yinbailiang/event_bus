@@ -15,6 +15,7 @@ class Event(BaseModel):
     name: str                           # 事件类型名
     data: Optional[BaseModel] = None    # 负载数据（Pydantic 模型实例）
     id: str                             # 事件 UUID（自动生成）
+    event_ids: List[str]                # 事件链 UUID
     sources: List[str]                  # 处理链来源记录
     timestamps: List[datetime]          # 各环节时间戳
 ```
@@ -24,6 +25,7 @@ class Event(BaseModel):
 | `name` | `str` | 事件类型名称，对应 `EventDeclaration.name`。 |
 | `data` | `Optional[BaseModel]` | 发布时传入的负载数据。无负载事件为 `None`。 |
 | `id` | `str` | 事件唯一标识（UUID hex），自动生成。 |
+| `event_ids` | `List[str]` | 事件链中所有事件的列表（包括自己），用于追踪因果。 |
 | `sources` | `List[str]` | 事件经过的处理节点名称列表，用于追踪处理链。 |
 | `timestamps` | `List[datetime]` | 每个处理节点的时间戳列表，与 `sources` 一一对应。 |
 
