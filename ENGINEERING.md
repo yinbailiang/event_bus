@@ -58,7 +58,7 @@ ignore-nested-functions = true
 
 | 指标 | 数值 |
 | - | - |
-| 公开 API docstring 覆盖 | **89.5%** |
+| 公开 API docstring 覆盖 | **85%+** |
 | 最低阈值 | 60% |
 | 文档文件 | 16 篇 `.md` |
 
