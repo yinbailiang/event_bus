@@ -10,8 +10,8 @@ jobs:
   build-and-publish:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write  # PyPI 受信发布必需
-      contents: write  # 创建 GitHub Release 必需
+      id-token: write
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,7 @@ jobs:
         run: uv build
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
