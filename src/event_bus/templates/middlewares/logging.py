@@ -4,7 +4,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-import aiosqlite
 from pydantic import BaseModel
 
 from event_bus import (
@@ -15,6 +14,18 @@ from event_bus import (
     Middleware,
     OnPublishNext,
 )
+
+# ---------------------------------------------------------------------------
+# aiosqlite 惰性导入 —— 仅 SQLiteLoggingMiddleware 需要
+# ---------------------------------------------------------------------------
+_aiosqlite: Any = None
+_aiosqlite_import_error: Optional[ImportError] = None
+
+try:
+    import aiosqlite as _aiosqlite
+except ImportError as _e:
+    _aiosqlite_import_error = _e
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +80,6 @@ class JSONLLoggingMiddleware(Middleware):
     def __init__(
         self,
         file_path: str = 'events.jsonl',
-        *,
         fallback: Optional[LogFallback] = None,
         extra_fields: Optional[Dict[str, Any]] = None,
     ) -> None:
@@ -226,7 +236,6 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
     def __init__(
         self,
         db_path: str = ':memory:',
-        *,
         table_name: str = 'event_log',
         extra_columns: Optional[List[str]] = None,
         fallback: Optional[LogFallback] = None,
@@ -247,11 +256,15 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
 
     async def on_setup(self, bus: EventBus) -> None:
         """连接 SQLite 并建表。"""
+        if _aiosqlite is None:
+            raise ImportError(
+                'SQLiteLoggingMiddleware 需要 aiosqlite 包，请执行: pip install infinity_bus[templates]'
+            ) from _aiosqlite_import_error
         try:
-            self._conn = await aiosqlite.connect(self._db_path)
+            self._conn = await _aiosqlite.connect(self._db_path)
             await self._conn.execute('PRAGMA journal_mode=WAL;')
             await self._conn.execute('PRAGMA synchronous=NORMAL;')
-            self._conn.row_factory = aiosqlite.Row
+            self._conn.row_factory = _aiosqlite.Row
             await self._ensure_table()
             self._ready = True
             logger.info('SQLiteLoggingMiddleware 就绪: %s', self._db_path)

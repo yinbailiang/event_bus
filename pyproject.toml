@@ -29,10 +29,6 @@ classifiers = [
 requires-python = ">=3.12"
 
 dependencies = [
-    # log
-    "aiosqlite",
-
-    # data
     "pydantic",
 ]
 
@@ -40,17 +36,20 @@ dependencies = [
 Repository = "https://github.com/yinbailiang/event_bus"
 
 [project.optional-dependencies]
+templates = [
+    "aiosqlite",
+]
 test = [
     "pytest",
     "pytest-cov",
     "pytest-asyncio",
+    "infinity_bus[templates]",
 ]
 dev = [
     "interrogate",
     "pre-commit",
-    "pytest",
-    "pytest-cov",
-    "pytest-asyncio",
+    "infinity_bus[templates]",
+    "infinity_bus[test]",
 ]
 
 [tool.pytest.ini_options]

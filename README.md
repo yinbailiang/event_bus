@@ -13,7 +13,7 @@
 
 | 类别 | 能力 |
 | - | - |
-| 类型安全 | Pydantic 负载校验 · pyright **strict** · **零** `# type: ignore` |
+| 类型安全 | Pydantic 负载校验 · pyright **strict** · **业务代码零** `# type: ignore` |
 | 灵活订阅 | **正则表达式**匹配事件名 · 通配符处理器 |
 | 中间件管道 | 洋葱模型 · `before_publish` / `on_publish` 双钩子 · 5 个内置中间件 |
 | 高级模板 | `expect` 一次性监听 · `request` RPC 调用 · `pipe` 双向管道 · `register` 批量注册 |
@@ -25,16 +25,38 @@
 
 ## 📦 安装
 
+> 推荐使用 [uv](https://docs.astral.sh/uv/) —— 极速 Python 包管理器，比 pip 快 10–100 倍，
+> 自动管理 venv、锁定依赖、解析冲突。无需单独安装虚拟环境工具。
+
+### pip
+
 ```bash
+# 核心（仅发布/订阅、中间件管道）
 pip install infinity_bus
+
+# 核心 + 高级模板（expect、request、pipe、SQLite 日志等）
+pip install infinity_bus[templates]
 ```
+
+### uv（推荐）
+
+```bash
+# 核心
+uv add infinity_bus
+
+# 核心 + 高级模板
+uv add infinity_bus --extra templates
+```
+
+> **提示**：高级模板（`expect`、`request`、`pipe`、`SQLiteLoggingMiddleware`）
+> 需要 `[templates]` extra。若未安装而使用这些功能，会收到 `ImportError` 提示。
 
 或从源码安装：
 
 ```bash
 git clone https://github.com/yinbailiang/event_bus.git
 cd event_bus
-pip install -e ".[test]"
+uv sync --extra dev
 ```
 
 ## 🚀 快速开始
@@ -81,6 +103,9 @@ asyncio.run(main())
 ```
 
 ### 请求-响应模式
+
+> 使用 `request` / `expect` / `pipe` 等高级模板需安装：`pip install infinity_bus[templates]`
+> uv 使用 `uv add infinity_bus --extra templates`
 
 ```python
 import asyncio
@@ -177,13 +202,88 @@ asyncio.run(main())
 
 ## 🧪 测试
 
+### pip
+
 ```bash
+# 克隆并安装测试依赖
+git clone https://github.com/yinbailiang/event_bus.git
+cd event_bus
+pip install -e ".[test]"
+
 # 运行全部测试
 pytest --cov=src -v
 
 # 仅运行模板测试
 pytest tests/templates/ -v
 ```
+
+### uv
+
+```bash
+# 克隆并同步测试依赖
+git clone https://github.com/yinbailiang/event_bus.git
+cd event_bus
+uv sync --extra test
+
+# 运行全部测试
+uv run pytest --cov=src -v
+
+# 仅运行模板测试
+uv run pytest tests/templates/ -v
+```
+
+## 🧑‍💻 开发
+
+### pip
+
+```bash
+# 1. 克隆并安装全部开发依赖
+git clone https://github.com/yinbailiang/event_bus.git
+cd event_bus
+pip install -e ".[dev]"
+
+# 2. 安装 pre-commit 门禁
+pre-commit install
+```
+
+### uv（推荐）
+
+```bash
+# 1. 克隆并同步全部依赖（自动创建 venv）
+git clone https://github.com/yinbailiang/event_bus.git
+cd event_bus
+uv sync --extra dev
+
+# 2. 安装 pre-commit 门禁
+uv run pre-commit install
+```
+
+### 开发循环
+
+```bash
+# lint + 格式化
+ruff check src/ && ruff format src/ --check
+
+# 类型检查
+pyright src/
+
+# 测试 + 覆盖率
+pytest --cov=src -v
+
+# 手动运行全部门禁
+pre-commit run --all-files
+```
+
+> 使用 uv 时，命令前加 `uv run` 即可自动使用项目 venv，例如 `uv run pytest --cov=src -v`。
+
+| 工具 | 用途 |
+| - | - |
+| `uv` | 极速 Python 包管理器（替代 pip/venv） |
+| `ruff` | Lint + 格式化 |
+| `pyright` | 严格类型检查 |
+| `pytest` + `pytest-cov` | 测试 + 覆盖率 |
+| `interrogate` | docstring 覆盖率 |
+| `pre-commit` | 提交前自动门禁 |
 
 ## 📄 许可证
 
