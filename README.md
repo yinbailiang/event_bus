@@ -126,3 +126,7 @@ pytest tests/templates/ -v
 ## 📄 许可证
 
 [MIT](LICENSE.md)
+
+## 此项目属于 InfinitySystem
+
+![icon](docs/res/infinity_icon/256x256.png)
