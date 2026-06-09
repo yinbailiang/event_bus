@@ -47,6 +47,8 @@ test = [
 ]
 dev = [
     "interrogate",
+    "ruff",
+    "pyright",
     "pre-commit",
     "infinity_bus[templates]",
     "infinity_bus[test]",
