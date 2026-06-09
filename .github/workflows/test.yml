@@ -8,9 +8,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.12", "3.13"]
 
     steps:
@@ -26,4 +28,4 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run tests with coverage (including slow)
-        run: uv run pytest --cov=src --cov-report=term-missing -v -m ""
+        run: uv run pytest --cov=src --cov-report=term-missing --cov-fail-under=90 -v -m ""
