@@ -25,8 +25,8 @@
 
 通过一对**请求/响应事件**建立连接：
 
-- 客户端调用 `open_pipe` 发起请求，并提前将管道实例注册到全局注册表。
-- 服务端调用 `expect_pipe` 等待请求，从注册表中取出对应的管道实例，完成链路绑定。
+- 客户端调用 `open_pipe` 发起请求，并通过 `InProcessPipeAllocator` 分配管道实例。
+- 服务端调用 `expect_pipe` 等待请求，从分配器中取出对应的管道实例，完成链路绑定。
 
 握手成功后，两端持有同一个 `Pipe` 实例的引用，可通过 `send` / `receive` 直接通信，无需再经过事件总线。
 
@@ -34,9 +34,9 @@
 
 基于 `asyncio.Queue` 的默认实现，支持可配置的队列容量以提供背压控制。
 
-### 管道注册表 (`PipeRegistry`)
+### 管道分配器 (`PipeAllocator` / `InProcessPipeAllocator`)
 
-单例模式的全局注册表，用于在握手期间临时存储管道实例，确保客户端与服务端能找到同一个管道对象。
+抽象基类 `PipeAllocator` 定义了管道生命周期管理接口，`InProcessPipeAllocator` 是其默认进程内实现，用于在握手期间临时存储管道实例，确保客户端与服务端能找到同一个管道对象。
 
 ---
 
@@ -46,7 +46,6 @@
 
 ```python
 class Pipe(ABC):
-    def __init__(self, maxsize: Optional[int] = None)
     async def __aenter__(self) -> "Pipe"
     async def __aexit__(self, ...)
     async def open(self) -> None
@@ -57,24 +56,39 @@ class Pipe(ABC):
 
 | 方法 | 说明 |
 | ---- | ---- |
-| `__init__(maxsize)` | 可选参数 `maxsize` 用于指定内部队列容量（具体实现解释各异）。 |
 | `open()` | 打开管道，准备发送/接收数据。 |
 | `close()` | 关闭管道，释放资源。 |
 | `send(data)` | 向管道写入一个 Pydantic 模型实例。若管道已关闭或容量已满，则抛出相应异常。 |
 | `receive()` | 从管道读取下一个 Pydantic 模型实例。若管道已关闭且无数据，则抛出 `PipeClosedError`。 |
 | 异步上下文管理器 | 进入时自动调用 `open()`，退出时自动调用 `close()`。 |
 
-### `PipeRegistry`
+### `PipeAllocator` (抽象基类)
 
-全局管道注册表（单例），用于握手期间临时存储管道对象。
+```python
+class PipeAllocator(ABC):
+    async def allocate(self, **kwargs: Dict[str, Any]) -> str
+    async def release(self, pipe_id: str) -> None
+    async def get(self, pipe_id: str) -> Optional[Pipe]
+```
 
 | 方法 | 说明 |
 | ---- | ---- |
-| `get_instance()` | 异步获取单例实例。 |
-| `register(pipe_id, pipe)` | 注册一个管道。若 ID 已存在则抛出 `ValueError`。 |
-| `get(pipe_id)` | 获取管道，不存在返回 `None`。 |
-| `pop(pipe_id)` | 获取并移除管道。通常由 `expect_pipe` 调用，以确保管道一对一所有权转移。 |
-| `remove(pipe_id)` | 仅移除（无返回值）。 |
+| `allocate(**kwargs)` | 创建一个管道实例并返回其唯一标识符。关键字参数会传递给具体管道类型的构造函数。 |
+| `release(pipe_id)` | 释放指定管道，从分配器中移除。 |
+| `get(pipe_id)` | 获取管道实例，不存在时返回 `None`。 |
+
+### `InProcessPipeAllocator`
+
+`PipeAllocator` 的进程内实现，管理管道实例的创建、查找与释放。
+
+```python
+class InProcessPipeAllocator(PipeAllocator):
+    def __init__(self, pipe_type: type[Pipe] = InProcessPipe)
+```
+
+- 构造参数 `pipe_type` 指定默认的管道类型，`allocate()` 时会用该类型创建实例。
+- `allocate(**kwargs)` 接受关键字参数并透传给 `pipe_type` 的构造函数（例如 `InProcessPipe(maxsize=10)`）。
+- `open_pipe` 和 `expect_pipe` 默认共享一个模块级 `InProcessPipeAllocator` 实例（通过 `get_default_allocator()` 获取），也可通过 `allocator` 参数传入自定义实例。
 
 ### `InProcessPipe`
 
@@ -97,9 +111,9 @@ async def open_pipe(
     req_event: str,
     resp_event: str,
     handshake_timeout: float = 5.0,
-    pipe_type: type[Pipe] = InProcessPipe,
-    maxsize: Optional[int] = None,
     session_id: Optional[str] = None,
+    allocator: Optional[InProcessPipeAllocator] = None,
+    pipe_kargs: Optional[Dict[str, Any]] = None,
 ) -> AsyncIterator[Pipe]
 ```
 
@@ -109,12 +123,12 @@ async def open_pipe(
 | `req_event` | `str` | 握手请求事件名。 |
 | `resp_event` | `str` | 握手响应事件名。 |
 | `handshake_timeout` | `float` | 握手超时时间（秒）。超时抛出 `PipeHandshakeError`。 |
-| `pipe_type` | `type[Pipe]` | 要创建的管道类型，默认为 `InProcessPipe`。 |
-| `maxsize` | `Optional[int]` | 传递给管道构造函数的容量参数。 |
 | `session_id` | `Optional[str]` | 用于关联请求-响应的会话 ID，若未提供则自动生成。 |
+| `allocator` | `Optional[InProcessPipeAllocator]` | 管道分配器实例。若未提供则使用模块级默认实例（`get_default_allocator()`）。 |
+| `pipe_kargs` | `Optional[Dict[str, Any]]` | 传递给管道构造函数的关键字参数字典（如 `{"maxsize": 10}`），会透传给 `allocator.allocate(**pipe_kargs)`。 |
 
 **Yields**  
-一个已握手成功并处于打开状态的 `Pipe` 实例。退出上下文时自动关闭管道并从注册表中移除。
+一个已握手成功并处于打开状态的 `Pipe` 实例。退出上下文时自动关闭管道并从分配器中释放。
 
 **异常**  
 
@@ -131,6 +145,7 @@ async def expect_pipe(
     resp_event: str,
     session_id: Optional[str] = None,
     timeout: float = 5.0,
+    allocator: Optional[InProcessPipeAllocator] = None,
 ) -> AsyncIterator[Pipe]
 ```
 
@@ -139,18 +154,19 @@ async def expect_pipe(
 | `bus_proxy` | `EventBus.Proxy` | 事件总线代理，用于监听请求和发送响应。 |
 | `req_event` | `str` | 期望监听的握手请求事件名。 |
 | `resp_event` | `str` | 用于回复握手结果的事件名。 |
-| `session_id` | `Optional[str]` | 用于筛选的会话 id，只响应指定会话 id 的请求 |
+| `session_id` | `Optional[str]` | 用于筛选的会话 id，只响应指定会话 id 的请求。 |
 | `timeout` | `float` | 等待握手请求的超时时间（秒）。超时抛出 `PipeHandshakeError`。 |
+| `allocator` | `Optional[InProcessPipeAllocator]` | 管道分配器实例。若未提供则使用模块级默认实例（`get_default_allocator()`）。 |
 
 **Yields**  
-握手成功后，返回从注册表中取出的 `Pipe` 实例。退出上下文时自动关闭管道。
+握手成功后，返回从分配器中取出的 `Pipe` 实例。退出上下文时自动关闭管道。
 
 **握手流程**  
 
-1. 使用 `expect` 监听 `req_event`，等待 `PipeOpenRequest` 事件。并校验会话id
-2. 收到请求后，根据 `pipe_id` 从 `PipeRegistry` 中 `pop` 出对应的管道（取出的同时移除注册，确保所有权唯一）。
-3. 若管道不存在，发布一个 `success=False` 的 `PipeLinkedResponse` 并抛出异常。
-4. 若存在，发布 `success=True` 的响应，然后 `yield` 管道。
+1. 使用 `expect` 监听 `req_event`，等待 `PipeOpenRequest` 事件，并通过 `session_id` 筛选（若提供）。
+2. 收到请求后，根据 `pipe_id` 从 `InProcessPipeAllocator` 中获取对应的管道。
+3. 若管道不存在，发布一个 `success=False` 的 `PipeLinkedResponse` 并抛出 `PipeHandshakeError`。
+4. 若存在，发布 `success=True` 的 `PipeLinkedResponse`，然后 `yield` 管道（管道的释放由客户端 `open_pipe` 在退出时负责）。
 
 ---
 
@@ -181,12 +197,12 @@ class PipeLinkedResponse(ResponseProtocol):
 ```Text
 客户端 (open_pipe)                          服务端 (expect_pipe)
       |                                             |
-      |  1. 创建 Pipe 实例，注册到 PipeRegistry       |
+      |  1. 创建 Pipe 实例，通过 InProcessPipeAllocator 分配    |
       |-------------------------------------------->|
       |  2. 发布 PipeOpenRequest 事件 (req_event)    |
       |                                             |
       |                                             |  3. 监听 req_event，收到请求
-      |                                             |  4. 从注册表 pop 出 Pipe
+      |                                             |  4. 从分配器获取 Pipe，并释放（转移所有权）
       |                                             |  5. 发布 PipeLinkedResponse (resp_event)
       |  6. 收到成功响应                             |
       |<--------------------------------------------|
@@ -258,10 +274,18 @@ class TcpPipe(Pipe):
         return SomeModel.parse_raw(line)
 ```
 
-使用时通过 `pipe_type` 指定：
+使用时通过自定义 `allocator` 指定管道类型：
 
 ```python
-async with open_pipe(bus, "tcp.connect", "tcp.linked", pipe_type=TcpPipe) as pipe:
+allocator = InProcessPipeAllocator(pipe_type=TcpPipe)
+async with open_pipe(bus, "tcp.connect", "tcp.linked", allocator=allocator) as pipe:
+    ...
+```
+
+或者通过 `pipe_kargs` 传递构造参数：
+
+```python
+async with open_pipe(bus, "pipe.req", "pipe.resp", pipe_kargs={"maxsize": 10}) as pipe:
     ...
 ```
 

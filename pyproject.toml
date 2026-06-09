@@ -29,9 +29,8 @@ classifiers = [
 requires-python = ">=3.12"
 
 dependencies = [
-    # http
-    #"aiohttp",
-    #"aiostream",
+    # log
+    "aiosqlite",
 
     # data
     "pydantic",

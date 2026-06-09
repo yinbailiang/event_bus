@@ -1,5 +1,5 @@
 import asyncio
-from typing import AsyncGenerator, List, Tuple
+from typing import AsyncGenerator, List, Optional, Tuple
 
 import pytest
 from pydantic import BaseModel
@@ -7,8 +7,8 @@ from pydantic import BaseModel
 from event_bus import EventBus, EventDeclaration, EventRegistry, EventHandlerRegistry
 from event_bus.templates.pipe import (
     InProcessPipe,
+    InProcessPipeAllocator,
     Pipe,
-    PipeRegistry,
     PipeClosedError,
     PipeHandshakeError,
     PipeLinkedResponse,
@@ -99,8 +99,7 @@ async def pipe_pair(event_bus: EventBus) -> AsyncGenerator[Tuple[Pipe, Pipe], No
         req_event=req_event,
         resp_event=resp_event,
         handshake_timeout=2.0,
-        pipe_type=InProcessPipe,
-        maxsize=10,
+        pipe_kargs={"maxsize": 10},
     ) as client_pipe:
         server_pipe = await server_task
         yield client_pipe, server_pipe
@@ -396,8 +395,7 @@ async def test_expect_pipe_with_session_id(event_bus: EventBus) -> None:
         resp_event=resp_event,
         session_id=target_session,
         handshake_timeout=2.0,
-        pipe_type=InProcessPipe,
-        maxsize=10,
+        pipe_kargs={"maxsize": 10},
     ) as client_pipe:
         server_pipe = await server_task
         await client_pipe.send(SimplePayload(value=42, msg="session_match"))
@@ -429,19 +427,25 @@ async def test_expect_pipe_request_filter_rejects_non_pipe_payload(
 
 @pytest.mark.asyncio
 async def test_pipe_id_collision_prevention(event_bus: EventBus) -> None:
-    """测试注册重复 pipe_id 会抛出 ValueError。"""
+    """测试 InProcessPipeAllocator 分配管道并正常获取/释放。"""
 
-    registry = await PipeRegistry.get_instance()
-    pipe_id = "duplicate_test"
-    pipe1 = InProcessPipe()
-    pipe2 = InProcessPipe()
+    allocator = InProcessPipeAllocator(pipe_type=InProcessPipe)
 
-    registry.register(pipe_id, pipe1)
-    with pytest.raises(ValueError, match="already exists"):
-        registry.register(pipe_id, pipe2)
+    # 分配一个管道
+    pipe_id: str = await allocator.allocate()
+    pipe: Optional[Pipe] = await allocator.get(pipe_id)
+    assert pipe is not None
+    assert isinstance(pipe, InProcessPipe)
 
-    # 清理
-    registry.remove(pipe_id)
+    # 发送一条消息验证管道可用
+    await pipe.send(SimplePayload(value=42))
+    received = await pipe.receive()
+    assert isinstance(received, SimplePayload)
+    assert received.value == 42
+
+    # 释放管道
+    await allocator.release(pipe_id)
+    assert await allocator.get(pipe_id) is None
 
 
 # ------------------------------------------------------------------------------

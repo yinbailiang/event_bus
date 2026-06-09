@@ -2,17 +2,29 @@
 
 __version__ = "1.2.0"
 
-from .core import (
+from .event import (
     Event,
     EventDeclaration,
     EventRegistry,
+)
+
+from .handler import (
     EventHandler,
     EventHandlerRegistry,
+)
+
+from .middleware import (
+    Middleware,
+    MiddlewareChain,
+)
+
+from .bus import (
     EventBus,
     BusShuttingDown,
     ShutdownEvent,
     TaskErrorPayload,
     TaskErrorEvent,
+    ShutdownConfig,
 )
 
 __all__: list[str] = [
@@ -22,9 +34,12 @@ __all__: list[str] = [
     "EventRegistry",
     "EventHandler",
     "EventHandlerRegistry",
+    "Middleware",
+    "MiddlewareChain",
     "EventBus",
     "BusShuttingDown",
     "ShutdownEvent",
     "TaskErrorPayload",
     "TaskErrorEvent",
+    "ShutdownConfig",
 ]

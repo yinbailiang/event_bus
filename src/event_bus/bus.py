@@ -1,134 +1,15 @@
 import asyncio
 import logging
-import re
 import types
-import uuid
-from collections import OrderedDict
 from datetime import datetime
-from typing import Any, ClassVar, Dict, List, Optional, Set, Type, Pattern, Union
+from typing import Any, Dict,  Optional, Set, Type, Union
 from pydantic import BaseModel, Field
-from abc import ABC, abstractmethod
+
+from .event import Event, EventDeclaration, EventRegistry
+from .handler import EventHandler, EventHandlerRegistry
+from .middleware import MiddlewareChain, OnPublishNext
 
 logger = logging.getLogger(__name__)
-
-class Event(BaseModel):
-    """事件数据类"""
-    name: str = Field(description="事件类型")
-    data: Optional[BaseModel] = Field(default=None, description="事件附加数据")
-
-    # metadata
-    id: str = Field(default_factory=lambda: uuid.uuid4().hex, description="事件UUID")
-    sources: List[str] = Field(default_factory=list, description="事件处理链")
-    timestamps: List[datetime] = Field(default_factory=lambda:[], description="事件时间戳")
-
-class EventDeclaration(ABC):
-    """事件声明抽象基类"""
-    name: ClassVar[str]
-    payload_type: ClassVar[Optional[Type[BaseModel]]] = None
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        if not cls.name.strip():
-            raise TypeError(f"事件声明类 {cls.__name__} 必须定义非空的 `name` 属性")
-
-class EventRegistry:
-    """事件注册表"""
-
-    def __init__(self) -> None:
-        self._events: Dict[str, Type[EventDeclaration]] = {}
-
-    def register(self, event_decl: Type[EventDeclaration]) -> None:
-        """手动注册事件声明"""
-        if event_decl.name in self._events:
-            raise ValueError(f"重复的事件声明 {event_decl.name}")
-        self._events[event_decl.name] = event_decl
-
-    def unregister(self, event_name: str) -> None:
-        """注销事件声明"""
-        if event_name in self._events:
-            del self._events[event_name]
-
-    def get(self, name: str) -> Optional[Type[EventDeclaration]]:
-        return self._events.get(name)
-
-    def list_names(self) -> List[str]:
-        return list(self._events.keys())
-
-class EventHandler(ABC):
-    """事件处理器基类，所有具体事件处理器应继承此类"""
-    
-    def __init__(self, subscriptions: Optional[List[str]] = None, handle_timeout: Optional[float] = 1.0) -> None:
-        self.subscriptions: List[str] = subscriptions.copy() if subscriptions is not None else [] # 订阅的事件类型列表，支持正则表达式
-        self.handle_timeout: Optional[float] = handle_timeout
-
-    async def __call__(self, bus_proxy: 'EventBus.Proxy', event: Event) -> None:
-        """事件处理器入口，自动解包事件数据"""
-        await self.handle(event.data, bus_proxy, event)
-    
-    @abstractmethod
-    async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None: pass
-
-class EventHandlerRegistry:
-    """事件处理器注册表，负责管理事件类型与处理器的映射关系"""
-    
-    def __init__(self, regex_cache_maxsize: int = 256) -> None:
-        self._regex_cache: OrderedDict[str, Pattern[str]] = OrderedDict()
-        self._regex_cache_maxsize: int = regex_cache_maxsize
-        self._handlers: Dict[str, EventHandler] = {}
-
-    def register(self, handler: EventHandler) -> str:
-        """注册一个事件处理器实例"""
-        id = uuid.uuid4().hex
-        self._handlers[id] = handler
-        return id
-    
-    def get(self, handler_id: str) -> Optional[EventHandler]:
-        """根据ID获取事件处理器实例"""
-        return self._handlers.get(handler_id)
-    
-    def unregister(self, handler_id: str) -> bool:
-        """注销一个事件处理器实例"""
-        if handler_id in self._handlers:
-            del self._handlers[handler_id]
-            return True
-        return False
-
-    def get_handlers(self, event_type: str) -> List[tuple[str, EventHandler]]:
-        """获取匹配事件类型的所有处理器实例及其注册ID"""
-        matched: List[tuple[str, EventHandler]] = []
-        for handler_id, handler in self._handlers.items():
-            for pattern in handler.subscriptions:
-                if self._match_pattern(event_type, pattern):
-                    matched.append((handler_id, handler))
-                    break
-        return matched
-
-    def _match_pattern(self, event_type: str, pattern: str) -> bool:
-        """使用正则表达式匹配事件类型（LRU 缓存编译结果，防止无限膨胀）"""
-        if pattern not in self._regex_cache:
-            if len(self._regex_cache) >= self._regex_cache_maxsize:
-                self._regex_cache.popitem(last=False)  # 淘汰最旧条目
-            self._regex_cache[pattern] = re.compile(pattern)
-        else:
-            self._regex_cache.move_to_end(pattern)  # 命中则标记为最近使用
-        return re.fullmatch(self._regex_cache[pattern], event_type) is not None
-    
-    @property
-    def handlers_count(self) -> int:
-        return len(self._handlers)
-
-    @property
-    def all_handlers(self) -> Dict[str, EventHandler]:
-        """获取所有注册的事件处理器实例"""
-        return self._handlers.copy()
-    
-    @property
-    def regex_cache_info(self) -> Dict[str, Any]:
-        """获取正则表达式缓存的当前状态"""
-        return {
-            "size": len(self._regex_cache),
-            "max_size": self._regex_cache_maxsize,
-        }
 
 class BusShuttingDown(Exception):
     """总线正在停止，拒绝新发布，请求处理器执行清理并退出"""
@@ -166,6 +47,7 @@ class EventBus:
 
     class Proxy:
         """事件总线代理，提供给处理器调用以访问总线功能"""
+        
         def __init__(self, bus: 'EventBus', source: str, raw_event: Optional[Event] = None) -> None:
             self._bus: EventBus = bus
             self._source: str = source
@@ -182,9 +64,10 @@ class EventBus:
         def events_registry(self) -> EventRegistry:
             return self._bus._events
 
-    def __init__(self, event_registry: EventRegistry, handler_registry: EventHandlerRegistry, max_queue_size: int = 1024, max_handler_semaphore: int = 256, shutdown: ShutdownConfig = ShutdownConfig()) -> None:
+    def __init__(self, event_registry: EventRegistry, handler_registry: EventHandlerRegistry, max_queue_size: int = 1024, max_handler_semaphore: int = 256, shutdown: ShutdownConfig = ShutdownConfig(), middleware_chain: Optional[MiddlewareChain] = None) -> None:
         self._events: EventRegistry = event_registry
         self._handlers: EventHandlerRegistry = handler_registry
+        self._mw_chain: MiddlewareChain = middleware_chain or MiddlewareChain()
         
         if self._events.get(ShutdownEvent.name) is None:
             self._events.register(ShutdownEvent)
@@ -202,8 +85,12 @@ class EventBus:
 
         self._shutdown: ShutdownConfig = shutdown
 
+        # 预构建中间件责任链（之后不再变更）
+        self._before_publish_chain = self._mw_chain.build_before_publish(self._core_publish)
+        self._on_publish_chain: OnPublishNext = self._mw_chain.build_on_publish(self._noop_on_publish)
+
     async def _publish(self, name: str, source: str, data: Optional[Union[Dict[str, Any], BaseModel]] = None, old_event: Optional[Event] = None) -> None:
-        """发布事件到总线"""
+        """发布事件到总线（经过中间件链）"""
         if not self._enable_publish.is_set():
             if self._running.is_set():
                 logger.warning("EventBus is stopping, cannot publish new events")
@@ -212,16 +99,31 @@ class EventBus:
                 logger.warning("EventBus is not running, cannot publish events")
                 raise RuntimeError("EventBus is not running, cannot publish events")
 
-        event_declaration: Optional[Type[EventDeclaration]] = self._events.get(name)
+        try:
+            await self._before_publish_chain(self._events, name, source, data, old_event)
+        except Exception as e:
+            await self._mw_chain.on_publish_error(e, name, source, data)
+            raise
+
+    async def _core_publish(
+        self,
+        event_registry: EventRegistry,
+        name: str,
+        source: str,
+        data: Optional[Union[Dict[str, Any], BaseModel]],
+        old_event: Optional[Event],
+    ) -> None:
+        """before_publish 链的末端处理器：校验 → 构造 Event → 入队 → 触发 on_publish 链"""
+        event_declaration: Optional[Type[EventDeclaration]] = event_registry.get(name)
         if not event_declaration:
             logger.error(f"Unknown event type: {name}")
             raise ValueError(f"Unknown event type: {name}")
-        
+
         payload: Optional[BaseModel] = None
         if event_declaration.payload_type:
             if data is None:
                 raise ValueError(f"Event {name} requires payload data, but none provided")
-            
+
             elif isinstance(data, BaseModel):
                 if not isinstance(data, event_declaration.payload_type):
                     raise TypeError(
@@ -229,13 +131,13 @@ class EventBus:
                         f"expected {event_declaration.payload_type.__name__}, got {type(data).__name__}"
                     )
                 payload = data.model_copy()
-            
-            else: # 静态类型检查已检查
+
+            else:
                 payload = event_declaration.payload_type(**data)
         else:
             if data is not None:
                 raise ValueError(f"Event {name} does not accept payload data")
-        
+
         event = Event(
             name=name,
             data=payload,
@@ -246,6 +148,15 @@ class EventBus:
         event.timestamps.append(datetime.now())
         await self._queue.put(event)
         logger.debug(f"Event published: {event.name} (id={event.id})")
+
+        # 发布成功后，运行 on_publish 中间件链
+        await self._on_publish_chain(event)
+
+    @staticmethod
+    async def _noop_on_publish(
+        event: Event,
+    ) -> None:
+        """on_publish 链的末端处理器（空操作）"""
 
     async def start(self) -> None:
         """启动事件分发循环"""
@@ -259,6 +170,7 @@ class EventBus:
                 raise
             self._running.set()
             self._enable_publish.set()
+            await self._mw_chain.setup(self)
             logger.info("EventBus started")
     
     async def stop(self) -> None:
@@ -287,6 +199,7 @@ class EventBus:
             await self._wait_all_tasks_done() # 等待所有处理器任务完成
             
             self._running.clear()
+            await self._mw_chain.teardown(self)
             logger.info("EventBus stopped")
     
     async def __aenter__(self) -> "EventBus":

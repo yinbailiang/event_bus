@@ -1,0 +1,51 @@
+import logging
+import uuid
+from datetime import datetime
+from typing import Any, ClassVar, Dict, List, Optional, Type
+from pydantic import BaseModel, Field
+from abc import ABC
+
+logger = logging.getLogger(__name__)
+
+class Event(BaseModel):
+    """事件数据类"""
+    name: str = Field(description="事件类型")
+    data: Optional[BaseModel] = Field(default=None, description="事件附加数据")
+
+    # metadata
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, description="事件UUID")
+    sources: List[str] = Field(default_factory=list, description="事件处理链")
+    timestamps: List[datetime] = Field(default_factory=lambda:[], description="事件时间戳")
+
+class EventDeclaration(ABC):
+    """事件声明抽象基类"""
+    name: ClassVar[str]
+    payload_type: ClassVar[Optional[Type[BaseModel]]] = None
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if not cls.name.strip():
+            raise TypeError(f"事件声明类 {cls.__name__} 必须定义非空的 `name` 属性")
+
+class EventRegistry:
+    """事件注册表"""
+
+    def __init__(self) -> None:
+        self._events: Dict[str, Type[EventDeclaration]] = {}
+
+    def register(self, event_decl: Type[EventDeclaration]) -> None:
+        """手动注册事件声明"""
+        if event_decl.name in self._events:
+            raise ValueError(f"重复的事件声明 {event_decl.name}")
+        self._events[event_decl.name] = event_decl
+
+    def unregister(self, event_name: str) -> None:
+        """注销事件声明"""
+        if event_name in self._events:
+            del self._events[event_name]
+
+    def get(self, name: str) -> Optional[Type[EventDeclaration]]:
+        return self._events.get(name)
+
+    def list_names(self) -> List[str]:
+        return list(self._events.keys())
