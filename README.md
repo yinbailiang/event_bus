@@ -1,22 +1,27 @@
 # InfinityBus — 异步事件总线
 
 [![Test](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml/badge.svg)](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml)
+[![Coverage](https://img.shields.io/badge/coverage-94%25-brightgreen)](ENGINEERING.md)
+[![Pyright](https://img.shields.io/badge/pyright-strict-blue)](ENGINEERING.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![PyPI Version](https://img.shields.io/pypi/v/infinity_bus)](https://pypi.org/project/infinity_bus/)
-[![PyPI Downloads](https://img.shields.io/pypi/dm/infinity_bus)](https://pypi.org/project/infinity_bus/)
-[![Supported Python](https://img.shields.io/pypi/pyversions/infinity_bus)](https://pypi.org/project/infinity_bus/)
+[![Supported Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://pypi.org/project/infinity_bus/)
 
-基于 **asyncio** 的轻量级事件总线，实现发布/订阅模式，用于在异步应用中解耦组件间的通信。
+**强类型、可扩展的异步事件总线——中间件管道 + 高级模板。**
 
 ## ✨ 特性
 
-- **强类型负载校验** — 基于 Pydantic，发布时自动校验数据类型与结构
-- **正则表达式订阅** — 支持灵活的事件名匹配规则
-- **背压控制** — 队列大小与并发信号量双重限流，防止过载
-- **超时保护** — 每个处理器可独立设置超时，避免单任务阻塞总线
-- **错误隔离** — 单个处理器异常不影响其他处理器，错误通过内置事件统一上报
-- **优雅停机** — 保证停止过程中已入队事件被完整处理，避免数据丢失
-- **可观测性** — 提供活跃任务数、队列长度等监控指标
+| 类别 | 能力 |
+| - | - |
+| 类型安全 | Pydantic 负载校验 · pyright **strict** · **零** `# type: ignore` |
+| 灵活订阅 | **正则表达式**匹配事件名 · 通配符处理器 |
+| 中间件管道 | 洋葱模型 · `before_publish` / `on_publish` 双钩子 · 5 个内置中间件 |
+| 高级模板 | `expect` 一次性监听 · `request` RPC 调用 · `pipe` 双向管道 · `register` 批量注册 |
+| 生产可靠 | 优雅停机 · 背压控制 · 超时保护 · 错误隔离 · 可观测性 |
+| 工程纪律 | 90%+ 测试覆盖 · 85%+ docstring 覆盖 · pre-commit 自动门禁 |
+
+> 和同类项目不同：InfinityBus 是**可扩展的**（中间件洋葱管道），而非把所有功能硬编码在核心类里。
+> 详见 [中间件系统](docs/middleware.md)。
 
 ## 📦 安装
 
@@ -168,15 +173,13 @@ asyncio.run(main())
 | [中间件系统](docs/middleware.md) | `Middleware` 基类、`MiddlewareChain` 洋葱管道 |
 | [高级模板](docs/templates/templates.md) | `expect`、`request`、`pipe`、`register` 四大模板总览 |
 | [内置中间件](docs/templates/middlewares/middlewares.md) | 日志、限流、转换、屏蔽、递归防护 |
+| [工程质量](ENGINEERING.md) | 类型安全、测试覆盖、pre-commit 门禁、模块化规范 |
 
 ## 🧪 测试
 
 ```bash
 # 运行全部测试
 pytest --cov=src -v
-
-# 仅运行核心测试
-pytest tests/event_bus_test.py -v
 
 # 仅运行模板测试
 pytest tests/templates/ -v
