@@ -4,7 +4,7 @@ import uuid
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from types import TracebackType
-from typing import Any, AsyncIterator, Dict, Literal, Optional
+from typing import Any, AsyncGenerator, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -207,7 +207,7 @@ async def open_pipe(
     session_id: Optional[str] = None,
     allocator: Optional[InProcessPipeAllocator] = None,
     pipe_kargs: Optional[Dict[str, Any]] = None,
-) -> AsyncIterator[Pipe]:
+) -> AsyncGenerator[Pipe, None]:
     """客户端管道握手上下文管理器。
 
     分配管道 → 发送握手请求 → 等待握手响应 → yield 已就绪的 Pipe。
@@ -265,7 +265,7 @@ async def expect_pipe(
     session_id: Optional[str] = None,
     timeout: float = 5.0,
     allocator: Optional[InProcessPipeAllocator] = None,
-) -> AsyncIterator[Pipe]:
+) -> AsyncGenerator[Pipe, None]:
     """等待一个管道连接请求，返回已建立的 Pipe 实例。"""
 
     if allocator is None:
