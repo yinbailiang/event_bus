@@ -11,6 +11,10 @@ from .middlewares import (
     make_field_redact_transform,
     make_blocklist_predicate,
     make_allowlist_predicate,
+    production_chain,
+    development_chain,
+    secure_chain,
+    minimal_chain,
 )
 from .pipe import Pipe, InProcessPipe, InProcessPipeAllocator, PipeAllocator, open_pipe, expect_pipe
 from .register import ModuleEventRegister, ModuleHandlerRegister
@@ -30,6 +34,10 @@ __all__ = [
     "make_field_redact_transform",
     "make_blocklist_predicate",
     "make_allowlist_predicate",
+    "production_chain",
+    "development_chain",
+    "secure_chain",
+    "minimal_chain",
     # pipe
     "Pipe",
     "InProcessPipe",

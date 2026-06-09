@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 from pydantic import BaseModel
 
 from ..event import Event, EventRegistry
-from ..middleware import Middleware, BeforePublishNext, OnPublishNext
+from ..middleware import Middleware, BeforePublishNext, MiddlewareChain, OnPublishNext
 
 if __name__ == "__main__":
     from ..bus import EventBus  # pragma: no cover
@@ -645,3 +645,100 @@ class RecursionGuardMiddleware(Middleware):
         next: OnPublishNext,
     ) -> None:
         await next(event)
+
+
+# ============================================================================
+# 中间件预设工厂
+# ============================================================================
+
+
+def production_chain(
+    db_path: str = "event_bus.db",
+    *,
+    rate_limit: int = 1000,
+    rate_window: float = 1.0,
+    max_depth: int = 5,
+    max_chain_length: Optional[int] = 50,
+    chain: Optional[MiddlewareChain] = None,
+) -> MiddlewareChain:
+    """生产环境预设：日志 + 限流 + 递归防护。
+
+    适用场景：正式部署，需要审计追溯和过载保护。
+
+    ``chain`` 参数允许传入已有的链，预设将追加到末尾。
+    """
+
+    chain = chain or MiddlewareChain()
+    chain.add(SQLiteLoggingMiddleware(db_path))
+    chain.add(RateLimitMiddleware(max_requests=rate_limit, window_seconds=rate_window))
+    chain.add(RecursionGuardMiddleware(
+        max_depth=max_depth,
+        max_chain_length=max_chain_length,
+        ignore_sources={"EventBus", "EventBusErrorReporter"},
+    ))
+    return chain
+
+
+def development_chain(
+    *,
+    chain: Optional[MiddlewareChain] = None,
+) -> MiddlewareChain:
+    """开发环境预设：内存日志 + 严格递归检测。
+
+    适用场景：本地开发，快速发现逻辑 bug（递归、死循环）。
+    """
+    chain = chain or MiddlewareChain()
+    chain.add(SQLiteLoggingMiddleware(":memory:"))
+    chain.add(RecursionGuardMiddleware(
+        max_depth=2,
+        max_chain_length=20,
+    ))
+    return chain
+
+
+def secure_chain(
+    *,
+    rate_limit: int = 500,
+    rate_window: float = 1.0,
+    max_depth: int = 3,
+    block_events: Optional[tuple[str, ...]] = None,
+    chain: Optional[MiddlewareChain] = None,
+) -> MiddlewareChain:
+    """安全防护预设：限流 + 递归防护 + 可选事件屏蔽。
+
+    适用场景：对外暴露接口、多租户环境，需要防刷和事件白名单。
+
+    ``chain`` 参数允许传入已有的链，预设将追加到末尾。
+    """
+    chain = chain or MiddlewareChain()
+    chain.add(RateLimitMiddleware(max_requests=rate_limit, window_seconds=rate_window))
+    chain.add(RecursionGuardMiddleware(
+        max_depth=max_depth,
+        max_chain_length=max_depth * 10,
+        ignore_sources={"EventBus", "EventBusErrorReporter"},
+    ))
+    if block_events:
+        chain.add(EventBlockMiddleware(
+            make_blocklist_predicate(*block_events),
+            block_reason="blocked by secure_chain preset",
+        ))
+    return chain
+
+
+def minimal_chain(
+    *,
+    max_depth: int = 5,
+    chain: Optional[MiddlewareChain] = None,
+) -> MiddlewareChain:
+    """最小预设：仅递归防护。
+
+    适用场景：嵌入式、性能敏感，不需要日志和限流。
+
+    ``chain`` 参数允许传入已有的链，预设将追加到末尾。
+    """
+    chain = chain or MiddlewareChain()
+    chain.add(RecursionGuardMiddleware(
+        max_depth=max_depth,
+        max_chain_length=None,  # 仅靠 per-source 计数
+    ))
+    return chain
