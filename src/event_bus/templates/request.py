@@ -1,3 +1,5 @@
+"""请求-响应模板：在事件总线上实现同步风格的异步 RPC 调用。"""
+
 import asyncio
 import logging
 import uuid
@@ -41,6 +43,10 @@ async def request(
     session_id: Optional[str] = None,
     timeout: Optional[float] = 60.0,
 ) -> ResponseProtocol:
+    """发布请求事件并等待匹配的响应，实现事件总线上的 RPC 调用。
+
+    自动注入 session_id 和 request_id，通过 ``expect`` 等待匹配的响应事件。
+    """
     req_decl: Optional[Type[EventDeclaration]] = bus_proxy.events_registry.get(req_event)
     if req_decl is None:
         raise ValueError(f"请求事件 '{req_event}' 未注册")
@@ -60,6 +66,7 @@ async def request(
     payload_data['request_id'] = request_id
 
     def response_filter(event: Event) -> bool:
+        """按 session_id + request_id 精确匹配响应事件。"""
         payload: Optional[BaseModel] = event.data
         if not isinstance(payload, ResponseProtocol):
             raise TypeError(f'响应 payload 应为 ResponseProtocol，实际为 {type(payload)}')

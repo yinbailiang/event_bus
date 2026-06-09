@@ -47,9 +47,11 @@ class EventBlockMiddleware(Middleware):
         self._blocked_count: int = 0
 
     async def on_setup(self, bus: EventBus) -> None:
+        """No-op."""
         pass
 
     async def on_teardown(self, bus: EventBus) -> None:
+        """No-op."""
         pass
 
     async def before_publish(
@@ -61,6 +63,7 @@ class EventBlockMiddleware(Middleware):
         old_event: Event | None,
         next: BeforePublishNext,
     ) -> None:
+        """判定是否屏蔽事件，屏蔽时直接返回不调用 next。"""
         if self._predicate(name, data):
             self._blocked_count += 1
             logger.debug(
@@ -77,6 +80,7 @@ class EventBlockMiddleware(Middleware):
         event: Event,
         next: OnPublishNext,
     ) -> None:
+        """Propagate to next."""
         await next(event)
 
     @property

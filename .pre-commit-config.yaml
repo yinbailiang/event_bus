@@ -28,3 +28,8 @@ repos:
       - id: pyright
         args: ["--level", "error"]
         files: ^src/
+
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate

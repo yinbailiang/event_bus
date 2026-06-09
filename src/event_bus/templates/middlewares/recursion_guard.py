@@ -58,9 +58,11 @@ class RecursionGuardMiddleware(Middleware):
         self._ignore = ignore_sources or set()
 
     async def on_setup(self, bus: EventBus) -> None:
+        """No-op."""
         pass
 
     async def on_teardown(self, bus: EventBus) -> None:
+        """No-op."""
         pass
 
     async def before_publish(
@@ -72,6 +74,7 @@ class RecursionGuardMiddleware(Middleware):
         old_event: Event | None,
         next: BeforePublishNext,
     ) -> None:
+        """双重递归检测：per-source 计数 + 绝对链长。"""
         if old_event is not None:
             if self.max_chain_length is not None:
                 chain_len = len(old_event.event_ids) + 1  # +1 计入当前事件
@@ -97,4 +100,5 @@ class RecursionGuardMiddleware(Middleware):
         event: Event,
         next: OnPublishNext,
     ) -> None:
+        """Propagate to next."""
         await next(event)

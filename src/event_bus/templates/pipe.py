@@ -16,18 +16,28 @@ logger = logging.getLogger(__name__)
 
 
 class PipeHandshakeError(Exception):
+    """管道握手失败时抛出。"""
+
     pass
 
 
 class PipeTeardownError(Exception):
+    """管道关闭过程中发生异常时抛出。"""
+
     pass
 
 
 class PipeClosedError(Exception):
+    """管道已关闭且数据已消费完时读或者关闭后写时抛出。"""
+
     pass
 
 
 class Pipe(ABC):
+    """双向异步管道抽象基类
+    子类必须实现 ``open``、``close``、``send``、``receive`` 四个方法。
+    """
+
     async def __aenter__(self) -> 'Pipe':
         await self.open()
         return self
@@ -42,22 +52,28 @@ class Pipe(ABC):
 
     @abstractmethod
     async def open(self) -> None:
+        """打开管道，准备发送/接收数据。"""
         pass
 
     @abstractmethod
     async def close(self) -> None:
+        """关闭管道，释放资源。"""
         pass
 
     @abstractmethod
     async def send(self, data: BaseModel) -> None:
+        """向管道写入一个 Pydantic 模型实例。"""
         pass
 
     @abstractmethod
     async def receive(self) -> BaseModel:
+        """从管道读取下一个 Pydantic 模型实例。"""
         pass
 
 
 class PipeAllocator(ABC):
+    """管道分配器抽象基类，管理管道实例的创建、查找与释放。"""
+
     @abstractmethod
     async def allocate(self, **kwargs: Dict[str, Any]) -> str:
         """创建一个管道实例并返回其唯一标识符。"""
@@ -83,11 +99,13 @@ class InProcessPipe(Pipe):
         self._closed = asyncio.Event()
 
     async def send(self, data: BaseModel) -> None:
+        """写入数据，管道已关闭则抛出 PipeClosedError。"""
         if self._closed.is_set():
             raise PipeClosedError('Pipe is closed')
         await self._queue.put(data)
 
     async def receive(self) -> BaseModel:
+        """读取数据，管道已关闭且队列为空则抛出 PipeClosedError。"""
         get_task: asyncio.Task[BaseModel] = asyncio.create_task(self._queue.get())
         wait_task: asyncio.Task[Literal[True]] = asyncio.create_task(self._closed.wait())
         done, _ = await asyncio.wait([get_task, wait_task], return_when=asyncio.FIRST_COMPLETED)
@@ -110,11 +128,13 @@ class InProcessPipe(Pipe):
         raise PipeClosedError('Pipe is closed')
 
     async def open(self) -> None:
+        """打开管道（若之前已关闭则清除关闭标记）。"""
         if self._closed.is_set():
             self._closed.clear()
         pass
 
     async def close(self) -> None:
+        """关闭管道，设置关闭事件通知等待中的 receive。"""
         if not self._closed.is_set():
             self._closed.set()
         pass
@@ -137,6 +157,7 @@ class InProcessPipeAllocator(PipeAllocator):
         self,
         **kwargs: Dict[str, Any],
     ) -> str:
+        """创建管道实例并返回唯一标识符。"""
         pipe_id: str = uuid.uuid4().hex
         pipe: Pipe = self._pipe_type(**kwargs)
 
@@ -146,9 +167,11 @@ class InProcessPipeAllocator(PipeAllocator):
         return pipe_id
 
     async def get(self, pipe_id: str) -> Optional[Pipe]:
+        """根据 ID 获取管道实例，不存在时返回 None。"""
         return self._pipes.get(pipe_id)
 
     async def release(self, pipe_id: str) -> None:
+        """释放指定管道，从分配器中移除。"""
         self._pipes.pop(pipe_id, None)
 
 
@@ -156,6 +179,7 @@ _default_allocator: Optional[InProcessPipeAllocator] = None
 
 
 def get_default_allocator() -> InProcessPipeAllocator:
+    """返回模块级默认管道分配器（懒初始化）。"""
     global _default_allocator
     if _default_allocator is None:
         _default_allocator = InProcessPipeAllocator()
@@ -163,10 +187,14 @@ def get_default_allocator() -> InProcessPipeAllocator:
 
 
 class PipeOpenRequest(RequestProtocol):
+    """管道握手请求负载，携带管道唯一标识符。"""
+
     pipe_id: str = Field(description='管道ID')
 
 
 class PipeLinkedResponse(ResponseProtocol):
+    """管道握手响应负载，标准成功/失败字段由 ResponseProtocol 提供。"""
+
     pass
 
 
@@ -180,6 +208,10 @@ async def open_pipe(
     allocator: Optional[InProcessPipeAllocator] = None,
     pipe_kargs: Optional[Dict[str, Any]] = None,
 ) -> AsyncIterator[Pipe]:
+    """客户端管道握手上下文管理器。
+
+    分配管道 → 发送握手请求 → 等待握手响应 → yield 已就绪的 Pipe。
+    """
     if allocator is None:
         allocator = get_default_allocator()
 
@@ -240,6 +272,7 @@ async def expect_pipe(
         allocator = get_default_allocator()
 
     def request_filter(event: Event) -> bool:
+        """仅匹配指定 session_id 的握手请求。"""
         if not isinstance(event.data, PipeOpenRequest):
             return False
         if session_id is not None and event.data.session_id != session_id:

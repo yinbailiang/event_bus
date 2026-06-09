@@ -46,6 +46,7 @@ test = [
     "pytest-asyncio",
 ]
 dev = [
+    "interrogate",
     "pre-commit",
     "pytest",
     "pytest-cov",
@@ -102,3 +103,12 @@ reportMissingImports = "error"
 exclude = ["tests", "**/node_modules", "**/__pycache__", "**/.*", ".venv"]
 venvPath = "."
 venv = ".venv"
+
+[tool.interrogate]
+fail-under = 60
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-private = true
+ignore-semiprivate = true
+ignore-nested-functions = true

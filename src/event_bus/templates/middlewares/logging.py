@@ -83,6 +83,7 @@ class JSONLLoggingMiddleware(Middleware):
     # ------------------------------------------------------------------
 
     async def on_setup(self, bus: EventBus) -> None:  # noqa: ARG002
+        """创建目录并测试文件可写性。"""
         import os
 
         try:
@@ -98,6 +99,7 @@ class JSONLLoggingMiddleware(Middleware):
             self._ready = False
 
     async def on_teardown(self, bus: EventBus) -> None:  # noqa: ARG002
+        """No-op."""
         pass
 
     # ------------------------------------------------------------------
@@ -113,6 +115,7 @@ class JSONLLoggingMiddleware(Middleware):
         old_event: Event | None,
         next: BeforePublishNext,
     ) -> None:
+        """Propagate to next (日志在 on_publish 中记录）。"""
         await next(event_registry, name, source, data, old_event)
 
     async def on_publish(
@@ -120,6 +123,7 @@ class JSONLLoggingMiddleware(Middleware):
         event: Event,
         next: OnPublishNext,
     ) -> None:
+        """将事件写入 JSONL 文件。"""
         await self._log_event(event)
         await next(event)
 
@@ -130,6 +134,7 @@ class JSONLLoggingMiddleware(Middleware):
         source: str,
         data: Dict[str, Any] | Any | None,
     ) -> None:
+        """记录发布异常到 fallback 通道。"""
         record: Dict[str, Any] = {
             'name': name,
             'source': source,
@@ -241,6 +246,7 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
     # ------------------------------------------------------------------
 
     async def on_setup(self, bus: EventBus) -> None:
+        """连接 SQLite 并建表。"""
         try:
             self._conn = await aiosqlite.connect(self._db_path)
             await self._conn.execute('PRAGMA journal_mode=WAL;')
@@ -254,6 +260,7 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
             self._ready = False
 
     async def on_teardown(self, bus: EventBus) -> None:
+        """关闭 SQLite 连接。"""
         if self._conn is not None:
             try:
                 await self._conn.close()
@@ -273,6 +280,7 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
         old_event: Event | None,
         next: BeforePublishNext,
     ) -> None:
+        """Propagate to next (日志在 on_publish 中记录）。"""
         await next(event_registry, name, source, data, old_event)
 
     async def on_publish(
@@ -280,6 +288,7 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
         event: Event,
         next: OnPublishNext,
     ) -> None:
+        """将事件写入 SQLite。"""
         await self._log_event(event)
         await next(event)
 
@@ -290,6 +299,7 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
         source: str,
         data: Dict[str, Any] | BaseModel | None,
     ) -> None:
+        """记录发布异常到 fallback 通道。"""
         # 错误事件也记录
         record: Dict[str, Any] = {
             'name': name,

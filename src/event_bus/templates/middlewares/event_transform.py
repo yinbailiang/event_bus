@@ -41,9 +41,11 @@ class EventTransformMiddleware(Middleware):
         self._transform = transform
 
     async def on_setup(self, bus: EventBus) -> None:
+        """No-op."""
         pass
 
     async def on_teardown(self, bus: EventBus) -> None:
+        """No-op."""
         pass
 
     async def before_publish(
@@ -55,6 +57,7 @@ class EventTransformMiddleware(Middleware):
         old_event: Event | None,
         next: BeforePublishNext,
     ) -> None:
+        """转换事件名和/或负载，然后调用 next。"""
         new_name, new_data = self._transform(name, data)
         await next(event_registry, new_name, source, new_data, old_event)
 
@@ -63,6 +66,7 @@ class EventTransformMiddleware(Middleware):
         event: Event,
         next: OnPublishNext,
     ) -> None:
+        """Propagate to next."""
         await next(event)
 
 

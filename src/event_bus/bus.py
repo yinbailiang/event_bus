@@ -20,10 +20,14 @@ class BusShuttingDown(Exception):
 
 
 class ShutdownEvent(EventDeclaration):
+    """总线停机前发布的系统事件，通知所有处理器准备退出。"""
+
     name = 'event_bus.__shutdown__'
 
 
 class TaskErrorPayload(BaseModel):
+    """处理器执行异常时携带的负载。"""
+
     error_event: Event = Field(description='发生异常的事件')
     handler_id: Optional[str] = Field(default=None, description='发生异常的处理器内部ID')
     handler_name: str = Field(description='发生异常的处理器类名')
@@ -32,6 +36,8 @@ class TaskErrorPayload(BaseModel):
 
 
 class TaskErrorEvent(EventDeclaration):
+    """处理器执行异常时发布的系统事件，用于错误监控与故障排查。"""
+
     name = 'event_bus.__task_error__'
     payload_type = TaskErrorPayload
 
@@ -63,14 +69,17 @@ class EventBus:
             self._raw_event: Optional[Event] = raw_event
 
         async def publish(self, name: str, data: Optional[Union[Dict[str, Any], BaseModel]] = None) -> None:
+            """发布事件到总线，自动校验负载类型并触发中间件管道。"""
             await self._bus._publish(name, self._source, data, self._raw_event)
 
         @property
         def handlers_registry(self) -> EventHandlerRegistry:
+            """访问处理器注册表。"""
             return self._bus._handlers
 
         @property
         def events_registry(self) -> EventRegistry:
+            """访问事件注册表。"""
             return self._bus._events
 
     def __init__(
@@ -344,16 +353,20 @@ class EventBus:
 
     @property
     def is_running(self) -> bool:
+        """总线是否在运行。"""
         return self._running.is_set()
 
     @property
     def is_publishing_enabled(self) -> bool:
+        """是否允许发布新事件（停止过程中为 False）。"""
         return self._enable_publish.is_set()
 
     @property
     def active_task_count(self) -> int:
+        """当前活跃的处理器任务数。"""
         return len(self._active_tasks)
 
     @property
     def queue_size(self) -> int:
+        """事件队列中待处理的事件数。"""
         return self._queue.qsize()

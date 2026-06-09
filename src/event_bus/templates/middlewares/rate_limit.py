@@ -52,9 +52,11 @@ class RateLimitMiddleware(Middleware):
         self._lock = asyncio.Lock()
 
     async def on_setup(self, bus: EventBus) -> None:
+        """No-op."""
         pass
 
     async def on_teardown(self, bus: EventBus) -> None:
+        """No-op."""
         pass
 
     async def before_publish(
@@ -66,6 +68,7 @@ class RateLimitMiddleware(Middleware):
         old_event: Event | None,
         next: BeforePublishNext,
     ) -> None:
+        """滑动窗口限流检查，超限时丢弃事件。"""
         key = name if self._per_event else '__global__'
         now = time.monotonic()
 
@@ -94,6 +97,7 @@ class RateLimitMiddleware(Middleware):
         event: Event,
         next: OnPublishNext,
     ) -> None:
+        """Propagate to next."""
         await next(event)
 
     @property
