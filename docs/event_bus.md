@@ -14,7 +14,7 @@ EventBus 是一个基于 asyncio 的轻量级事件总线，实现发布/订阅�
 | [handler.md](handler.md) | `EventHandler` 处理器基类、`EventHandlerRegistry` 处理器注册表 |
 | [bus.md](bus.md) | `EventBus` 事件总线、`Proxy` 代理、`ShutdownConfig` 停机配置、内置事件与异常 |
 | [middleware.md](middleware.md) | `Middleware` 中间件基类、`MiddlewareChain` 责任链管理器、洋葱模型 |
-| [templates/](templates/) | 高级模板：`expect` 一次性监听、`pipe` 数据管道、`register` 批量注册、`request` 请求-响应 |
+| [templates/](templates/templates.md) | [高级模板总览](templates/templates.md)：`expect`、`request`、`pipe`、`register` 及内置中间件 |
 
 ---
 

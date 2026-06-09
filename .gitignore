@@ -28,6 +28,9 @@ uv.lock
 .DS_Store
 Thumbs.db
 
+# Experimental / lab
+experimental/
+
 # Logs
 logs/
 *.log
