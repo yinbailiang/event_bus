@@ -48,7 +48,11 @@ class Pipe(ABC):
         exc_val: Optional[BaseException],
         exc_tb: Optional[TracebackType],
     ) -> Optional[bool]:
-        await self.close()
+        try:
+            await self.close()
+        except Exception:
+            logger.exception('Pipe.close() 发生异常')
+        return None
 
     @abstractmethod
     async def open(self) -> None:
@@ -128,10 +132,16 @@ class InProcessPipe(Pipe):
         raise PipeClosedError('Pipe is closed')
 
     async def open(self) -> None:
-        """打开管道（若之前已关闭则清除关闭标记）。"""
+        """打开管道。若之前已关闭，清空残留队列并重置关闭标记。"""
         if self._closed.is_set():
             self._closed.clear()
-        pass
+            # 清空残留数据，避免重开后读到旧数据
+            while not self._queue.empty():
+                try:
+                    self._queue.get_nowait()
+                    self._queue.task_done()
+                except asyncio.QueueEmpty:
+                    break
 
     async def close(self) -> None:
         """关闭管道，设置关闭事件通知等待中的 receive。"""

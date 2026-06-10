@@ -1,6 +1,7 @@
 from .expect import OneShotEventHandler, expect
 from .middlewares import (
     EventBlockMiddleware,
+    EventForwardMiddleware,
     EventTransformMiddleware,
     JSONLLoggingMiddleware,
     RateLimitMiddleware,
@@ -9,6 +10,7 @@ from .middlewares import (
     SQLiteLoggingMiddleware,
     make_allowlist_predicate,
     make_blocklist_predicate,
+    make_event_name_filter,
     make_field_inject_transform,
     make_field_redact_transform,
     make_rename_transform,
@@ -27,6 +29,7 @@ __all__ = [
     'RateLimitMiddleware',
     'EventTransformMiddleware',
     'EventBlockMiddleware',
+    'EventForwardMiddleware',
     'RecursionGuardMiddleware',
     'RecursionDetectedError',
     'make_rename_transform',
@@ -34,6 +37,7 @@ __all__ = [
     'make_field_redact_transform',
     'make_blocklist_predicate',
     'make_allowlist_predicate',
+    'make_event_name_filter',
     # pipe
     'Pipe',
     'InProcessPipe',

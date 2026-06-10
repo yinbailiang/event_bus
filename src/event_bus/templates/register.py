@@ -1,6 +1,9 @@
+import logging
 from typing import Any, Callable, Dict, List, Set, Tuple, Type, TypeVar
 
 from .. import EventDeclaration, EventHandler, EventHandlerRegistry, EventRegistry
+
+logger = logging.getLogger(__name__)
 
 EventDeclT = TypeVar('EventDeclT', bound=Type[EventDeclaration])
 
@@ -133,15 +136,25 @@ class ModuleHandlerRegister:
         """
         将所有收集到的处理器实例化并注册到指定的 EventHandlerRegistry 中。
 
+        单个处理器的构造或注册失败不会中断其余处理器的注册流程，
+        异常会被记录到日志中。
+
         Args:
             handler_registry: 目标处理器注册表
         """
         for handler_type, depends_factory in self.handlers:
-            # 调用依赖工厂获取参数字典
-            kwargs: Dict[str, Any] = depends_factory()
-            # 实例化处理器并注册
-            handler_instance: EventHandler = handler_type(**kwargs)
-            handler_registry.register(handler_instance)
+            try:
+                # 调用依赖工厂获取参数字典
+                kwargs: Dict[str, Any] = depends_factory()
+                # 实例化处理器并注册
+                handler_instance: EventHandler = handler_type(**kwargs)
+                handler_registry.register(handler_instance)
+            except Exception:
+                logger.exception(
+                    '注册处理器 %s 失败（依赖工厂: %s），跳过并继续',
+                    handler_type.__name__,
+                    depends_factory,
+                )
 
     def __repr__(self) -> str:
         return f'<ModuleHandlerRegister name={self.name} handlers={len(self.handlers)}>'

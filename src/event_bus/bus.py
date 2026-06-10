@@ -145,7 +145,10 @@ class EventBus:
         data: Optional[Union[Dict[str, Any], BaseModel]],
         old_event: Optional[Event],
     ) -> None:
-        """before_publish 链的末端处理器：校验 → 构造 Event → 入队 → 触发 on_publish 链"""
+        """before_publish 链的末端处理器：事件声明校验 → 负载校验 → 构造 Event → 入队 → 触发 on_publish 链
+
+        此方法仅在所有中间件的 ``before_publish`` 钩子均调用 ``await next(...)`` 后执行。
+        """
         event_declaration: Optional[Type[EventDeclaration]] = event_registry.get(name)
         if not event_declaration:
             logger.error(f'Unknown event type: {name}')

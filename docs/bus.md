@@ -65,10 +65,112 @@ class EventBus:
 
 | 属性 | 类型 | 说明 |
 | - | - | - |
-| `is_running` | `bool` | 总线是否在运行。 |
-| `is_publishing_enabled` | `bool` | 是否允许发布新事件（停止过程中为 `False`）。 |
+| `is_running` | `bool` | 总线是否在运行。详见 [is_running](#is_running)。 |
+| `is_publishing_enabled` | `bool` | 是否允许发布新事件。详见 [is_publishing_enabled](#is_publishing_enabled)。 |
 | `active_task_count` | `int` | 当前活跃的处理器任务数。 |
 | `queue_size` | `int` | 事件队列中待处理的事件数。 |
+
+#### `is_running`
+
+指示事件总线的运行状态。其值在整个生命周期中的变化如下：
+
+| 阶段 | `is_running` | 说明 |
+| - | - | - |
+| 构造后、`start()` 前 | `False` | 总线已创建但尚未启动。 |
+| `start()` 执行中 | `False` | 调度循环创建中，尚未标记运行。 |
+| `start()` 完成后 | **`True`** | 调度循环已启动，正在分发事件。 |
+| `stop()` 执行中 | **`True`** | 正在排空队列、等待活跃任务完成。 |
+| `stop()` 完成后 | `False` | 所有资源已释放。 |
+
+> **关键**：`is_running` 在 `stop()` 的**整个排空和等待期间保持 `True`**，
+> 直到所有活跃任务完成、中间件拆卸完毕后才会变为 `False`。
+> 这意味着在停机过程中，`is_running=True` 但 `is_publishing_enabled=False`
+> （参见下文）。
+
+```python
+bus = EventBus(reg, h_reg)
+print(bus.is_running)  # False
+
+await bus.start()
+print(bus.is_running)  # True
+
+# stop() 内部：排空队列 + 等待任务期间，is_running 仍为 True
+await bus.stop()
+print(bus.is_running)  # False
+```
+
+#### `is_publishing_enabled`
+
+指示是否允许向总线发布新事件。其值在整个生命周期中的变化如下：
+
+| 阶段 | `is_publishing_enabled` | 说明 |
+| - | - | - |
+| 构造后、`start()` 前 | `False` | 发布将抛出 `RuntimeError`。 |
+| `start()` 完成后 | **`True`** | 可以正常发布事件。 |
+| `stop()` 发布 `__shutdown__` 后 | **`False`** | 拒绝新事件入队，发布将抛出 `BusShuttingDown`。 |
+| `stop()` 完成后 | `False` | — |
+
+> **关键**：`is_publishing_enabled` 在 `stop()` 的**第一时间被清除**（紧随 `__shutdown__`
+> 事件发布之后），早于队列排空和活跃任务等待。这确保了停机过程中不会有新事件
+> 被加入队列，而已入队的事件仍会被正常分发处理。
+
+##### 与 `is_running` 的区别
+
+| 场景 | `is_running` | `is_publishing_enabled` |
+| - | - | - |
+| 正常运行 | `True` | `True` |
+| 停机中（排空队列、等待任务） | `True` | **`False`** |
+| 未启动 / 已停止 | `False` | `False` |
+
+这两个属性在**停机过程中存在状态分离**：`is_running` 保持 `True` 以确保队列和
+任务被完整处理，而 `is_publishing_enabled` 提前变为 `False` 以阻止新事件流入。
+
+##### 使用场景
+
+```python
+# 场景 1：健康检查端点
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok" if bus.is_running else "degraded",
+        "can_publish": bus.is_publishing_enabled,
+        "queue_depth": bus.queue_size,
+        "active_handlers": bus.active_task_count,
+    }
+
+# 场景 2：优雅停机时等待总线完全停止
+async def graceful_shutdown():
+    signal.alarm("shutdown")
+    await bus.stop()
+    # 此时 is_running == False，可以安全退出进程
+    assert not bus.is_running
+
+# 场景 3：发布前检查（通常无需手动检查，publish 会抛出对应异常）
+async def safe_publish(bus, name, data):
+    if not bus.is_publishing_enabled:
+        logger.warning("总线已停止接受新事件，跳过发布")
+        return
+    await bus.proxy("my_service").publish(name, data)
+```
+
+##### 状态转换时序图
+
+```text
+start()                                   stop()
+  │                                         │
+  │  dispatch_task 创建                      │  1. 发布 __shutdown__
+  │  _running.set()           ◄────────── 仍在运行 ──────────►  _running.clear()
+  │  _enable_publish.set()    ◄── 允许发布 ──►  _enable_publish.clear()
+  │                                         │
+  │  mw_chain.setup()                       │  2. 排空队列（queue.join()）
+  │                                         │  3. 取消 dispatch_task
+  ▼                                         ▼  4. 等待活跃任务
+is_running=True                          │  5. mw_chain.teardown()
+is_publishing_enabled=True               │
+                                         ▼
+                                       is_running=False
+                                       is_publishing_enabled=False
+```
 
 ---
 

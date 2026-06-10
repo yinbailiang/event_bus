@@ -85,7 +85,7 @@ class Middleware(ABC):
 
 #### `before_publish(event_registry, name, source, data, old_event, next)`
 
-发布**前**钩子。在事件声明校验通过后、构造 Event 并入队前执行。
+发布**前**钩子。在 publish 的任何逻辑（含事件声明校验）开始前执行。调用 ``next`` 后才会进入校验 → 构造 Event → 入队流程。
 
 | 参数 | 说明 |
 | - | - |

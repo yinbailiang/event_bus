@@ -51,7 +51,7 @@ class EventHandler(ABC):
     """事件处理器基类，所有具体事件处理器应继承此类"""
 
     def __init__(
-        self, subscriptions: Optional[List[Regex | str]] = None, handle_timeout: Optional[float] = 1.0
+        self, subscriptions: Optional[List[Regex | str]] = None, handle_timeout: Optional[float] = 32.0
     ) -> None:
         self.subscriptions: List[Regex | str] = subscriptions.copy() if subscriptions is not None else []
         self.handle_timeout: Optional[float] = handle_timeout

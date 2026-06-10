@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager, contextmanager
 from inspect import isawaitable
 from typing import (
@@ -21,6 +22,8 @@ from .. import (
     EventHandlerRegistry,
     Regex,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OneShotEventHandler(EventHandler):
@@ -48,7 +51,10 @@ class OneShotEventHandler(EventHandler):
     async def handle(self, payload: Optional[BaseModel], bus_proxy: EventBus.Proxy, raw_event: Event) -> None:
         """事件入口，内部进行状态检查与过滤"""
         if not self._active.is_set():
+            logger.debug('OneShotEventHandler 已停用，跳过事件: %s (id=%s)', raw_event.name, raw_event.id)
             return
+
+        logger.debug('OneShotEventHandler 收到事件: %s (id=%s)', raw_event.name, raw_event.id)
 
         # 过滤
         if self._filter is not None:
@@ -57,17 +63,20 @@ class OneShotEventHandler(EventHandler):
                 if isawaitable(result):
                     result = await result
                 if not result:
+                    logger.debug('OneShotEventHandler 过滤器返回 False，跳过事件: %s', raw_event.name)
                     return
             except Exception as e:
+                logger.debug('OneShotEventHandler 过滤器异常: %s: %s', type(e).__name__, e)
                 if self._active.is_set():
                     self._active.clear()
                     if self._on_error:
                         self._on_error(e)
                     else:
-                        raise  # 触发总线错误事件
+                        raise  # 触发总线错误事件（兜底）
 
         if self._active.is_set():
             self._active.clear()
+            logger.debug('OneShotEventHandler 匹配成功，触发回调: %s', raw_event.name)
             self._on_match(raw_event)
 
 

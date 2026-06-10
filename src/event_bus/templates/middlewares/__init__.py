@@ -1,4 +1,10 @@
 from .event_block import BlockPredicate, EventBlockMiddleware, make_allowlist_predicate, make_blocklist_predicate
+from .event_forward import (
+    EventFilter,
+    EventForwardMiddleware,
+    TargetBusProvider,
+    make_event_name_filter,
+)
 from .event_transform import (
     EventTransformMiddleware,
     TransformFunc,
@@ -17,6 +23,11 @@ __all__ = [
     'LogFallback',
     # 限流
     'RateLimitMiddleware',
+    # 转发
+    'EventForwardMiddleware',
+    'EventFilter',
+    'TargetBusProvider',
+    'make_event_name_filter',
     # 转换
     'EventTransformMiddleware',
     'TransformFunc',

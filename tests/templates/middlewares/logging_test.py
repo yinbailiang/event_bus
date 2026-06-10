@@ -71,7 +71,7 @@ class TestSQLiteLoggingMiddleware:
             # 查询 SQLite 确认写入（在连接关闭前查询）
             assert mw.is_connect
             cursor = await mw._conn.execute( # pyright: ignore[reportPrivateUsage]
-                f"SELECT name, sources, data FROM {mw._table}" # type: ignore
+                f"SELECT name, sources, data FROM {mw._table}" # pyright: ignore[reportPrivateUsage]
             )
             rows = await cursor.fetchall()
             assert len(rows) >= 1

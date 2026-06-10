@@ -105,6 +105,9 @@ def make_field_inject_transform(
         name: str,
         data: Dict[str, Any] | BaseModel | None,
     ) -> tuple[str, Dict[str, Any] | BaseModel | None]:
+        if isinstance(data, BaseModel):
+            data = {**static_fields, **data.model_dump()}
+            return name, data
         if isinstance(data, dict):
             merged = {**static_fields, **data}
             return name, merged
@@ -129,7 +132,10 @@ def make_field_redact_transform(
         name: str,
         data: Dict[str, Any] | BaseModel | None,
     ) -> tuple[str, Dict[str, Any] | BaseModel | None]:
+        if isinstance(data, BaseModel):
+            data = data.model_dump()
         if isinstance(data, dict):
+            data = data.copy()  # 避免修改调用方的原始数据
             for field in fields:
                 if field in data:
                     data[field] = replacement

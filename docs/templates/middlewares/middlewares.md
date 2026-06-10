@@ -1,6 +1,6 @@
 # 内置中间件总览
 
-EventBus 提供了 5 个开箱即用的中间件，覆盖日志、限流、转换、屏蔽、递归防护等常见横切关注点。
+EventBus 提供了 6 个开箱即用的中间件，覆盖日志、限流、转换、屏蔽、递归防护、跨总线转发等常见横切关注点。
 所有中间件通过 `MiddlewareChain` 注册，按注册顺序形成洋葱管道。
 
 ---
@@ -9,12 +9,13 @@ EventBus 提供了 5 个开箱即用的中间件，覆盖日志、限流、转�
 
 | 中间件 | 阶段 | 用途 | 文档 |
 | - | - | - | - |
-| `EventBlockMiddleware` | `before_publish` | 按规则屏蔽（丢弃）事件 | [event_block.md](event_block.md) |
-| `EventTransformMiddleware` | `before_publish` | 转换事件名 / 注入 / 脱敏字段 | [event_transform.md](event_transform.md) |
-| `JSONLLoggingMiddleware` | `on_publish` | JSONL 文件持久化日志 | [logging.md](logging.md) |
-| `SQLiteLoggingMiddleware` | `on_publish` | SQLite 数据库持久化日志 | [logging.md](logging.md) |
 | `RateLimitMiddleware` | `before_publish` | 滑动窗口速率限制 | [rate_limit.md](rate_limit.md) |
 | `RecursionGuardMiddleware` | `before_publish` | 双重递归检测 | [recursion_guard.md](recursion_guard.md) |
+| `EventBlockMiddleware` | `before_publish` | 按规则屏蔽（丢弃）事件 | [event_block.md](event_block.md) |
+| `EventTransformMiddleware` | `before_publish` | 转换事件名 / 注入 / 脱敏字段 | [event_transform.md](event_transform.md) |
+| `EventForwardMiddleware` | `on_publish` | 单向跨总线事件转发 | [event_forward.md](event_forward.md) |
+| `JSONLLoggingMiddleware` | `on_publish` | JSONL 文件持久化日志 | [logging.md](logging.md) |
+| `SQLiteLoggingMiddleware` | `on_publish` | SQLite 数据库持久化日志 | [logging.md](logging.md) |
 
 ---
 
@@ -34,12 +35,15 @@ EventBus 提供了 5 个开箱即用的中间件，覆盖日志、限流、转�
   │
   ▼
 ┌─ on_publish 链 ─────────────────────────────────────┐
+│  EventForwardMiddleware  ← 转发到其他总线              │
 │  JSONLLoggingMiddleware  ← 写入 JSONL 文件             │
 │  SQLiteLoggingMiddleware ← 写入 SQLite 数据库          │
 └──────────────────────────────────────────────────────┘
 ```
 
-> **建议注册顺序**：限流 → 递归防护 → 屏蔽 → 转换 → 日志。`on_publish` 阶段的日志中间件顺序无关紧要。
+> **建议注册顺序**：限流 → 递归防护 → 屏蔽 → 转换 → 转发 → 日志。
+> `on_publish` 阶段的转发和日志中间件顺序：转发在前可确保日志中间仅记录本总线事件。
+> 如需在目标总线记录转发来源，可将转发放在日志之后。
 
 ---
 
@@ -67,6 +71,12 @@ from event_bus.templates.middlewares import (
     # 递归防护
     RecursionGuardMiddleware,
     RecursionDetectedError,
+    # 转发
+    EventForwardMiddleware,
+    EventFilter,
+    TargetBusProvider,
+    make_event_name_filter,
+    make_static_target_provider,
     # 工具
     serialize_data,
 )

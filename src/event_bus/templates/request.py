@@ -66,10 +66,18 @@ async def request(
     payload_data['request_id'] = request_id
 
     def response_filter(event: Event) -> bool:
-        """按 session_id + request_id 精确匹配响应事件。"""
+        """按 session_id + request_id 精确匹配响应事件。
+
+        若 payload 类型不匹配，抛出 TypeError 以便通过 ``expect`` 的 future
+        立即传播错误，而非让调用方等待超时。
+        """
         payload: Optional[BaseModel] = event.data
         if not isinstance(payload, ResponseProtocol):
-            raise TypeError(f'响应 payload 应为 ResponseProtocol，实际为 {type(payload)}')
+            # 此分支不应当发生，防御，防止总线带病
+            raise TypeError(
+                f'响应 payload 应为 ResponseProtocol 子类，实际为 {type(payload).__name__}。'
+                f'请确认 resp_event="{resp_event}" 的 payload_type 继承自 ResponseProtocol。'
+            )
         return payload.session_id == session_id and payload.request_id == request_id
 
     async with expect(

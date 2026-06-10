@@ -27,7 +27,7 @@
 | - | - |
 | 类型安全 | Pydantic 负载校验 · pyright **strict** · **业务代码零** `# type: ignore` |
 | 灵活订阅 | **正则表达式**匹配事件名 · 通配符处理器 |
-| 中间件管道 | 洋葱模型 · `before_publish` / `on_publish` 双钩子 · 5 个内置中间件 |
+| 中间件管道 | 洋葱模型 · `before_publish` / `on_publish` 双钩子 · 5+ 内置中间件 |
 | 高级模板 | `expect` 一次性监听 · `request` RPC 调用 · `pipe` 双向管道 · `register` 批量注册 |
 | 生产可靠 | 优雅停机 · 背压控制 · 超时保护 · 错误隔离 · 可观测性 |
 | 工程纪律 | 90%+ 测试覆盖 · 85%+ docstring 覆盖 · pre-commit 自动门禁 |

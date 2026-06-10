@@ -48,7 +48,11 @@ class Middleware(ABC):
         old_event: Event | None,
         next: BeforePublishNext,
     ) -> None:
-        """发布**前**钩子 —— 在事件声明校验完成后、入队前执行。"""
+        """发布**前**钩子 —— 在 publish 的任何逻辑（含事件校验）开始前执行。
+
+        调用 ``await next(...)`` 将进入下一个中间件或核心发布流程
+        （事件声明校验 → 构造 ``Event`` → 入队 → 触发 ``on_publish`` 链）。
+        """
         ...
 
     @abstractmethod

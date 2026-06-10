@@ -1,8 +1,8 @@
 import asyncio
 import logging
 import time
-from collections import defaultdict
-from typing import Any, Dict, List
+from collections import defaultdict, deque
+from typing import Any, Dict
 
 from pydantic import BaseModel
 
@@ -48,7 +48,7 @@ class RateLimitMiddleware(Middleware):
         self._per_event = per_event
 
         # name → deque[float]
-        self._buckets: Dict[str, List[float]] = defaultdict(list)
+        self._buckets: Dict[str, deque[float]] = defaultdict(deque)
         self._lock = asyncio.Lock()
 
     async def on_setup(self, bus: EventBus) -> None:
@@ -77,7 +77,7 @@ class RateLimitMiddleware(Middleware):
             # 清理过期时间戳
             cutoff = now - self._window
             while bucket and bucket[0] < cutoff:
-                bucket.pop(0)
+                bucket.popleft()
 
             if len(bucket) >= self._max:
                 logger.warning(
