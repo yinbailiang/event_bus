@@ -84,12 +84,20 @@ class MiddlewareChain:
 
     def __init__(self) -> None:
         self._middlewares: list[Middleware] = []
+        self._cached_before: BeforePublishNext | None = None
+        self._cached_on: OnPublishNext | None = None
+
+    def _invalidate(self) -> None:
+        """清空缓存（中间件列表变更时调用）。"""
+        self._cached_before = None
+        self._cached_on = None
 
     def add(self, middleware: Middleware) -> 'MiddlewareChain':
         """在链**末尾**追加一个中间件。"""
         if middleware in self._middlewares:
             raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
         self._middlewares.append(middleware)
+        self._invalidate()
         return self
 
     def insert(self, index: int, middleware: Middleware) -> 'MiddlewareChain':
@@ -97,15 +105,18 @@ class MiddlewareChain:
         if middleware in self._middlewares:
             raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
         self._middlewares.insert(index, middleware)
+        self._invalidate()
         return self
 
     def remove(self, middleware: Middleware) -> None:
         """移除指定中间件实例。"""
         self._middlewares.remove(middleware)
+        self._invalidate()
 
     def clear(self) -> None:
         """清空所有中间件。"""
         self._middlewares.clear()
+        self._invalidate()
 
     @property
     def middlewares(self) -> list[Middleware]:
@@ -122,7 +133,7 @@ class MiddlewareChain:
                 error_middlewares.append(mw)
                 logger.exception('Middleware %s on_setup failed', mw.__class__.__name__)
         for error_mw in error_middlewares:
-            self._middlewares.remove(error_mw)
+            self.remove(error_mw)
         return error_middlewares
 
     async def teardown(self, bus: EventBus) -> None:
@@ -137,21 +148,25 @@ class MiddlewareChain:
         self,
         final_handler: BeforePublishNext,
     ) -> BeforePublishNext:
-        """构建 ``before_publish`` 责任链。"""
-        handler = final_handler
-        for mw in reversed(self._middlewares):
-            handler = self._wrap_before(mw, handler)
-        return handler
+        """构建 ``before_publish`` 责任链（带缓存，中间件变更后自动重建）。"""
+        if self._cached_before is None:
+            handler = final_handler
+            for mw in reversed(self._middlewares):
+                handler = self._wrap_before(mw, handler)
+            self._cached_before = handler
+        return self._cached_before
 
     def build_on_publish(
         self,
         final_handler: OnPublishNext,
     ) -> OnPublishNext:
-        """构建 ``on_publish`` 责任链。"""
-        handler = final_handler
-        for mw in reversed(self._middlewares):
-            handler = self._wrap_on(mw, handler)
-        return handler
+        """构建 ``on_publish`` 责任链（带缓存，中间件变更后自动重建）。"""
+        if self._cached_on is None:
+            handler = final_handler
+            for mw in reversed(self._middlewares):
+                handler = self._wrap_on(mw, handler)
+            self._cached_on = handler
+        return self._cached_on
 
     async def on_publish_error(
         self,

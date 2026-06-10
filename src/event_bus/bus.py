@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from .event import Event, EventDeclaration, EventRegistry
 from .handler import EventHandler, EventHandlerRegistry
-from .middleware import MiddlewareChain, OnPublishNext
+from .middleware import MiddlewareChain
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,11 @@ class EventBus:
             """访问事件注册表。"""
             return self._bus._events
 
+        @property
+        def middleware(self) -> MiddlewareChain:
+            """访问中间件链，支持运行时动态增删中间件。"""
+            return self._bus._mw_chain
+
     def __init__(
         self,
         event_registry: EventRegistry,
@@ -111,10 +116,6 @@ class EventBus:
 
         self._shutdown: ShutdownConfig = shutdown
 
-        # 预构建中间件责任链（之后不再变更）
-        self._before_publish_chain = self._mw_chain.build_before_publish(self._core_publish)
-        self._on_publish_chain: OnPublishNext = self._mw_chain.build_on_publish(self._noop_on_publish)
-
     async def _publish(
         self,
         name: str,
@@ -132,7 +133,7 @@ class EventBus:
                 raise RuntimeError('EventBus is not running, cannot publish events')
 
         try:
-            await self._before_publish_chain(self._events, name, source, data, old_event)
+            await self._mw_chain.build_before_publish(self._core_publish)(self._events, name, source, data, old_event)
         except Exception as e:
             await self._mw_chain.on_publish_error(e, name, source, data)
             raise
@@ -187,7 +188,7 @@ class EventBus:
         logger.debug(f'Event published: {event.name} (id={event.id})')
 
         # 发布成功后，运行 on_publish 中间件链
-        await self._on_publish_chain(event)
+        await self._mw_chain.build_on_publish(EventBus._noop_on_publish)(event)
 
     @staticmethod
     async def _noop_on_publish(

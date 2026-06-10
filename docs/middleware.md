@@ -14,26 +14,26 @@
 发布请求
   │
   ▼
-┌─────────────────────────────┐
-│  Middleware 1 (外层)         │
-│  ┌─────────────────────────┐ │
-│  │ Middleware 2 (内层)     │ │
-│  │ ┌─────────────────────┐ │ │
-│  │ │ 核心发布逻辑         │ │ │
-│  │ │ (校验 → 构造 → 入队) │ │ │
-│  │ └─────────────────────┘ │ │
-│  └─────────────────────────┘ │
-└─────────────────────────────┘
-  │
-  ▼
-事件入队 → on_publish 链（同样洋葱模型）
+┌─────────────────────────────────────┐
+│  Middleware 1 (外层)                 │
+│  ┌─────────────────────────────────┐ │
+│  │ Middleware 2 (内层)             │ │
+│  │ ┌─────────────────────────────┐ │ │
+│  │ │ 核心发布逻辑                 │ │ │
+│  │ │ ├─ 校验 → 构造 → 入队       │ │ │
+│  │ │ └─ on_publish 链（洋葱模型） │ │ │
+│  │ └─────────────────────────────┘ │ │
+│  └─────────────────────────────────┘ │
+└─────────────────────────────────────┘
 ```
+
+> **注意**：`on_publish` 链嵌套在核心发布逻辑内部，而核心发布逻辑是 `before_publish` 链的最内层。因此 `before_publish` 钩子中 `await next(...)` 之后的代码会在 `on_publish` 链**完全结束之后**才执行。
 
 ### 两个钩子阶段
 
 | 阶段 | 时机 | 可获取的信息 |
 | - | - | - |
-| `before_publish` | 事件声明校验通过后、构造 Event 并入队**之前** | 事件名、来源、原始 data、前驱 event |
+| `before_publish` | 事件声明校验、构造 Event 并入队**之前** | 事件名、来源、原始 data、前驱 event |
 | `on_publish` | Event 成功入队**之后** | 完整的 Event 对象（含 id、sources、timestamps） |
 
 ---
@@ -133,6 +133,15 @@ class MiddlewareChain:
     @property
     def middlewares(self) -> list[Middleware]
 
+    def build_before_publish(
+        self,
+        final_handler: BeforePublishNext,
+    ) -> BeforePublishNext
+    def build_on_publish(
+        self,
+        final_handler: OnPublishNext,
+    ) -> OnPublishNext
+
     async def setup(self, bus: EventBus) -> List[Middleware]
     async def teardown(self, bus: EventBus) -> None
     async def on_publish_error(
@@ -148,6 +157,8 @@ class MiddlewareChain:
 | `remove(middleware)` | 移除指定中间件实例。 |
 | `clear()` | 清空所有中间件。 |
 | `middlewares` | （属性）返回当前中间件列表的副本。 |
+| `build_before_publish(final_handler)` | 构建 ``before_publish`` 责任链。传入核心发布逻辑作为末端处理器，返回包装后的可调用链。 |
+| `build_on_publish(final_handler)` | 构建 ``on_publish`` 责任链。传入空操作作为末端处理器，返回包装后的可调用链。 |
 | `setup(bus)` | 按注册顺序调用所有中间件的 `on_setup`。返回初始化失败的中间件列表（这些中间件已被自动移除）。 |
 | `teardown(bus)` | 按注册**逆序**调用所有中间件的 `on_teardown`。单个异常不影响其他。 |
 | `on_publish_error(...)` | 按注册顺序通知所有中间件发布异常。 |
@@ -253,12 +264,35 @@ chain.add(LoggingMiddleware())       # 最外层
 chain.add(ValidationMiddleware())    # 中层
 chain.add(RateLimitMiddleware())     # 最内层
 
-# 执行顺序：
-#   Logging.before → Validation.before → RateLimit.before
-#     → 核心发布逻辑
-#   RateLimit.before_after → Validation.before_after → Logging.before_after
-#   （入队后）
-#   Logging.on → Validation.on → RateLimit.on
-#     → 空操作
-#   RateLimit.on_after → Validation.on_after → Logging.on_after
+# 执行顺序（on_publish 链嵌套在 before_publish 链内部）：
+#   Logging.before 进入 → Validation.before 进入 → RateLimit.before 进入
+#     → 核心发布逻辑（校验 → 构造 → 入队）
+#     → Logging.on 进入 → Validation.on 进入 → RateLimit.on 进入
+#         → 空操作（on_publish 链终点）
+#       ← RateLimit.on 退出 ← Validation.on 退出 ← Logging.on 退出
+#   ← RateLimit.before 退出 ← Validation.before 退出 ← Logging.before 退出
 ```
+
+### 运行时动态管理
+
+中间件链支持运行时动态增删，且变更即时生效。可通过总线代理在处理器内部访问：
+
+```python
+class DynamicMiddleware(Middleware):
+    async def on_setup(self, bus):
+        self._proxy = bus.proxy(self.__class__.__name__)
+
+    async def on_teardown(self, bus): pass
+
+    async def before_publish(self, event_registry, name, source, data, old_event, next):
+        # 根据条件动态注入中间件
+        if name == "sensitive.event":
+            self._proxy.middleware.add(AuditMiddleware())
+        await next(event_registry, name, source, data, old_event)
+
+    async def on_publish(self, event, next):
+        await next(event)
+```
+
+> **注意**：处理器通过 `bus_proxy.middleware` 获取的 `MiddlewareChain` 实例与总线共享同一实例，
+> 增删操作直接影响后续所有发布流程。链在每次分发时按需构建，变更即时生效。

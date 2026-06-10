@@ -15,7 +15,7 @@ class EventHandler(ABC):
     def __init__(
         self,
         subscriptions: Optional[List[Regex | str]] = None,
-        handle_timeout: Optional[float] = 1.0
+        handle_timeout: Optional[float] = 32.0
     ) -> None
 
     async def __call__(self, bus_proxy: EventBus.Proxy, event: Event) -> None
@@ -32,7 +32,7 @@ class EventHandler(ABC):
 | 参数 / 方法 | 说明 |
 | - | - |
 | `subscriptions` | 订阅的事件名模式列表。`str` 全字匹配（`event_type == subscription`），`Regex` 正则全匹配。如 `["user.login"]` 只匹配 `"user.login"`，`[Regex(r"user\..*")]` 匹配所有 `user.*` 事件。 |
-| `handle_timeout` | 单次 `handle` 调用的超时时间（秒）。`None` 表示无限等待。默认 `1.0`。 |
+| `handle_timeout` | 单次 `handle` 调用的超时时间（秒）。`None` 表示无限等待。默认 `32.0`。 |
 | `__call__` | 总线内部入口，自动解包 `Event` 后调用 `handle(payload, bus_proxy, raw_event)`。 |
 | `handle(payload, bus_proxy, raw_event)` | **子类必须实现**。`payload` 为已解包的负载（可能为 `None`）。`bus_proxy` 提供受限的总线访问。`raw_event` 为完整事件对象。 |
 

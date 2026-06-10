@@ -51,7 +51,7 @@ class EventBus:
 | `shutdown` | `ShutdownConfig` | `ShutdownConfig()` | 停机行为配置，参见 [ShutdownConfig](#shutdownconfig)。 |
 | `middleware_chain` | `Optional[MiddlewareChain]` | `None` | 中间件链，用于在发布流程中插入自定义逻辑。参见 [中间件文档](middleware.md)。 |
 
-构造时自动注册 `ShutdownEvent` 和 `TaskErrorEvent`（若注册表中不存在），并预构建中间件责任链。
+构造时自动注册 `ShutdownEvent` 和 `TaskErrorEvent`（若注册表中不存在）。中间件链在每次分发时按需构建，运行时增删即时生效。
 
 ### 生命周期
 
@@ -190,6 +190,8 @@ class Proxy:
     def handlers_registry(self) -> EventHandlerRegistry
     @property
     def events_registry(self) -> EventRegistry
+    @property
+    def middleware(self) -> MiddlewareChain
 ```
 
 | 成员 | 说明 |
@@ -197,6 +199,7 @@ class Proxy:
 | `publish(name, data=None)` | 发布一个事件。`data` 可为字典或 Pydantic 模型实例。总线未运行时抛 `RuntimeError`，停止中抛 `BusShuttingDown`，未知事件抛 `ValueError`，负载类型不匹配抛 `TypeError`。 |
 | `handlers_registry` | 只读访问处理器注册表。 |
 | `events_registry` | 只读访问事件注册表。 |
+| `middleware` | 访问中间件链，支持运行时动态增删。变更即时生效。参见 [中间件文档](middleware.md)。 |
 
 ---
 
