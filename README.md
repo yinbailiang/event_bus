@@ -47,14 +47,14 @@
 | 高级模板 | ✅ expect/request/pipe/register | ⚠️ 仅 `bus.expect()` | ❌ | ❌ |
 | 事件返回值 | ⚠️ 通过 `request` 模板 | ✅ 内置 `event.event_result()` | ❌ | ❌ |
 | 事件转发 | ⚠️ EventForwardMiddleware | ✅ 内置 `event.forward_to()` | ❌ | ❌ |
-| 依赖数量 | 1 核心（pydantic） | 6（anyio, aiofiles...） | 0 | 0 |
+| 依赖数量 | 1 核心（pydantic）+ 1 可选 | 6（anyio, aiofiles...） | 0 | 0 |
 | 优雅停机 | ✅ 排空队列 + 等待活跃任务 | ✅ wait_until_idle + 队列关闭 | ⚠️ `wait_for_complete` + `cancel` | N/A（同步） |
 | 超时保护 | ✅ 每 handler 独立超时 | ✅ event_result.timeout | ❌ | N/A |
 | 错误隔离 | ✅ TaskErrorEvent 统一上报 | ✅ 错误记录不中断总线 | ❌ | N/A |
 | FIFO 处理 | ❌ | ✅ 全局锁保证 | ❌ | N/A |
 | 慢 handler 告警 | ❌ | ✅ 15s 超时告警 | ❌ | N/A |
 | 防递归 | ✅ 中间件（可配置） | ✅ 内置（不可配置） | ❌ | N/A |
-| 日志与审计 | ✅ JSONL + SQLite（中间件） | ✅ 内置 WAL 日志 | ❌ 无内置 | ⚠️ 调试追踪 |
+| 日志与审计 | ✅ JSONL + SQLite（中间件） | ✅ 内置 JSONL WAL 日志 | ❌ 无内置 | ⚠️ 调试追踪 |
 | 测试覆盖 | ✅ 92%（160 tests） | ✅ 83%（138 tests） | ✅ 94%（43 tests） | ✅ 86%（167 tests） |
 | Python 版本 | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
 | 基准版本 | v1.4.1 `fb7cbed` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
