@@ -61,8 +61,7 @@ class EventHandler(ABC):
         await self.handle(event.data, bus_proxy, event)
 
     @abstractmethod
-    async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
-        pass
+    async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None: ...
 
 
 class EventHandlerRegistry:

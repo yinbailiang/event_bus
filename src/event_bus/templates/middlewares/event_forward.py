@@ -58,6 +58,11 @@ class EventForwardMiddleware(Middleware):
         self._filter: EventFilter | None = event_filter
         self._forward_system: bool = forward_system_events
 
+        # 可观测性计数器
+        self._forwarded_count: int = 0
+        self._failed_count: int = 0
+        self._skipped_count: int = 0
+
     async def before_publish(
         self,
         event_registry: EventRegistry,
@@ -90,6 +95,7 @@ class EventForwardMiddleware(Middleware):
     async def _do_forward(self, event: Event) -> None:
         """执行实际的转发逻辑。"""
         if not self._forward_system and event.name.startswith(self._SYSTEM_EVENT_PREFIX):
+            self._skipped_count += 1
             return
 
         if self._filter is not None:
@@ -98,8 +104,10 @@ class EventForwardMiddleware(Middleware):
                 if isawaitable(result):
                     result = await result
                 if not result:
+                    self._skipped_count += 1
                     return
             except Exception:
+                self._skipped_count += 1
                 logger.warning(
                     'EventForward: 过滤回调异常，跳过事件 %s (id=%s)',
                     event.name,
@@ -111,6 +119,7 @@ class EventForwardMiddleware(Middleware):
         try:
             target_bus = await self._resolve_target()
         except Exception:
+            self._failed_count += 1
             logger.exception('EventForward: 获取目标总线失败，事件 %s (id=%s)', event.name, event.id)
             return
 
@@ -121,6 +130,7 @@ class EventForwardMiddleware(Middleware):
 
         try:
             await target_bus.proxy(self._source_name, event).publish(event.name, forward_data)
+            self._forwarded_count += 1
             logger.debug(
                 'EventForward: 已转发 %s (id=%s) → target_bus',
                 event.name,
@@ -128,6 +138,7 @@ class EventForwardMiddleware(Middleware):
             )
             return
         except Exception as e:
+            self._failed_count += 1
             logger.warning(
                 'EventForward: 转发 %s 失败 %s',
                 event.name,
@@ -136,10 +147,28 @@ class EventForwardMiddleware(Middleware):
 
     async def _resolve_target(self) -> EventBus:
         """解析目标总线实例"""
-        raw: Union[EventBus, Awaitable[EventBus]] = self._target() if callable(self._target) else self._target
+        if isinstance(self._target, EventBus):
+            raw: Union[EventBus, Awaitable[EventBus]] = self._target
+        else:
+            raw = self._target()
         if isawaitable(raw):
             return await raw
         return raw
+
+    @property
+    def forwarded_count(self) -> int:
+        """累计成功转发的事件数。"""
+        return self._forwarded_count
+
+    @property
+    def failed_count(self) -> int:
+        """累计转发失败的事件数（含目标不可达、publish 异常）。"""
+        return self._failed_count
+
+    @property
+    def skipped_count(self) -> int:
+        """累计被跳过的事件数（系统事件、过滤器拒绝、过滤器异常）。"""
+        return self._skipped_count
 
 
 def make_event_name_filter(

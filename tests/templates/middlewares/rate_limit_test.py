@@ -128,6 +128,42 @@ class TestRateLimitMiddleware:
         ping_count = mw.current_rate.get("mw.ping", 0)
         assert ping_count <= 2
 
+    @pytest.mark.asyncio
+    async def test_sliding_window_expires_old_timestamps(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """窗口滑动后旧时间戳被清理，新事件可继续通过"""
+        mw = RateLimitMiddleware(max_requests=3, window_seconds=0.1)
+        chain = MiddlewareChain()
+        chain.add(mw)
+
+        handler = SimplePingHandler()
+        handler_registry.register(handler)
+
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            # 第一轮：打满窗口
+            for i in range(3):
+                await bus.proxy('src').publish('mw.ping', {'key': f'k{i}', 'count': i})
+                await asyncio.sleep(0.01)
+
+            # 等待窗口过期
+            await asyncio.sleep(0.15)
+
+            # 第二轮：旧时间戳被清理，新事件可再次通过
+            await bus.proxy('src').publish('mw.ping', {'key': 'k_after', 'count': 99})
+            await asyncio.sleep(0.05)
+
+        # 两轮共 4 个事件通过（3 + 1）
+        assert len(handler.received) == 4
+
 
 # ============================================================================
 # 组合测试：rate_limit + transform

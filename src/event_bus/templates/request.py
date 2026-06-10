@@ -92,6 +92,5 @@ async def request(
         else:
             resp: Event = await asyncio.wait_for(future, timeout=timeout)
 
-    if resp.data is None:
-        raise RuntimeError('Unexpected None response')
+    assert resp.data is not None, 'Unexpected None response'
     return cast(ResponseProtocol, resp.data)

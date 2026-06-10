@@ -10,11 +10,13 @@ from pydantic import BaseModel, ValidationError
 from event_bus import (
     Event,
     BusShuttingDown,
-    EventHandler,
     EventBus,
+    EventHandler,
     EventHandlerRegistry,
     EventRegistry,
     ShutdownConfig,
+    ShutdownEvent,
+    TaskErrorEvent,
 )
 
 from conftest import (
@@ -332,6 +334,72 @@ async def test_shutting_down_exception(
         await event_bus.proxy("after_stop").publish(
             "test.event", {"value": 2}
         )
+
+
+# ============================================================================
+# 属性与内部路径覆盖
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_proxy_handlers_registry(event_bus: EventBus):
+    """Proxy.handlers_registry 返回处理器注册表"""
+    proxy = event_bus.proxy("test")
+    assert proxy.handlers_registry is not None
+
+
+@pytest.mark.asyncio
+async def test_is_publishing_enabled(event_bus: EventBus):
+    """is_publishing_enabled 反映发布开关状态"""
+    assert event_bus.is_publishing_enabled is True
+    await event_bus.stop()
+    assert event_bus.is_publishing_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_system_events_auto_registered():
+    """未预注册 TaskErrorEvent 时，总线自动补注册"""
+    reg = EventRegistry()
+    hreg = EventHandlerRegistry()
+    bus = EventBus(reg, hreg)
+    assert reg.get(TaskErrorEvent.name) is not None
+    assert reg.get(ShutdownEvent.name) is not None
+
+
+class _BusWithBrokenStop(EventBus):
+    """stop() 会抛出异常的 EventBus 子类，用于测试 __aexit__ 异常路径"""
+
+    async def stop(self) -> None:
+        await super().stop()
+        raise RuntimeError("stop boom")
+
+
+@pytest.mark.asyncio
+async def test_context_manager_stop_error_propagates(
+    base_event_registry: EventRegistry,
+    handler_registry: EventHandlerRegistry,
+):
+    """__aexit__: stop() 异常且无上下文异常时，应传播 stop 错误"""
+    bus = _BusWithBrokenStop(base_event_registry, handler_registry)
+    await bus.start()
+
+    with pytest.raises(RuntimeError, match="stop boom"):
+        async with bus:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_context_manager_stop_error_with_context_exception(
+    base_event_registry: EventRegistry,
+    handler_registry: EventHandlerRegistry,
+):
+    """__aexit__: stop() 异常 + 上下文异常 → 传播原异常，stop 错误仅记日志"""
+    bus = _BusWithBrokenStop(base_event_registry, handler_registry)
+    await bus.start()
+
+    with pytest.raises(ValueError, match="context error"):
+        async with bus:
+            raise ValueError("context error")
 
 
 # ============================================================================
