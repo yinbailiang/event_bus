@@ -22,7 +22,7 @@
 @asynccontextmanager
 async def expect(
     bus_proxy: EventBus.Proxy,
-    event_patterns: Union[str, List[str]],
+    event_patterns: Union[str, Regex, List[Union[str, Regex]]],
     filter_func: Optional[Callable[[Event], Union[Awaitable[bool], bool]]] = None,
 ) -> AsyncGenerator[asyncio.Future[Event], None]
 ```
@@ -30,7 +30,7 @@ async def expect(
 | 参数 | 类型 | 说明 |
 | - | - | - |
 | `bus_proxy` | `EventBus.Proxy` | 事件总线代理，用于访问处理器注册表。 |
-| `event_patterns` | `str` \| `List[str]` | 监听的事件名模式（支持正则表达式）。可传入单个字符串或字符串列表。 |
+| `event_patterns` | `str` \| `Regex` \| `List[str \| Regex]` | 监听的事件名模式。`str` 全字匹配，`Regex` 正则匹配。可传入单个或序列。 |
 | `filter_func` | `Optional[Callable]` | 可选过滤器。接收 `Event` 对象，返回布尔值（或可等待的布尔值），`True` 表示匹配成功。若省略，任何匹配 `event_patterns` 的事件都会触发。 |
 
 **Yields**：一个 `asyncio.Future[Event]` 对象，`await` 它将返回匹配的完整 `Event` 实例。
@@ -113,8 +113,10 @@ async with expect(bus_proxy, ["order.paid", "order.cancelled"]) as future:
 ### 正则模式匹配
 
 ```python
+from event_bus import Regex
+
 # 匹配所有以 "notify." 开头的事件
-async with expect(bus_proxy, r"notify\..*") as future:
+async with expect(bus_proxy, Regex(r"notify\..*")) as future:
     await trigger_notifications()
     event = await asyncio.wait_for(future, timeout=2.0)
     print(f"First notification: {event.name}")

@@ -1,6 +1,6 @@
 """事件转换中间件测试：EventTransformMiddleware。"""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 import pytest
 from pydantic import BaseModel
@@ -9,7 +9,6 @@ from event_bus import (
     Event,
     EventBus,
     EventDeclaration,
-    EventHandler,
     EventHandlerRegistry,
     EventRegistry,
     MiddlewareChain,

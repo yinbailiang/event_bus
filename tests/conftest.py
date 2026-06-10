@@ -12,6 +12,7 @@ from event_bus import (
     Event,
     EventBus,
     EventDeclaration,
+    Regex,
     EventHandler,
     EventHandlerRegistry,
     EventRegistry,
@@ -93,7 +94,7 @@ BASE_EVENT_DECLS: List[Type[EventDeclaration]] = [
 class BaseTestHandler(EventHandler):
     """提供常用辅助方法的测试 Handler 基类"""
 
-    def __init__(self, subscriptions: List[str], handle_timeout: float = 1.0):
+    def __init__(self, subscriptions: List[str | Regex], handle_timeout: float = 1.0):
         super().__init__(subscriptions, handle_timeout)
         self._started = asyncio.Event()
         self._completed = asyncio.Event()
@@ -150,7 +151,7 @@ class SlowHandler(BaseTestHandler):
     def __init__(
         self,
         delay: float = 0.5,
-        subscriptions: Optional[List[str]] = None,
+        subscriptions: Optional[List[str | Regex]] = None,
         handle_timeout: float = 0.1,
     ):
         super().__init__(
@@ -169,7 +170,7 @@ class SlowHandler(BaseTestHandler):
 class BlockingHandler(BaseTestHandler):
     """可控制阻塞的 Handler，用于测试背压/关闭"""
 
-    def __init__(self, subscriptions: Optional[List[str]] = None):
+    def __init__(self, subscriptions: Optional[List[str | Regex]] = None):
         super().__init__(subscriptions or ["test.block"], handle_timeout=10.0)
         self._block = asyncio.Event()
 
@@ -185,7 +186,7 @@ class BlockingHandler(BaseTestHandler):
 class ConcurrentTrackingHandler(BaseTestHandler):
     """跟踪并发数，用于测试 Semaphore 限流"""
 
-    def __init__(self, subscriptions: Optional[List[str]] = None):
+    def __init__(self, subscriptions: Optional[List[str | Regex]] = None):
         super().__init__(subscriptions or ["test.block"], handle_timeout=10.0)
         self.active_count = 0
         self.max_seen = 0
@@ -232,7 +233,7 @@ class PatternSpyHandler(BaseTestHandler):
     """记录匹配正则的事件名"""
 
     def __init__(self, pattern: str = r"user\..*"):
-        super().__init__([pattern])
+        super().__init__([Regex(pattern)])
         self.triggered: List[str] = []
 
     async def _do_handle(

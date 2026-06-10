@@ -2,7 +2,7 @@ import pytest
 from typing import Any, Optional
 from pydantic import BaseModel
 
-from event_bus import Event, EventHandler, EventHandlerRegistry, EventBus
+from event_bus import Event, EventHandler, EventHandlerRegistry, EventBus, Regex
 
 
 @pytest.mark.asyncio
@@ -43,7 +43,7 @@ async def test_handler_pattern_matching(handler_registry: EventHandlerRegistry):
 
     class PatternHandler(EventHandler):
         def __init__(self):
-            super().__init__([r"user\..*"])
+            super().__init__([Regex(r"user\..*")])
 
         async def handle(
             self,
@@ -60,14 +60,17 @@ async def test_handler_pattern_matching(handler_registry: EventHandlerRegistry):
     assert handler_registry.get_handlers("user.logout") == [(hid, handler)]
     assert handler_registry.get_handlers("admin.login") == []
 
+    # 精确匹配应不命中
+    assert handler_registry.get_handlers(r"user\..*") == []
+
 
 @pytest.mark.asyncio
 async def test_handler_multiple_patterns(handler_registry: EventHandlerRegistry):
-    """一个 Handler 可订阅多个模式"""
+    """一个 Handler 可订阅多个模式（Regex 与 str 混合）"""
 
     class MultiHandler(EventHandler):
         def __init__(self):
-            super().__init__([r"a\..*", r"b\..*"])
+            super().__init__([Regex(r"a\..*"), Regex(r"b\..*")])
 
         async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
             pass
@@ -81,37 +84,34 @@ async def test_handler_multiple_patterns(handler_registry: EventHandlerRegistry)
 
 
 @pytest.mark.asyncio
-async def test_regex_cache_lru_eviction(
+async def test_handler_str_exact_and_regex_mixed(
     handler_registry: EventHandlerRegistry,
 ) -> None:
-    """正则缓存达到上限时应淘汰最旧条目（LRU 淘汰 + move_to_end 刷新）"""
-    small_registry = EventHandlerRegistry(regex_cache_maxsize=2)
+    """str 全字匹配 vs Regex 正则匹配：混合订阅应各自命中"""
 
-    class PatternHandler(EventHandler):
-        def __init__(self, pattern: str):
-            super().__init__([pattern])
+    class MixedHandler(EventHandler):
+        def __init__(self):
+            super().__init__(["order.created", Regex(r"order\..*")])
 
         async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
             pass
 
-    small_registry.register(PatternHandler(r"user\..*"))
-    small_registry.register(PatternHandler(r"admin\..*"))
-    small_registry.register(PatternHandler(r"order\..*"))  # 淘汰 user\..*
+    handler_registry.register(MixedHandler())
 
-    info = small_registry.regex_cache_info
-    assert info["size"] <= info["max_size"]
-
-    # 重新查询 user\..* —— 缓存未命中，应重新编译
-    small_registry.get_handlers("user.login")
-    info = small_registry.regex_cache_info
-    assert info["size"] <= info["max_size"]
+    # str 全字匹配：只命中完全相等的
+    assert len(handler_registry.get_handlers("order.created")) == 1
+    # Regex 匹配：通配
+    assert len(handler_registry.get_handlers("order.deleted")) == 1
+    assert len(handler_registry.get_handlers("order.shipped")) == 1
+    # 都不匹配
+    assert len(handler_registry.get_handlers("user.login")) == 0
 
 
 @pytest.mark.asyncio
 async def test_handler_subscriptions_copy():
     """subscriptions 应为独立副本，外部修改不影响 Handler"""
 
-    subs = ["a.event"]
+    subs: list[str | Regex] = ["a.event"]
 
     class MyHandler(EventHandler):
         def __init__(self):

@@ -140,7 +140,7 @@ class UserCreatedHandler(EventHandler):
 @module_handlers.handler()
 class AuditLogHandler(EventHandler):
     def __init__(self):
-        super().__init__(subscriptions=[r"user\..*"])
+        super().__init__(subscriptions=[Regex(r"user\..*")])
 
     async def handle(self, payload, bus_proxy, raw_event):
         print(f"Audit: {raw_event.name}")

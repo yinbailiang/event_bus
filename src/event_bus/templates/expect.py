@@ -19,6 +19,7 @@ from .. import (
     EventBus,
     EventHandler,
     EventHandlerRegistry,
+    Regex,
 )
 
 
@@ -27,14 +28,14 @@ class OneShotEventHandler(EventHandler):
 
     def __init__(
         self,
-        event_patterns: List[str],
+        event_patterns: List[Union[str, Regex]],
         on_match: Callable[[Event], Any],
         filter_func: Optional[Callable[[Event], Union[Awaitable[bool], bool]]] = None,
         on_error: Optional[Callable[[Exception], Any]] = None,
         handle_timeout: Optional[float] = None,
     ) -> None:
         # 若需要监听关闭事件，自动添加内置事件名
-        super().__init__(subscriptions=list(event_patterns), handle_timeout=handle_timeout)
+        super().__init__(subscriptions=event_patterns.copy(), handle_timeout=handle_timeout)
 
         self._on_match: Callable[[Event], Any] = on_match
         self._filter: Optional[Callable[[Event], Union[Awaitable[bool], bool]]] = filter_func
@@ -86,11 +87,14 @@ def temporary_handler(
 @asynccontextmanager
 async def expect(
     bus_proxy: EventBus.Proxy,
-    event_patterns: Union[str, List[str]],
+    event_patterns: Union[str, Regex, List[Union[str, Regex]]],
     filter_func: Optional[Callable[[Event], Union[Awaitable[bool], bool]]] = None,
 ) -> AsyncGenerator[asyncio.Future[Event], None]:
     """异步上下文管理器：注册一个一次性事件监听器，返回一个 Future 用于等待匹配的事件。"""
-    patterns: List[str] = [event_patterns] if isinstance(event_patterns, str) else list(event_patterns)
+    if isinstance(event_patterns, (str, Regex)):
+        patterns: List[Union[str, Regex]] = [event_patterns]
+    else:
+        patterns: List[Union[str, Regex]] = list(event_patterns)
     future: asyncio.Future[Event] = asyncio.Future()
 
     def on_error(exc: BaseException) -> None:

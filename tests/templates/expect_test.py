@@ -11,8 +11,9 @@ from event_bus import (
     EventHandlerRegistry,
     EventRegistry,
     Event,
+    Regex,
 )
-from event_bus.templates.expect import expect, OneShotEventHandler
+from event_bus.templates import expect, OneShotEventHandler
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +242,7 @@ async def test_expect_regex_pattern(running_bus: EventBus) -> None:
     """支持正则表达式模式"""
     proxy = running_bus.proxy("test")
 
-    async with expect(proxy, r"test\..*") as future:
+    async with expect(proxy, Regex(r"test\..*")) as future:
         await proxy.publish("test.other", {"value": 88, "msg": "regex"})
         result = await asyncio.wait_for(future, timeout=1.0)
 

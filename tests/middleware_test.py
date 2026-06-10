@@ -1,7 +1,7 @@
 """Middleware / MiddlewareChain 单元测试 + 与 EventBus 集成测试。"""
 
 import asyncio
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import pytest
 from pydantic import BaseModel
@@ -9,7 +9,6 @@ from pydantic import BaseModel
 from event_bus import (
     Event,
     EventBus,
-    EventDeclaration,
     EventHandlerRegistry,
     EventRegistry,
     Middleware,
@@ -18,10 +17,7 @@ from event_bus import (
 from event_bus.middleware import BeforePublishNext, OnPublishNext
 
 from conftest import (
-    MiddlewarePingEventDecl,
-    MiddlewareTestPayload,
-    SimplePingHandler,
-    wait_for_condition,
+    SimplePingHandler
 )
 
 
@@ -500,7 +496,7 @@ class TestMiddlewareChainBuild:
 
         built = chain.build_before_publish(final_handler)
         bus = _mock_bus()
-        await built(bus._events, "test.event", "test", None, None)
+        await built(bus.proxy("test").events_registry, "test.event", "test", None, None)
 
         assert final_called
         # 洋葱模型: outer:before → inner:before → final → inner:after → outer:after
@@ -563,7 +559,7 @@ class TestMiddlewareChainBuild:
 
         built = chain.build_before_publish(final_handler)
         bus = _mock_bus()
-        await built(bus._events, "test.event", "test", None, None)
+        await built(bus.proxy("test").events_registry, "test.event", "test", None, None)
 
         assert short.intercepted == ["test.event"]
         # mw 的 before_publish 没有被调用
@@ -590,7 +586,7 @@ class TestMiddlewareChainBuild:
 
         built = chain.build_before_publish(final_handler)
         bus = _mock_bus()
-        await built(bus._events, "test.event", "test", None, None)
+        await built(bus.proxy("test").events_registry, "test.event", "test", None, None)
         assert final_called
 
 
@@ -625,13 +621,21 @@ class TestMiddlewareChainError:
             async def on_setup(self, bus: EventBus) -> None: pass
             async def on_teardown(self, bus: EventBus) -> None: pass
 
-            async def before_publish(self, event_registry, name, source, data, old_event, next):
+            async def before_publish(
+                    self,
+                    event_registry: EventRegistry,
+                    name: str,
+                    source: str,
+                    data: dict[str, Any] | BaseModel | None,
+                    old_event: Event | None,
+                    next: BeforePublishNext,
+                ) -> None:                
                 await next(event_registry, name, source, data, old_event)
 
-            async def on_publish(self, event, next):
+            async def on_publish(self, event: Event, next: OnPublishNext) -> None:
                 await next(event)
 
-            async def on_publish_error(self, error, name, source, data):
+            async def on_publish_error(self, error: Exception, name: str, source: str, data: dict[str, Any] | BaseModel | None) -> None:
                 raise RuntimeError("error handler itself failed")
 
         mw_good = LoggingMiddleware("good")
@@ -658,11 +662,20 @@ class TestMiddlewareDefaults:
         """默认 on_setup 不抛异常"""
 
         class MinimalMiddleware(Middleware):
-            async def before_publish(self, er, n, s, d, oe, nx):
-                await nx(er, n, s, d, oe)
+            async def before_publish(
+                    self,
+                    event_registry: EventRegistry,
+                    name: str,
+                    source: str,
+                    data: dict[str, Any] | BaseModel | None,
+                    old_event: Event | None,
+                    next: BeforePublishNext,
+                ) -> None:                
+                await next(event_registry, name, source, data, old_event)
 
-            async def on_publish(self, e, nx):
-                await nx(e)
+            async def on_publish(self, event: Event, next: OnPublishNext) -> None:
+                await next(event)
+
 
         mw = MinimalMiddleware()
         bus = _mock_bus()
@@ -673,11 +686,20 @@ class TestMiddlewareDefaults:
         """默认 on_teardown 不抛异常"""
 
         class MinimalMiddleware(Middleware):
-            async def before_publish(self, er, n, s, d, oe, nx):
-                await nx(er, n, s, d, oe)
+            async def before_publish(
+                    self,
+                    event_registry: EventRegistry,
+                    name: str,
+                    source: str,
+                    data: dict[str, Any] | BaseModel | None,
+                    old_event: Event | None,
+                    next: BeforePublishNext,
+                ) -> None:                
+                await next(event_registry, name, source, data, old_event)
 
-            async def on_publish(self, e, nx):
-                await nx(e)
+            async def on_publish(self, event: Event, next: OnPublishNext) -> None:
+                await next(event)
+
 
         mw = MinimalMiddleware()
         bus = _mock_bus()
@@ -688,11 +710,19 @@ class TestMiddlewareDefaults:
         """默认 on_publish_error 不抛异常"""
 
         class MinimalMiddleware(Middleware):
-            async def before_publish(self, er, n, s, d, oe, nx):
-                await nx(er, n, s, d, oe)
+            async def before_publish(
+                    self,
+                    event_registry: EventRegistry,
+                    name: str,
+                    source: str,
+                    data: dict[str, Any] | BaseModel | None,
+                    old_event: Event | None,
+                    next: BeforePublishNext,
+                ) -> None:                
+                await next(event_registry, name, source, data, old_event)
 
-            async def on_publish(self, e, nx):
-                await nx(e)
+            async def on_publish(self, event: Event, next: OnPublishNext) -> None:
+                await next(event)
 
         mw = MinimalMiddleware()
         await mw.on_publish_error(ValueError("x"), "e", "s", None)
@@ -994,13 +1024,13 @@ def _mock_bus() -> EventBus:
 
     handler_reg = EventHandlerRegistry()
     bus = EventBus.__new__(EventBus)
-    bus._events = reg
-    bus._handlers = handler_reg
-    bus._mw_chain = MiddlewareChain()
-    bus._state_lock = asyncio.Lock()
-    bus._enable_publish = asyncio.Event()
-    bus._running = asyncio.Event()
-    bus._queue = asyncio.Queue(maxsize=10)
+    bus._events = reg # pyright: ignore[reportPrivateUsage]
+    bus._handlers = handler_reg # pyright: ignore[reportPrivateUsage]
+    bus._mw_chain = MiddlewareChain() # pyright: ignore[reportPrivateUsage]
+    bus._state_lock = asyncio.Lock() # pyright: ignore[reportPrivateUsage]
+    bus._enable_publish = asyncio.Event() # pyright: ignore[reportPrivateUsage]
+    bus._running = asyncio.Event() # pyright: ignore[reportPrivateUsage]
+    bus._queue = asyncio.Queue(maxsize=10) # pyright: ignore[reportPrivateUsage]
     # 不启动 dispatch loop
     return bus
 

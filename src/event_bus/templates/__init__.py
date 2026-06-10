@@ -1,4 +1,4 @@
-from .expect import expect
+from .expect import OneShotEventHandler, expect
 from .middlewares import (
     EventBlockMiddleware,
     EventTransformMiddleware,
@@ -18,7 +18,9 @@ from .register import ModuleEventRegister, ModuleHandlerRegister
 from .request import RequestProtocol, ResponseProtocol, request
 
 __all__ = [
+    # expect
     'expect',
+    'OneShotEventHandler',
     # middlewares
     'SQLiteLoggingMiddleware',
     'JSONLLoggingMiddleware',

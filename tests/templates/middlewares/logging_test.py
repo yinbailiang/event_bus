@@ -1,6 +1,5 @@
 """日志中间件测试：SQLiteLogging / JSONLLogging。"""
 
-import asyncio
 import json
 import os
 import tempfile
@@ -9,7 +8,6 @@ from typing import List
 import pytest
 
 from event_bus import (
-    Event,
     EventBus,
     EventHandlerRegistry,
     EventRegistry,
@@ -21,7 +19,6 @@ from event_bus.templates.middlewares import (
 )
 
 from conftest import (
-    MiddlewareTestPayload,
     SimplePingHandler,
 )
 
@@ -72,9 +69,9 @@ class TestSQLiteLoggingMiddleware:
             await handler.wait_received(timeout=2.0)
 
             # 查询 SQLite 确认写入（在连接关闭前查询）
-            assert mw._conn is not None
-            cursor = await mw._conn.execute(
-                f"SELECT name, sources, data FROM {mw._table}"
+            assert mw.is_connect
+            cursor = await mw._conn.execute( # pyright: ignore[reportPrivateUsage]
+                f"SELECT name, sources, data FROM {mw._table}" # type: ignore
             )
             rows = await cursor.fetchall()
             assert len(rows) >= 1
@@ -116,7 +113,7 @@ class TestSQLiteLoggingMiddleware:
             # 文件应该存在且非空
             assert os.path.exists(db_path)
             assert os.path.getsize(db_path) > 0
-            assert mw._conn is not None
+            assert mw.is_connect
         finally:
             try:
                 os.unlink(db_path)

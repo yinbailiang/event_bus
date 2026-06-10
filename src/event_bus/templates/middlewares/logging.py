@@ -365,3 +365,7 @@ VALUES (:name, :sources, :data, :event_id, :event_ids, :timestamps)"""
                 logger.exception('SQLite 写入失败，降级处理')
                 self._ready = False  # 一次失败后全部降级
         self._fallback(json.dumps(row, ensure_ascii=False))
+
+    @property
+    def is_connect(self) -> bool:
+        return self._conn is not None

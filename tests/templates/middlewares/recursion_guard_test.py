@@ -7,6 +7,7 @@ import pytest
 from pydantic import BaseModel
 
 from event_bus import (
+    Regex,
     Event,
     EventBus,
     EventHandler,
@@ -14,8 +15,7 @@ from event_bus import (
     EventRegistry,
     MiddlewareChain,
 )
-from event_bus.templates.middlewares import (
-    RecursionDetectedError,
+from event_bus.templates import (
     RecursionGuardMiddleware,
 )
 
@@ -34,7 +34,7 @@ class ChainPublishingHandler(EventHandler):
         self,
         publish_event: str,
         publish_data: Optional[Dict[str, Any]] = None,
-        subscriptions: Optional[List[str]] = None,
+        subscriptions: Optional[List[str| Regex]] = None,
     ):
         super().__init__(subscriptions=subscriptions or ["mw.ping"])
         self._pub_event = publish_event
@@ -194,14 +194,14 @@ class TestRecursionGuardMiddleware:
             def __init__(self):
                 super().__init__(["mw.ping"])
 
-            async def handle(self, payload, bus_proxy, raw_event):
+            async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
                 await bus_proxy.publish("mw.ping", {"key": "from_a", "count": 1})
 
         class HandlerB(EventHandler):
             def __init__(self):
                 super().__init__(["mw.ping"])
 
-            async def handle(self, payload, bus_proxy, raw_event):
+            async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
                 await bus_proxy.publish("mw.ping", {"key": "from_b", "count": 2})
 
         handler_registry.register(HandlerA())

@@ -1,16 +1,13 @@
 """事件屏蔽中间件测试：EventBlockMiddleware。"""
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
 
 from event_bus import (
-    Event,
     EventBus,
-    EventDeclaration,
-    EventHandler,
     EventHandlerRegistry,
     EventRegistry,
     MiddlewareChain,
@@ -24,7 +21,6 @@ from event_bus.templates.middlewares import (
 )
 
 from conftest import (
-    MiddlewareTestPayload,
     SimplePingHandler,
 )
 
