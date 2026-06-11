@@ -88,10 +88,9 @@ def mock_bus_proxy(event_registry: EventRegistry, handler_registry: EventHandler
 # ---------------------------------------------------------------------------
 # 辅助函数：模拟服务端响应触发
 # ---------------------------------------------------------------------------
-async def trigger_response(handler_registry: EventHandlerRegistry, resp_event: str, payload: BaseModel) -> None:
+async def trigger_response(event_registry: EventRegistry, handler_registry: EventHandlerRegistry, resp_event: str, payload: BaseModel) -> None:
     """手动触发已注册的响应处理器，模拟事件总线分发"""
-    from event_bus import EventRegistry
-    matcher = Matcher(EventRegistry(), handler_registry)
+    matcher = Matcher(event_registry, handler_registry)
     handlers: List[tuple[str, EventHandler]] = matcher.match(resp_event)
     for _, handler in handlers:
         # 构造一个模拟的 Event 和 Proxy
@@ -104,7 +103,7 @@ async def trigger_response(handler_registry: EventHandlerRegistry, resp_event: s
 # 测试用例
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_request_success(mock_bus_proxy: EventBus.Proxy, handler_registry: EventHandlerRegistry) -> None:
+async def test_request_success(mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> None:
     """正常请求响应流程"""
     session_id = "test-session-123"
 
@@ -136,7 +135,7 @@ async def test_request_success(mock_bus_proxy: EventBus.Proxy, handler_registry:
         success=True,
         result="world",
     )
-    await trigger_response(handler_registry, "test.response", response_payload)
+    await trigger_response(event_registry, handler_registry, "test.response", response_payload)
 
     # 获取结果
     result: ResponseProtocol = await req_task
@@ -172,7 +171,7 @@ async def test_request_bus_shutting_down(mock_bus_proxy: EventBus.Proxy) -> None
 
 
 @pytest.mark.asyncio
-async def test_request_cancelled(mock_bus_proxy: EventBus.Proxy, handler_registry: EventHandlerRegistry) -> None:
+async def test_request_cancelled(mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> None:
     """外部取消请求任务应正确传播 CancelledError 并清理资源"""
     req_task: asyncio.Task[ResponseProtocol] = asyncio.create_task(
         request(
@@ -211,6 +210,7 @@ async def test_request_fails_immediately_if_response_event_not_compliant(
 @pytest.mark.asyncio
 async def test_handler_rejects_malformed_response_payload_at_runtime(
     mock_bus_proxy: EventBus.Proxy,
+    event_registry: EventRegistry,
     handler_registry: EventHandlerRegistry,
 ) -> None:
     """当收到 payload 不是 ResponseProtocol 实例时（尽管声明合法），请求应失败"""
@@ -237,14 +237,14 @@ async def test_handler_rejects_malformed_response_payload_at_runtime(
         some_field=42,
     )
     # 手动触发响应，绕过总线类型检查
-    await trigger_response(handler_registry, "test.response", bad_payload)
+    await trigger_response(event_registry, handler_registry, "test.response", bad_payload)
 
     # 请求任务应抛出 TypeError
     with pytest.raises(TypeError):
         await req_task
 
 @pytest.mark.asyncio
-async def test_request_session_mismatch_ignored(mock_bus_proxy: EventBus.Proxy, handler_registry: EventHandlerRegistry) -> None:
+async def test_request_session_mismatch_ignored(mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> None:
     """响应中的 session_id 或 request_id 不匹配时应被忽略，请求继续等待（直至超时）"""
     req_task: asyncio.Task[ResponseProtocol] = asyncio.create_task(
         request(
@@ -269,7 +269,7 @@ async def test_request_session_mismatch_ignored(mock_bus_proxy: EventBus.Proxy, 
         success=True,
         result="ignored",
     )
-    await trigger_response(handler_registry, "test.response", bad_resp1)
+    await trigger_response(event_registry, handler_registry, "test.response", bad_resp1)
 
     # 发送一个 request_id 不匹配的响应
     bad_resp2 = SimpleResponsePayload(
@@ -278,7 +278,7 @@ async def test_request_session_mismatch_ignored(mock_bus_proxy: EventBus.Proxy, 
         success=True,
         result="ignored",
     )
-    await trigger_response(handler_registry, "test.response", bad_resp2)
+    await trigger_response(event_registry, handler_registry, "test.response", bad_resp2)
 
     # 请求应超时，因为正确的响应未到达
     with pytest.raises(asyncio.TimeoutError):
@@ -307,6 +307,7 @@ async def test_request_unregistered_event(mock_bus_proxy: EventBus.Proxy) -> Non
 @pytest.mark.asyncio
 async def test_request_no_timeout(
     mock_bus_proxy: EventBus.Proxy,
+    event_registry: EventRegistry,
     handler_registry: EventHandlerRegistry,
 ) -> None:
     """timeout=None 时直接 await future，不经过 asyncio.wait_for 包装"""
@@ -332,7 +333,7 @@ async def test_request_no_timeout(
         success=True,
         result="no_timeout_ok",
     )
-    await trigger_response(handler_registry, "test.response", response_payload)
+    await trigger_response(event_registry, handler_registry, "test.response", response_payload)
 
     result: ResponseProtocol = await req_task
     assert isinstance(result, SimpleResponsePayload)
@@ -362,7 +363,7 @@ async def test_request_payload_not_request_protocol(mock_bus_proxy: EventBus.Pro
 
 
 @pytest.mark.asyncio
-async def test_response_failure_raise_if_failed(mock_bus_proxy: EventBus.Proxy, handler_registry: EventHandlerRegistry) -> None:
+async def test_response_failure_raise_if_failed(mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> None:
     """响应中 success=False 时，调用 raise_if_failed 应抛出 RuntimeError"""
     req_task: asyncio.Task[ResponseProtocol] = asyncio.create_task(
         request(
@@ -387,7 +388,7 @@ async def test_response_failure_raise_if_failed(mock_bus_proxy: EventBus.Proxy, 
         error_msg="something went wrong",
         result="Error!"
     )
-    await trigger_response(handler_registry, "test.response", fail_resp)
+    await trigger_response(event_registry, handler_registry, "test.response", fail_resp)
 
     result: ResponseProtocol = await req_task
     assert result.success is False

@@ -36,6 +36,17 @@ class _EventC(EventDeclaration):
     payload_type = _TestPayload
 
 
+class _TestEvent(EventDeclaration):
+    name = 'test.event'
+
+
+class _TestAnotherEvent(EventDeclaration):
+    name = 'test.another'
+
+
+_EXTRA_EVENT_DECLS = (_TestEvent, _TestAnotherEvent)
+
+
 # ============================================================================
 # 测试用 Handler
 # ============================================================================
@@ -262,6 +273,8 @@ class TestModuleHandlerRegister:
         empty_event_registry: EventRegistry,
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
+        for evt in _EXTRA_EVENT_DECLS:
+            empty_event_registry.register(evt)
         module_handlers.add_handler(_SimpleHandler, depends=lambda: {"extra": "test"})
         module_handlers.register_all_handlers(empty_handler_registry)
 
@@ -278,6 +291,8 @@ class TestModuleHandlerRegister:
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
         """验证依赖工厂的返回值正确传递给处理器构造器"""
+        for evt in _EXTRA_EVENT_DECLS:
+            empty_event_registry.register(evt)
         fake_db = object()
         module_handlers.add_handler(
             _AnotherHandler, depends=lambda: {"db": fake_db}
@@ -294,6 +309,8 @@ class TestModuleHandlerRegister:
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
         """注册多个处理器，全部应出现在注册表中"""
+        for evt in _EXTRA_EVENT_DECLS:
+            empty_event_registry.register(evt)
         module_handlers.add_handler(_SimpleHandler, depends=lambda: {"extra": "a"})
         module_handlers.add_handler(_AnotherHandler, depends=lambda: {"db": None})
 
@@ -318,6 +335,8 @@ class TestModuleHandlerRegister:
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
         """默认 depends (lambda: {}) 时处理器应使用默认参数构造"""
+        for evt in _EXTRA_EVENT_DECLS:
+            empty_event_registry.register(evt)
         reg = ModuleHandlerRegister("test")
         reg.add_handler(_SimpleHandler, depends=lambda: {})
         reg.register_all_handlers(empty_handler_registry)
@@ -331,6 +350,8 @@ class TestModuleHandlerRegister:
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
         """每次 register_all_handlers 调用时 depends 工厂被重新调用"""
+        for evt in _EXTRA_EVENT_DECLS:
+            empty_event_registry.register(evt)
         call_count = 0
 
         def counting_factory() -> Dict[str, Any]:

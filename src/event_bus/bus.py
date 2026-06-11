@@ -92,7 +92,6 @@ class EventBus:
         self,
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
-        matcher: Optional[Matcher] = None,
         max_queue_size: int = 1024,
         max_handler_semaphore: int = 256,
         shutdown: ShutdownConfig = ShutdownConfig(),
@@ -100,7 +99,7 @@ class EventBus:
     ) -> None:
         self._events: EventRegistry = event_registry
         self._handlers: EventHandlerRegistry = handler_registry
-        self._matcher: Matcher = matcher or Matcher(event_registry, handler_registry)
+        self._matcher: Matcher = Matcher(event_registry, handler_registry)
         self._mw_chain: MiddlewareChain = middleware_chain or MiddlewareChain()
 
         if self._events.get(ShutdownEvent.name) is None:

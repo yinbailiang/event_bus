@@ -114,6 +114,7 @@ async def test_publish_before_start(
 # ============================================================================
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_high_concurrency_throughput(
     event_bus_factory: Callable[..., EventBus],

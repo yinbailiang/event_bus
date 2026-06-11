@@ -100,44 +100,6 @@ class TestPrecomputedDispatchTable:
 
 
 # ============================================================================
-# 动态匹配（未注册事件）
-# ============================================================================
-
-
-class TestDynamicMatching:
-    """事件类型不在预计算表中时应触发动态匹配并缓存"""
-
-    def test_unknown_event_triggers_dynamic_match(self) -> None:
-        """未声明的 event_type 应遍历处理器动态匹配"""
-        events = EventRegistry()
-        handlers = EventHandlerRegistry()
-        h = _SimpleHandler(['some.event'])
-        hid = handlers.register(h)
-
-        m = Matcher(events, handlers)
-
-        # 预计算表为空（无注册事件）
-        assert m.dispatch_table == {}
-
-        # 动态匹配应命中
-        assert m.match('some.event') == [(hid, h)]
-
-        # 结果应被缓存
-        assert 'some.event' in m.dispatch_table
-
-    def test_unknown_event_no_match(self) -> None:
-        """动态匹配无结果时缓存空列表"""
-        events = EventRegistry()
-        handlers = EventHandlerRegistry()
-        handlers.register(_SimpleHandler(['other.event']))
-
-        m = Matcher(events, handlers)
-        result = m.match('nonexistent.event')
-        assert result == []
-        assert m.dispatch_table['nonexistent.event'] == []
-
-
-# ============================================================================
 # 版本感知自动重建
 # ============================================================================
 
