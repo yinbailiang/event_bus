@@ -11,8 +11,8 @@
 **本项目唯一合法的 Python 工具链是 [uv](https://docs.astral.sh/uv/)。**
 
 - 所有 Python 命令必须通过 `uv run` 执行
-- 执行任何代码修改前，先确认 uv 可用：`python scripts/check_uv.py`
-- 若 uv 缺失，脚本会打印安装指引并阻断操作——此时应提示用户安装 uv，不得绕过
+- 执行任何代码修改前，先确认 uv 可用：`uv --version`
+- 若 uv 缺失，提示用户安装 uv（https://docs.astral.sh/uv/），不得绕过
 - 首次设置开发环境：
 
   ```bash
