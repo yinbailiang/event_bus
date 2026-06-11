@@ -36,5 +36,8 @@ logs/
 *.log
 
 # Agent runtime data
-.agents/MEMORY/memorys/
-.agents/TEMP_FILES/tmps/
+.agents/MEMORY/memorys/*
+.agents/TEMP_FILES/tmps/*
+
+!.agents/MEMORY/memorys/.gitkeep
+!.agents/TEMP_FILES/tmps/.gitkeep
