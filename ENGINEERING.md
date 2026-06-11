@@ -112,6 +112,9 @@ pytest tests/templates/ -v              # 模板层
 
 ## Pre-commit 门禁
 
+> **需要 [uv](https://docs.astral.sh/uv/)**。钩子通过 `uv run` 调用工具链，
+> 确保在所有开发环境中使用一致的 venv 和依赖版本。
+
 每次提交自动执行，全部通过才允许 commit：
 
 | 钩子 | 范围 | 作用 |
@@ -120,6 +123,7 @@ pytest tests/templates/ -v              # 模板层
 | `ruff-format` | `^src/` | 格式化 |
 | `pyright` | `^src/` | `--level error` 类型检查 |
 | `interrogate` | `^src/` | docstring 覆盖 >= 60% |
+| `pytest-cov` | 全量 | 测试 + 覆盖率 >= 90% |
 | `check-ast` | 全项目 | Python 语法校验 |
 | `check-toml/yaml/json` | 全项目 | 配置文件校验 |
 | `check-merge-conflict` | 全项目 | 合并冲突残留 |
@@ -127,7 +131,7 @@ pytest tests/templates/ -v              # 模板层
 | `trailing-whitespace` | 非 `.py` | 行尾空白（`.py` 由 ruff 处理） |
 
 ```bash
-pre-commit run --all-files   # 手动全量运行
+uv run pre-commit run --all-files   # 手动全量运行
 ```
 
 ---

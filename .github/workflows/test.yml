@@ -25,6 +25,7 @@ jobs:
         run: uv run pre-commit run --all-files
 
   test:
+    needs: pre-commit
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

@@ -284,19 +284,8 @@ uv run pytest tests/templates/ -v
 
 ## 🧑‍💻 开发
 
-### pip
-
-```bash
-# 1. 克隆并安装全部开发依赖
-git clone https://github.com/yinbailiang/event_bus.git
-cd event_bus
-pip install -e ".[dev]"
-
-# 2. 安装 pre-commit 门禁
-pre-commit install
-```
-
-### uv（推荐）
+> **开发本项目的唯一工具链是 [uv](https://docs.astral.sh/uv/)。**
+> pre-commit 门禁通过 `uv run` 调用测试和代码质量工具，请先安装 uv。
 
 ```bash
 # 1. 克隆并同步全部依赖（自动创建 venv）
@@ -312,19 +301,17 @@ uv run pre-commit install
 
 ```bash
 # lint + 格式化
-ruff check src/ && ruff format src/ --check
+uv run ruff check src/ && uv run ruff format src/ --check
 
 # 类型检查
-pyright src/
+uv run pyright src/
 
 # 测试 + 覆盖率
-pytest --cov=src -v
+uv run pytest --cov=src -v
 
 # 手动运行全部门禁
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
-
-> 使用 uv 时，命令前加 `uv run` 即可自动使用项目 venv，例如 `uv run pytest --cov=src -v`。
 
 | 工具 | 用途 |
 | - | - |

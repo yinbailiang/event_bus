@@ -6,6 +6,20 @@
 
 设计哲学：**可扩展性优先**——功能通过中间件洋葱管道和模板注入，不硬编码在核心类中。
 
+## 开发工具链
+
+**本项目唯一合法的 Python 工具链是 [uv](https://docs.astral.sh/uv/)。**
+
+- 所有 Python 命令必须通过 `uv run` 执行
+- 执行任何代码修改前，先确认 uv 可用：`python scripts/check_uv.py`
+- 若 uv 缺失，脚本会打印安装指引并阻断操作——此时应提示用户安装 uv，不得绕过
+- 首次设置开发环境：
+
+  ```bash
+  uv sync --extra dev
+  uv run pre-commit install
+  ```
+
 ## 信息源
 
 以下文件是项目真相的权威来源。**不确定任何配置、数值或结构时，直接阅读对应文件，禁止猜测。**
@@ -45,6 +59,7 @@
 - 内部状态通过 `@property` 暴露，避免直接访问私有字段
 - **注释只解释"为什么"，不解释"做什么"**——一眼能看懂的代码逻辑不写注释
 - **docstring 只描述公开行为**（用途、参数、返回值、异常），不描述内部实现流程
+- **所有python命令必须通过 `uv run` 执行**（如 `uv run pytest`、`uv run pyright src/`）。禁止裸调python命令——项目不依赖全局 Python 环境，裸调会因 venv 未激活而失败
 - 工具链：ruff（lint + format）、pyright（类型检查）、interrogate（docstring 覆盖）、pytest（测试 + 覆盖率）
 
 ---

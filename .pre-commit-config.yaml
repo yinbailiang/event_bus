@@ -34,3 +34,13 @@ repos:
     hooks:
       - id: interrogate
         files: ^src/
+
+  - repo: local
+    hooks:
+      - id: pytest-cov
+        name: pytest coverage
+        entry: uv run pytest tests/ --cov=event_bus --cov-fail-under=90 -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        types: [python]
