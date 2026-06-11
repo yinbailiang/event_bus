@@ -177,6 +177,70 @@ def make_event_name_filter(
 | `event_names` | 要匹配的事件名。 |
 | `mode` | `"white"` 白名单模式，`"black"` 黑名单模式。 |
 
+### `make_bidirectional_forward`
+
+```python
+def make_bidirectional_forward(
+    bus_a: EventBus | TargetBusProvider,
+    bus_b: EventBus | TargetBusProvider,
+    *,
+    source_a_to_b: str = 'a→b',
+    source_b_to_a: str = 'b→a',
+    event_filter: EventFilter | None = None,
+    anti_recursion: bool = True,
+    forward_system_events: bool = False,
+) -> tuple[EventForwardMiddleware, EventForwardMiddleware]:
+```
+
+一键创建一对单向转发中间件，实现两条总线之间的双向事件同步。
+
+| 参数 | 类型 | 默认值 | 说明 |
+| - | - | - | - |
+| `bus_a` | `EventBus \| TargetBusProvider` | (必需) | 总线 A 或其工厂回调。 |
+| `bus_b` | `EventBus \| TargetBusProvider` | (必需) | 总线 B 或其工厂回调。 |
+| `source_a_to_b` | `str` | `"a→b"` | A→B 方向在目标总线上使用的来源标识。 |
+| `source_b_to_a` | `str` | `"b→a"` | B→A 方向在目标总线上使用的来源标识。 |
+| `event_filter` | `EventFilter \| None` | `None` | 共享的事件过滤回调。 |
+| `anti_recursion` | `bool` | `True` | 启用反递归过滤，防止 A→B→A 无限循环。 |
+| `forward_system_events` | `bool` | `False` | 是否转发系统事件。 |
+
+返回值 ``(a_to_b, b_to_a)``：
+
+- ``a_to_b`` 挂载到总线 A，将 A 的事件转发到 B
+- ``b_to_a`` 挂载到总线 B，将 B 的事件转发到 A
+
+**反递归机制**：当 ``anti_recursion=True``（默认），每个方向的中间件会自动跳过
+由对向转发过来的事件。具体而言：
+
+- ``a_to_b`` 跳过 ``sources`` 中包含 ``"b→a"`` 的事件
+- ``b_to_a`` 跳过 ``sources`` 中包含 ``"a→b"`` 的事件
+
+```python
+from event_bus import EventBus, MiddlewareChain
+from event_bus.templates import make_bidirectional_forward
+
+# 一键创建双向转发对
+a_to_b, b_to_a = make_bidirectional_forward(
+    bus_a,
+    bus_b,
+    source_a_to_b='main→audit',
+    source_b_to_a='audit→main',
+)
+
+# 分别挂载到各自总线
+chain_a = MiddlewareChain()
+chain_a.add(a_to_b)
+bus_a = EventBus(..., middleware_chain=chain_a)
+
+chain_b = MiddlewareChain()
+chain_b.add(b_to_a)
+bus_b = EventBus(..., middleware_chain=chain_b)
+```
+
+> **注意**：``anti_recursion`` 防止的是 A→B→A 的直接回环。若业务处理器在收到转发
+> 事件后**主动发布新事件**，该新事件仍会被正常转发（这是预期行为）。若需更严格的
+> 递归控制，请配合使用 ``RecursionGuardMiddleware``。
+
 ---
 
 ## 注意事项

@@ -9,6 +9,7 @@ from .middlewares import (
     RecursionGuardMiddleware,
     SQLiteLoggingMiddleware,
     make_allowlist_predicate,
+    make_bidirectional_forward,
     make_blocklist_predicate,
     make_event_name_filter,
     make_field_inject_transform,
@@ -38,6 +39,7 @@ __all__ = [
     'make_blocklist_predicate',
     'make_allowlist_predicate',
     'make_event_name_filter',
+    'make_bidirectional_forward',
     # pipe
     'Pipe',
     'InProcessPipe',

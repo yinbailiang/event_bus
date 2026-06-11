@@ -4,10 +4,15 @@ import asyncio
 from typing import Any, List, Optional
 
 import pytest
+from conftest import (
+    BASE_EVENT_DECLS,
+    MiddlewareTestPayload,
+    SimplePingHandler,
+    create_event_registry,
+)
 from pydantic import BaseModel
 
 from event_bus import (
-    Regex,
     Event,
     EventBus,
     EventDeclaration,
@@ -15,19 +20,13 @@ from event_bus import (
     EventHandlerRegistry,
     EventRegistry,
     MiddlewareChain,
+    Regex,
 )
 from event_bus.templates import (
     EventForwardMiddleware,
+    make_bidirectional_forward,
     make_event_name_filter,
 )
-
-from conftest import (
-    MiddlewareTestPayload,
-    SimplePingHandler,
-    create_event_registry,
-    BASE_EVENT_DECLS,
-)
-
 
 # ============================================================================
 # 辅助：用于验证转发结果的 Handler
@@ -639,3 +638,304 @@ class TestEventForwardMiddleware:
 
         assert len(spy.received_sources) >= 1
         assert spy.received_sources[0] == "event_forward"
+
+
+# ============================================================================
+# make_bidirectional_forward
+# ============================================================================
+
+
+class TestMakeBidirectionalForward:
+    """make_bidirectional_forward 双向转发中间件对"""
+
+    @pytest.mark.asyncio
+    async def test_basic_bidirectional(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """A→B 和 B→A 两个方向均能成功转发"""
+        registry_a = create_event_registry(BASE_EVENT_DECLS)
+        registry_b = create_event_registry(BASE_EVENT_DECLS)
+
+        handlers_a = EventHandlerRegistry()
+        handlers_b = EventHandlerRegistry()
+
+        spy_a = ForwardSpyHandler(["mw.ping", "user.login"])
+        spy_b = ForwardSpyHandler(["mw.ping", "user.login"])
+        handlers_a.register(spy_a)
+        handlers_b.register(spy_b)
+
+        # 先创建链和总线，再生成中间件对并追加到链中
+        chain_a = MiddlewareChain()
+        chain_b = MiddlewareChain()
+        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+
+        a_to_b, b_to_a = make_bidirectional_forward(
+            bus_a,
+            bus_b,
+            source_a_to_b='a→b',
+            source_b_to_a='b→a',
+        )
+        chain_a.add(a_to_b)
+        chain_b.add(b_to_a)
+
+        async with bus_a:
+            async with bus_b:
+                # A 发布事件 → 应转发到 B
+                await bus_a.proxy('a-src').publish('mw.ping', {'key': 'from-a', 'count': 1})
+                await spy_b.wait_received(timeout=3.0)
+
+                # B 发布事件 → 应转发到 A
+                await bus_b.proxy('b-src').publish('user.login', None)
+                await spy_a.wait_received(timeout=3.0)
+
+        # B 收到了来自 A 的事件
+        b_pings = [n for n in spy_b.received_names if n == 'mw.ping']
+        assert len(b_pings) >= 1
+        b_sources = [
+            spy_b.received_sources[i]
+            for i, n in enumerate(spy_b.received_names)
+            if n == 'mw.ping'
+        ]
+        assert 'a→b' in b_sources
+
+        # A 收到了来自 B 的事件
+        a_logins = [n for n in spy_a.received_names if n == 'user.login']
+        assert len(a_logins) >= 1
+        a_sources = [
+            spy_a.received_sources[i]
+            for i, n in enumerate(spy_a.received_names)
+            if n == 'user.login'
+        ]
+        assert 'b→a' in a_sources
+
+    @pytest.mark.asyncio
+    async def test_anti_recursion_prevents_loop(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """反递归过滤阻止 A→B→A 回环"""
+        registry_a = create_event_registry(BASE_EVENT_DECLS)
+        registry_b = create_event_registry(BASE_EVENT_DECLS)
+
+        handlers_a = EventHandlerRegistry()
+        handlers_b = EventHandlerRegistry()
+
+        spy_a = ForwardSpyHandler(['mw.ping'])
+        spy_b = ForwardSpyHandler(['mw.ping'])
+        handlers_a.register(spy_a)
+        handlers_b.register(spy_b)
+
+        chain_a = MiddlewareChain()
+        chain_b = MiddlewareChain()
+        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+
+        a_to_b, b_to_a = make_bidirectional_forward(
+            bus_a,
+            bus_b,
+            source_a_to_b='a→b',
+            source_b_to_a='b→a',
+            anti_recursion=True,
+        )
+        chain_a.add(a_to_b)
+        chain_b.add(b_to_a)
+
+        async with bus_a:
+            async with bus_b:
+                # A 发布事件
+                await bus_a.proxy('a-src').publish('mw.ping', {'key': 'loop-test', 'count': 1})
+                await spy_b.wait_received(timeout=3.0)
+                # 给足够时间让可能的回环发生
+                await asyncio.sleep(0.3)
+
+        # B 收到了 1 次（来自 A 的转发）
+        assert len(spy_b.received_names) == 1
+        # A 的 spy 不应该收到来自 B 的回环转发（反递归生效）
+        b_to_a_sources = [s for s in spy_a.received_sources if s == 'b→a']
+        assert len(b_to_a_sources) == 0
+
+    @pytest.mark.asyncio
+    async def test_anti_recursion_disabled_allows_loop(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """关闭反递归时 A→B→A 可以发生"""
+        registry_a = create_event_registry(BASE_EVENT_DECLS)
+        registry_b = create_event_registry(BASE_EVENT_DECLS)
+
+        handlers_a = EventHandlerRegistry()
+        handlers_b = EventHandlerRegistry()
+
+        spy_a = ForwardSpyHandler(['mw.ping'])
+        spy_b = ForwardSpyHandler(['mw.ping'])
+        handlers_a.register(spy_a)
+        handlers_b.register(spy_b)
+
+        chain_a = MiddlewareChain()
+        chain_b = MiddlewareChain()
+        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+
+        a_to_b, b_to_a = make_bidirectional_forward(
+            bus_a,
+            bus_b,
+            source_a_to_b='a→b',
+            source_b_to_a='b→a',
+            anti_recursion=False,
+        )
+        chain_a.add(a_to_b)
+        chain_b.add(b_to_a)
+
+        async with bus_a:
+            async with bus_b:
+                await bus_a.proxy('a-src').publish('mw.ping', {'key': 'no-guard', 'count': 1})
+                # B 也会回环转发到 A
+                await asyncio.sleep(0.5)
+
+        # B 收到来自 A 的转发
+        assert len(spy_b.received_names) >= 1
+        # A 也收到了来自 B 的回环（无防护）
+        b_to_a_sources = [s for s in spy_a.received_sources if s == 'b→a']
+        assert len(b_to_a_sources) >= 1
+
+    @pytest.mark.asyncio
+    async def test_custom_event_filter_with_pair(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """自定义过滤器与反递归组合生效"""
+        registry_a = create_event_registry(BASE_EVENT_DECLS)
+        registry_b = create_event_registry(BASE_EVENT_DECLS)
+
+        handlers_a = EventHandlerRegistry()
+        handlers_b = EventHandlerRegistry()
+
+        spy_a = ForwardSpyHandler(['mw.ping', 'user.login'])
+        spy_b = ForwardSpyHandler(['mw.ping', 'user.login'])
+        handlers_a.register(spy_a)
+        handlers_b.register(spy_b)
+
+        chain_a = MiddlewareChain()
+        chain_b = MiddlewareChain()
+        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+
+        a_to_b, b_to_a = make_bidirectional_forward(
+            bus_a,
+            bus_b,
+            source_a_to_b='a→b',
+            source_b_to_a='b→a',
+            event_filter=make_event_name_filter('mw.ping', mode='white'),
+            anti_recursion=True,
+        )
+        chain_a.add(a_to_b)
+        chain_b.add(b_to_a)
+
+        async with bus_a:
+            async with bus_b:
+                # A 发布 mw.ping → 应转发到 B
+                await bus_a.proxy('a-src').publish('mw.ping', {'key': 'filtered', 'count': 1})
+                # A 发布 user.login → 不应转发（白名单仅含 mw.ping）
+                await bus_a.proxy('a-src').publish('user.login', None)
+                await spy_b.wait_received(timeout=3.0)
+                await asyncio.sleep(0.2)
+
+        # B 仅收到 mw.ping
+        b_names = spy_b.received_names
+        assert 'mw.ping' in b_names
+        assert 'user.login' not in b_names
+
+    @pytest.mark.asyncio
+    async def test_dynamic_bus_providers(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """支持动态总线提供者（工厂回调）"""
+        registry_a = create_event_registry(BASE_EVENT_DECLS)
+        registry_b = create_event_registry(BASE_EVENT_DECLS)
+
+        handlers_a = EventHandlerRegistry()
+        handlers_b = EventHandlerRegistry()
+
+        spy_b = ForwardSpyHandler(['mw.ping'])
+        handlers_b.register(spy_b)
+
+        # bus_b 先创建并持有链，再生成中间件对
+        chain_b = MiddlewareChain()
+        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+
+        # bus_a 尚未创建，使用工厂回调
+        _bus_a: Optional[EventBus] = None
+
+        def get_bus_a() -> EventBus:
+            assert _bus_a is not None
+            return _bus_a
+
+        a_to_b, b_to_a = make_bidirectional_forward(
+            get_bus_a,
+            bus_b,
+            source_a_to_b='a→b',
+            source_b_to_a='b→a',
+        )
+
+        chain_a = MiddlewareChain()
+        chain_a.add(a_to_b)
+        _bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
+        chain_b.add(b_to_a)
+
+        async with _bus_a:
+            async with bus_b:
+                await _bus_a.proxy('a-src').publish('mw.ping', {'key': 'dynamic', 'count': 42})
+                await spy_b.wait_received(timeout=3.0)
+
+        assert len(spy_b.received_names) >= 1
+        assert spy_b.received_names[0] == 'mw.ping'
+        assert spy_b.received_sources[0] == 'a→b'
+
+    @pytest.mark.asyncio
+    async def test_default_source_names(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """默认 source 名称为 'a→b' 和 'b→a'"""
+        registry_a = create_event_registry(BASE_EVENT_DECLS)
+        registry_b = create_event_registry(BASE_EVENT_DECLS)
+
+        handlers_a = EventHandlerRegistry()
+        handlers_b = EventHandlerRegistry()
+
+        spy_b = ForwardSpyHandler(['mw.ping'])
+        handlers_b.register(spy_b)
+
+        chain_a = MiddlewareChain()
+        chain_b = MiddlewareChain()
+        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+
+        a_to_b, b_to_a = make_bidirectional_forward(bus_a, bus_b)
+        chain_a.add(a_to_b)
+        chain_b.add(b_to_a)
+
+        async with bus_a:
+            async with bus_b:
+                await bus_a.proxy('a-src').publish('mw.ping', {'key': 'default', 'count': 1})
+                await spy_b.wait_received(timeout=3.0)
+
+        assert len(spy_b.received_sources) >= 1
+        assert spy_b.received_sources[0] == 'a→b'
+
+        async with bus_a:
+            async with bus_b:
+                await bus_a.proxy('a-src').publish('mw.ping', {'key': 'default', 'count': 1})
+                await spy_b.wait_received(timeout=3.0)
+
+        assert len(spy_b.received_sources) >= 1
+        assert spy_b.received_sources[0] == 'a→b'

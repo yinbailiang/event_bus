@@ -192,3 +192,101 @@ def make_event_name_filter(
                 return event.name not in name_set
 
             return _block_filter
+
+
+def make_bidirectional_forward(
+    bus_a: Union[EventBus, TargetBusProvider],
+    bus_b: Union[EventBus, TargetBusProvider],
+    *,
+    source_a_to_b: str = 'a→b',
+    source_b_to_a: str = 'b→a',
+    event_filter: Optional[EventFilter] = None,
+    anti_recursion: bool = True,
+    forward_system_events: bool = False,
+) -> tuple[EventForwardMiddleware, EventForwardMiddleware]:
+    """创建一对单向转发中间件，实现两条总线之间的双向事件同步。
+
+    返回 ``(a_to_b, b_to_a)``：
+    - ``a_to_b`` 挂载到总线 A 的中间件链，将事件从 A 转发到 B
+    - ``b_to_a`` 挂载到总线 B 的中间件链，将事件从 B 转发到 A
+
+    参数
+    ----
+    bus_a:
+        总线 A（或返回总线 A 的回调）。
+    bus_b:
+        总线 B（或返回总线 B 的回调）。
+    source_a_to_b:
+        A→B 方向在目标总线上使用的来源标识，默认 ``"a→b"``。
+    source_b_to_a:
+        B→A 方向在目标总线上使用的来源标识，默认 ``"b→a"``。
+    event_filter:
+        共享的事件过滤回调，为 ``None`` 时转发所有非系统事件。
+        若需两个方向使用不同过滤，请手动创建 ``EventForwardMiddleware``。
+    anti_recursion:
+        是否启用反递归过滤，默认 ``True``。
+        启用后，每个方向自动跳过已由对向中间件转发过来的事件，
+        防止 A→B→A→B… 无限循环。
+    forward_system_events:
+        是否转发 ``event_bus.*`` 系统事件，默认 ``False``。
+
+    Example::
+
+        a_to_b, b_to_a = make_bidirectional_forward(bus_a, bus_b)
+
+        chain_a = MiddlewareChain()
+        chain_a.add(a_to_b)
+        bus_a = EventBus(..., middleware_chain=chain_a)
+
+        chain_b = MiddlewareChain()
+        chain_b.add(b_to_a)
+        bus_b = EventBus(..., middleware_chain=chain_b)
+    """
+
+    def _compose_filter(
+        base: Optional[EventFilter],
+        anti_source: str,
+    ) -> Optional[EventFilter]:
+        """将用户过滤与反递归过滤组合。"""
+        if not anti_recursion:
+
+            async def _anti_pass(event: Event) -> bool:
+                return True
+
+            _anti: EventFilter = _anti_pass
+        else:
+
+            async def _anti_source_filter(event: Event) -> bool:
+                return anti_source not in event.sources
+
+            _anti = _anti_source_filter
+
+        if base is None:
+            return _anti
+
+        async def _composed(event: Event) -> bool:
+            base_result = base(event)
+            if isawaitable(base_result):
+                base_result = await base_result
+            if not base_result:
+                return False
+            anti_result = _anti(event)
+            if isawaitable(anti_result):
+                anti_result = await anti_result
+            return bool(anti_result)
+
+        return _composed
+
+    a_to_b = EventForwardMiddleware(
+        target=bus_b,
+        source_name=source_a_to_b,
+        event_filter=_compose_filter(event_filter, source_b_to_a),
+        forward_system_events=forward_system_events,
+    )
+    b_to_a = EventForwardMiddleware(
+        target=bus_a,
+        source_name=source_b_to_a,
+        event_filter=_compose_filter(event_filter, source_a_to_b),
+        forward_system_events=forward_system_events,
+    )
+    return a_to_b, b_to_a

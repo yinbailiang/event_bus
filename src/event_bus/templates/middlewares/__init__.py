@@ -3,6 +3,7 @@ from .event_forward import (
     EventFilter,
     EventForwardMiddleware,
     TargetBusProvider,
+    make_bidirectional_forward,
     make_event_name_filter,
 )
 from .event_transform import (
@@ -28,6 +29,7 @@ __all__ = [
     'EventFilter',
     'TargetBusProvider',
     'make_event_name_filter',
+    'make_bidirectional_forward',
     # 转换
     'EventTransformMiddleware',
     'TransformFunc',
