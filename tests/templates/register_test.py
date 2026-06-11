@@ -372,6 +372,123 @@ class TestModuleHandlerRegister:
         handlers = Matcher(empty_event_registry, reg2).match("test.event")
         assert cast(_SimpleHandler, handlers[0][1]).extra == "2"
 
+    def test_register_all_handlers_one_failure_does_not_block_others(
+        self,
+        empty_event_registry: EventRegistry,
+        empty_handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """单个处理器注册失败（depends 工厂抛异常）不应阻止其余处理器正常注册"""
+        for evt in _EXTRA_EVENT_DECLS:
+            empty_event_registry.register(evt)
+
+        def _failing_factory() -> Dict[str, Any]:
+            raise RuntimeError("依赖工厂故意失败")
+
+        reg = ModuleHandlerRegister("test")
+        # 第一个会失败，第二个和第三个应正常注册
+        reg.add_handler(_SimpleHandler, depends=_failing_factory)
+        reg.add_handler(_SimpleHandler, depends=lambda: {"extra": "ok-1"})
+        reg.add_handler(_AnotherHandler, depends=lambda: {"db": "ok-db"})
+
+        # 不应抛出异常
+        reg.register_all_handlers(empty_handler_registry)
+
+        # 只有 2 个成功注册（失败的被跳过）
+        assert empty_handler_registry.handlers_count == 2
+
+        # 验证成功的处理器可以正常匹配
+        matcher = Matcher(empty_event_registry, empty_handler_registry)
+        event_handlers = matcher.match("test.event")
+        another_handlers = matcher.match("test.another")
+
+        assert len(event_handlers) == 1
+        assert isinstance(event_handlers[0][1], _SimpleHandler)
+        assert event_handlers[0][1].extra == "ok-1"
+
+        assert len(another_handlers) == 1
+        assert isinstance(another_handlers[0][1], _AnotherHandler)
+        assert another_handlers[0][1].db == "ok-db"
+
+    def test_register_all_handlers_all_fail_still_no_exception(
+        self,
+        empty_handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """所有处理器注册均失败时也不应抛出异常，注册表保持为空"""
+
+        def _failing_factory() -> Dict[str, Any]:
+            raise RuntimeError("全部失败")
+
+        reg = ModuleHandlerRegister("test")
+        reg.add_handler(_SimpleHandler, depends=_failing_factory)
+        reg.add_handler(_AnotherHandler, depends=_failing_factory)
+
+        # 不应抛出异常
+        reg.register_all_handlers(empty_handler_registry)
+
+        assert empty_handler_registry.handlers_count == 0
+
+    # ---- register_all_handlers (atomic=True) ----
+    def test_register_all_handlers_atomic_all_succeed(
+        self,
+        empty_event_registry: EventRegistry,
+        empty_handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """atomic=True 且全部成功时应正常注册所有处理器"""
+        for evt in _EXTRA_EVENT_DECLS:
+            empty_event_registry.register(evt)
+
+        reg = ModuleHandlerRegister("test")
+        reg.add_handler(_SimpleHandler, depends=lambda: {"extra": "a"})
+        reg.add_handler(_AnotherHandler, depends=lambda: {"db": "x"})
+
+        reg.register_all_handlers(empty_handler_registry, atomic=True)
+
+        assert empty_handler_registry.handlers_count == 2
+
+    def test_register_all_handlers_atomic_rollback_on_failure(
+        self,
+        empty_event_registry: EventRegistry,
+        empty_handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """atomic=True 时任一处理器失败应回滚已注册的并抛出异常"""
+        for evt in _EXTRA_EVENT_DECLS:
+            empty_event_registry.register(evt)
+
+        def _failing_factory() -> Dict[str, Any]:
+            raise RuntimeError("依赖工厂故意失败")
+
+        reg = ModuleHandlerRegister("test")
+        # 第 1 个成功，第 2 个失败 → 第 1 个应被回滚
+        reg.add_handler(_SimpleHandler, depends=lambda: {"extra": "ok"})
+        reg.add_handler(_SimpleHandler, depends=_failing_factory)
+
+        with pytest.raises(RuntimeError, match="依赖工厂故意失败"):
+            reg.register_all_handlers(empty_handler_registry, atomic=True)
+
+        # 回滚后注册表应为空
+        assert empty_handler_registry.handlers_count == 0
+
+    def test_register_all_handlers_atomic_first_fails_no_rollback_needed(
+        self,
+        empty_event_registry: EventRegistry,
+        empty_handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """atomic=True 且第一个就失败时直接抛异常，注册表为空"""
+        for evt in _EXTRA_EVENT_DECLS:
+            empty_event_registry.register(evt)
+
+        def _failing_factory() -> Dict[str, Any]:
+            raise RuntimeError("第一个就失败")
+
+        reg = ModuleHandlerRegister("test")
+        reg.add_handler(_SimpleHandler, depends=_failing_factory)
+        reg.add_handler(_AnotherHandler, depends=lambda: {"db": "never-reached"})
+
+        with pytest.raises(RuntimeError, match="第一个就失败"):
+            reg.register_all_handlers(empty_handler_registry, atomic=True)
+
+        assert empty_handler_registry.handlers_count == 0
+
     # ---- __repr__ ----
     def test_repr(self, module_handlers: ModuleHandlerRegister) -> None:
         module_handlers.add_handler(_SimpleHandler, depends=lambda: {})

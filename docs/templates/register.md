@@ -49,7 +49,9 @@ class ModuleHandlerRegister:
         self,
         depends: Callable[[], Dict[str, Any]] = lambda: {}
     ) -> Callable[[HandlerT], HandlerT]
-    def register_all_handlers(self, handler_registry: EventHandlerRegistry) -> None
+    def register_all_handlers(
+        self, handler_registry: EventHandlerRegistry, *, atomic: bool = False
+    ) -> None
 ```
 
 | 成员 | 说明 |
@@ -57,7 +59,7 @@ class ModuleHandlerRegister:
 | `__init__(name)` | 构造注册器。`name` 为模块名称，用于标识和调试。 |
 | `add_handler(handler_type, depends)` | 手动添加一个处理器类及其依赖工厂函数。重复添加自动去重。 |
 | `handler(depends)` | **装饰器工厂**。返回一个类装饰器，自动将处理器类添加到注册器中。`depends` 为返回依赖字典的可调用对象，字典键对应处理器 `__init__` 的参数名，默认 `lambda: {}`。 |
-| `register_all_handlers(handler_registry)` | 将所有已收集的处理器**实例化**（通过 `depends` 工厂注入依赖）并一次性注册到给定的 `EventHandlerRegistry` 中。 |
+| `register_all_handlers(handler_registry, *, atomic=False)` | 将所有已收集的处理器**实例化**（通过 `depends` 工厂注入依赖）并一次性注册。`atomic=True` 时启用事务性注册：任一失败则回滚已注册的处理器并抛出异常；默认 `False` 时失败仅记日志并继续。 |
 
 ---
 
@@ -213,6 +215,7 @@ bus = EventBus(event_registry, handler_registry)
 | **声明与注册分离** | 模块导入时收集声明，应用启动时统一注册，避免模块导入副作用。 |
 | **去重保护** | 重复添加同一事件声明或同一 `(处理器类, 依赖工厂)` 组合自动忽略。 |
 | **惰性实例化** | 处理器仅在 `register_all_handlers` 调用时才通过依赖工厂实例化，确保依赖在注册时已可用。 |
+| **事务性注册** | `register_all_handlers` 支持 `atomic=True` 模式：任一处理器失败时自动回滚已注册的处理器，保证整批成功或整批失败。 |
 | **装饰器友好** | 提供 `@register.event` 和 `@register.handler(depends=...)` 两种装饰器风格，保持代码整洁。 |
 | **模块隔离** | 每个模块拥有独立的注册器实例，可按需注册部分或全部事件/处理器。 |
 
@@ -225,6 +228,7 @@ bus = EventBus(event_registry, handler_registry)
 3. **注册顺序**：建议先将所有模块的事件注册完毕，再注册处理器。虽然注册表本身不强制顺序，但处理器可能依赖事件声明已就绪。
 4. **无需手动调用 `register_all_*` 的模块**：若某模块仅有事件或仅有处理器，可只使用对应的注册器，不必强行创建另一个。
 5. **重复添加的去重依据**：`ModuleEventRegister` 通过类对象本身去重；`ModuleHandlerRegister` 通过 `(handler_type, depends)` 元组去重。注意不同 `depends` 工厂（即使行为相同）会被视为不同条目。
+6. **事务性注册（`atomic=True`）**：当任一处理器注册失败时，所有已注册的处理器会被自动移除（回滚），原始异常向外抛出。适用于需要"整批成功或整批失败"语义的场景。默认 `atomic=False` 保持宽松行为：失败仅记录日志，其余处理器继续注册。
 
 ---
 

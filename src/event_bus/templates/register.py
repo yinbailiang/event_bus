@@ -132,24 +132,39 @@ class ModuleHandlerRegister:
 
         return decorator
 
-    def register_all_handlers(self, handler_registry: EventHandlerRegistry) -> None:
+    def register_all_handlers(self, handler_registry: EventHandlerRegistry, *, atomic: bool = False) -> None:
         """
         将所有收集到的处理器实例化并注册到指定的 EventHandlerRegistry 中。
 
-        单个处理器的构造或注册失败不会中断其余处理器的注册流程，
-        异常会被记录到日志中。
+        默认情况下（``atomic=False``），单个处理器的构造或注册失败不会中断
+        其余处理器的注册流程，异常会被记录到日志中。
+
+        当 ``atomic=True`` 时，任一处理器失败将导致已注册的处理器被回滚
+        （从注册表中移除），并向外抛出原始异常。
 
         Args:
             handler_registry: 目标处理器注册表
+            atomic: 是否启用事务性注册（整批成功或整批失败）
+
+        Raises:
+            Exception: 当 ``atomic=True`` 且任一处理器注册失败时，
+                       重新抛出导致失败的原始异常
         """
+        registered_ids: List[str] = []
         for handler_type, depends_factory in self.handlers:
             try:
                 # 调用依赖工厂获取参数字典
                 kwargs: Dict[str, Any] = depends_factory()
                 # 实例化处理器并注册
                 handler_instance: EventHandler = handler_type(**kwargs)
-                handler_registry.register(handler_instance)
+                hid = handler_registry.register(handler_instance)
+                registered_ids.append(hid)
             except Exception:
+                if atomic:
+                    # 回滚：移除所有已注册的处理器
+                    for hid in registered_ids:
+                        handler_registry.unregister(hid)
+                    raise
                 logger.exception(
                     '注册处理器 %s 失败（依赖工厂: %s），跳过并继续',
                     handler_type.__name__,
