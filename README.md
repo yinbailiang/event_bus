@@ -1,4 +1,4 @@
-# InfinityBus — 异步事件总线
+# InfinityBus — Async Event Bus
 
 [![Test](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml/badge.svg)](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml)
 [![Coverage](https://img.shields.io/badge/coverage-90%25+-brightgreen)](ENGINEERING.md)
@@ -7,101 +7,103 @@
 [![PyPI Version](https://img.shields.io/pypi/v/infinity_bus)](https://pypi.org/project/infinity_bus/)
 [![Supported Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://pypi.org/project/infinity_bus/)
 
-**强类型、可扩展的异步事件总线——中间件管道 + 高级模板。**
+**Strongly-typed, extensible async event bus — middleware pipeline + advanced templates.**
 
-## 📑 目录
+> 📖 [中文版](README_zh.md)
 
-- [✨ 特性](#-特性)
-- [🔍 同类对比](#-同类对比)
-- [📦 安装](#-安装)
-- [🚀 快速开始](#-快速开始)
-- [🧱 架构](#-架构)
-- [📚 文档](#-文档)
-- [🧪 测试](#-测试)
-- [🧑‍💻 开发](#-开发)
-- [📄 许可证](#-许可证)
+## 📑 Table of Contents
 
-## ✨ 特性
+- [✨ Features](#-features)
+- [🔍 Comparison](#-comparison)
+- [📦 Installation](#-installation)
+- [🚀 Quick Start](#-quick-start)
+- [🧱 Architecture](#-architecture)
+- [📚 Documentation](#-documentation)
+- [🧪 Testing](#-testing)
+- [🧑‍💻 Development](#-development)
+- [📄 License](#-license)
 
-| 类别 | 能力 |
+## ✨ Features
+
+| Category | Capability |
 | - | - |
-| 类型安全 | Pydantic 负载校验 · pyright **strict** · **业务代码零** `# type: ignore` |
-| 灵活订阅 | **正则表达式**匹配事件名 · 通配符处理器 |
-| 中间件管道 | 洋葱模型 · `before_publish` / `on_publish` 双钩子 · 5+ 内置中间件 |
-| 高级模板 | `expect` 一次性监听 · `request` RPC 调用 · `pipe` 双向管道 · `register` 批量注册 |
-| 生产可靠 | 优雅停机 · 背压控制 · 超时保护 · 错误隔离 · 可观测性 |
-| 工程纪律 | 90%+ 测试覆盖 · 85%+ docstring 覆盖 · pre-commit 自动门禁 |
+| Type Safety | Pydantic payload validation · pyright **strict** · **zero** `# type: ignore` in business code |
+| Flexible Subscription | **Regex**-based event name matching · wildcard handlers |
+| Middleware Pipeline | Onion model · `before_publish` / `on_publish` dual hooks · 5+ built-in middlewares |
+| Advanced Templates | `expect` one-shot listener · `request` RPC call · `pipe` bidirectional channel · `register` batch registration |
+| Production Ready | Graceful shutdown · backpressure control · timeout protection · error isolation · observability |
+| Engineering Discipline | 90%+ test coverage · 85%+ docstring coverage · pre-commit automated gating |
 
-> 和同类项目不同：InfinityBus 是**可扩展的**（中间件洋葱管道），而非把所有功能硬编码在核心类里。
-> 详见 [中间件系统](docs/middleware.md)。
+> Unlike similar projects: InfinityBus is **extensible** (middleware onion pipeline), rather than hardcoding all functionality in the core class.
+> See [Middleware System](docs/middleware.md) for details.
 
-## 🔍 同类对比
+## 🔍 Comparison
 
-| 特性 | InfinityBus | [bubus](https://github.com/browser-use/bubus) | [pyee](https://github.com/jfhbrook/pyee) | [PyPubSub](https://github.com/schollii/pypubsub) |
+| Feature | InfinityBus | [bubus](https://github.com/browser-use/bubus) | [pyee](https://github.com/jfhbrook/pyee) | [PyPubSub](https://github.com/schollii/pypubsub) |
 | - | - | - | - | - |
-| 异步原生 | ✅ asyncio | ✅ asyncio / anyio | ✅ asyncio / trio | ❌ 纯同步 |
-| 类型安全 | ✅ pyright strict · 业务零 `type: ignore` | ⚠️ pyright strict · 业务 ~30 处遮蔽 | ✅ mypy + pyright | ❌ 无类型注解 |
-| 负载校验 | ✅ Pydantic 自动校验 | ✅ Pydantic 自动校验 | ❌ 无 | ❌ 无（任意对象） |
-| 订阅方式 | 正则表达式 | 类名 + 通配符 `*` | 字符串精确匹配 | 主题层级（`a.b.c`） |
-| 中间件管道 | ✅ 洋葱模型双钩子 | ❌ | ❌ | ❌ |
-| 高级模板 | ✅ expect/request/pipe/register | ⚠️ 仅 `bus.expect()` | ❌ | ❌ |
-| 事件返回值 | ⚠️ 通过 `request` 模板 | ✅ 内置 `event.event_result()` | ❌ | ❌ |
-| 事件转发 | ⚠️ EventForwardMiddleware | ✅ 内置 `event.forward_to()` | ❌ | ❌ |
-| 依赖数量 | 1 核心（pydantic）+ 1 可选 | 6（anyio, aiofiles...） | 0 | 0 |
-| 优雅停机 | ✅ 排空队列 + 等待活跃任务 | ✅ wait_until_idle + 队列关闭 | ⚠️ `wait_for_complete` + `cancel` | N/A（同步） |
-| 超时保护 | ✅ 每 handler 独立超时 | ✅ event_result.timeout | ❌ | N/A |
-| 错误隔离 | ✅ TaskErrorEvent 统一上报 | ✅ 错误记录不中断总线 | ❌ | N/A |
-| FIFO 处理 | ❌ | ✅ 全局锁保证 | ❌ | N/A |
-| 慢 handler 告警 | ❌ | ✅ 15s 超时告警 | ❌ | N/A |
-| 防递归 | ✅ 中间件（可配置） | ✅ 内置（不可配置） | ❌ | N/A |
-| 日志与审计 | ✅ JSONL + SQLite（中间件） | ✅ 内置 JSONL WAL 日志 | ❌ 无内置 | ⚠️ 调试追踪 |
-| 测试覆盖 | ✅ 92%（160 tests） | ✅ 83%（138 tests） | ✅ 94%（43 tests） | ✅ 86%（167 tests） |
-| Python 版本 | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
-| 基准版本 | v1.4.1 `fb7cbed` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
+| Async Native | ✅ asyncio | ✅ asyncio / anyio | ✅ asyncio / trio | ❌ sync only |
+| Type Safety | ✅ pyright strict · zero `type: ignore` in business code | ⚠️ pyright strict · ~30 suppressions in business code | ✅ mypy + pyright | ❌ no type annotations |
+| Payload Validation | ✅ Pydantic auto-validation | ✅ Pydantic auto-validation | ❌ none | ❌ none (arbitrary objects) |
+| Subscription Model | Regex | class name + wildcard `*` | exact string match | topic hierarchy (`a.b.c`) |
+| Middleware Pipeline | ✅ onion model dual hooks | ❌ | ❌ | ❌ |
+| Advanced Templates | ✅ expect/request/pipe/register | ⚠️ `bus.expect()` only | ❌ | ❌ |
+| Event Return Values | ⚠️ via `request` template | ✅ built-in `event.event_result()` | ❌ | ❌ |
+| Event Forwarding | ⚠️ EventForwardMiddleware | ✅ built-in `event.forward_to()` | ❌ | ❌ |
+| Dependency Count | 1 core (pydantic) + 1 optional | 6 (anyio, aiofiles...) | 0 | 0 |
+| Graceful Shutdown | ✅ drain queue + await active tasks | ✅ wait_until_idle + queue close | ⚠️ `wait_for_complete` + `cancel` | N/A (sync) |
+| Timeout Protection | ✅ per-handler timeout | ✅ event_result.timeout | ❌ | N/A |
+| Error Isolation | ✅ TaskErrorEvent unified reporting | ✅ errors logged, bus uninterrupted | ❌ | N/A |
+| FIFO Processing | ❌ | ✅ global lock guarantee | ❌ | N/A |
+| Slow Handler Alert | ❌ | ✅ 15s timeout alert | ❌ | N/A |
+| Recursion Guard | ✅ middleware (configurable) | ✅ built-in (non-configurable) | ❌ | N/A |
+| Logging & Auditing | ✅ JSONL + SQLite (middleware) | ✅ built-in JSONL WAL logging | ❌ no built-in | ⚠️ debug tracing |
+| Test Coverage | ✅ 92% (160 tests) | ✅ 83% (138 tests) | ✅ 94% (43 tests) | ✅ 86% (167 tests) |
+| Python Version | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
+| Baseline Version | v1.4.1 `fb7cbed` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
 
-> **选择 InfinityBus 的理由**：你需要通过中间件扩展功能而非修改核心代码；你无法容忍生产代码中出现 `# type: ignore`；你想用最少的依赖获得完整的生产级特性（背压、优雅停机、正则订阅）。
+> **Choose InfinityBus when**: you need to extend functionality via middleware rather than modifying core code; you can't tolerate `# type: ignore` in production code; you want full production-grade features (backpressure, graceful shutdown, regex subscriptions) with minimal dependencies.
 >
-> **选择 bubus 的理由**：你需要事件自带返回值、事件转发这类开箱即用的功能；你需要支持 Python 3.11；你偏好 `bus.on(EventClass, fn)` 这种类驱动的 API 风格。
+> **Choose bubus when**: you need built-in event return values and event forwarding; you need Python 3.11 support; you prefer the class-driven API style of `bus.on(EventClass, fn)`.
 >
-> **选择 pyee 的理由**：你熟悉 Node.js EventEmitter 风格；你需要同时支持 asyncio 和 trio；你偏好极简 API（`ee.on('event', fn)`）；v13 起类型系统大幅增强，同时通过 mypy 和 pyright 检查。
+> **Choose pyee when**: you're familiar with the Node.js EventEmitter style; you need both asyncio and trio support; you prefer a minimal API (`ee.on('event', fn)`); the type system has been greatly enhanced since v13, passing both mypy and pyright.
 >
-> **选择 PyPubSub 的理由**：你不使用 asyncio；你需要极宽的 Python 版本兼容（3.7–3.14）；你偏好传统的主题层级字符串匹配。
+> **Choose PyPubSub when**: you don't use asyncio; you need very broad Python version compatibility (3.7–3.14); you prefer traditional topic hierarchy string matching.
 >
-> 完整 commit：
+> Full commits:
 > · [InfinityBus `fb7cbed`](https://github.com/yinbailiang/event_bus/commit/fb7cbed)
 > · [bubus `7c09342`](https://github.com/browser-use/bubus/commit/7c09342)
-> · [pyee `5157de2`](https://github.com/jfhbrook/pyee/commit/5157de2)（官方 CI 无覆盖率，此处为手动 `pytest-cov` 测量）
+> · [pyee `5157de2`](https://github.com/jfhbrook/pyee/commit/5157de2) (no coverage in official CI; manually measured via `pytest-cov`)
 > · [PyPubSub `4ec2c47`](https://github.com/schollii/pypubsub/commit/4ec2c47)
 
-## 📦 安装
+## 📦 Installation
 
-> 推荐使用 [uv](https://docs.astral.sh/uv/) —— 极速 Python 包管理器，比 pip 快 10–100 倍，
-> 自动管理 venv、锁定依赖、解析冲突。无需单独安装虚拟环境工具。
+> We recommend [uv](https://docs.astral.sh/uv/) — a blazing-fast Python package manager, 10–100× faster than pip,
+> with automatic venv management, dependency locking, and conflict resolution. No need for separate virtual environment tools.
 
 ### pip
 
 ```bash
-# 核心（仅发布/订阅、中间件管道）
+# Core (pub/sub and middleware pipeline only)
 pip install infinity_bus
 
-# 核心 + 高级模板（expect、request、pipe、SQLite 日志等）
+# Core + advanced templates (expect, request, pipe, SQLite logging, etc.)
 pip install infinity_bus[templates]
 ```
 
-### uv（推荐）
+### uv (recommended)
 
 ```bash
-# 核心
+# Core
 uv add infinity_bus
 
-# 核心 + 高级模板
+# Core + advanced templates
 uv add infinity_bus --extra templates
 ```
 
-> **提示**：高级模板（`expect`、`request`、`pipe`、`SQLiteLoggingMiddleware`）
-> 需要 `[templates]` extra。若未安装而使用这些功能，会收到 `ImportError` 提示。
+> **Note**: Advanced templates (`expect`, `request`, `pipe`, `SQLiteLoggingMiddleware`)
+> require the `[templates]` extra. Using them without installing the extra will raise an `ImportError`.
 
-或从源码安装：
+Or install from source:
 
 ```bash
 git clone https://github.com/yinbailiang/event_bus.git
@@ -109,9 +111,9 @@ cd event_bus
 uv sync --extra dev
 ```
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 基础发布/订阅
+### Basic Pub/Sub
 
 ```python
 import asyncio
@@ -121,16 +123,16 @@ from event_bus import (
     EventRegistry, EventHandlerRegistry,
 )
 
-# 1. 定义负载
+# 1. Define payload
 class MyPayload(BaseModel):
     message: str
 
-# 2. 声明事件
+# 2. Declare event
 class MyEvent(EventDeclaration):
     name = "my.event"
     payload_type = MyPayload
 
-# 3. 实现处理器
+# 3. Implement handler
 class MyHandler(EventHandler):
     def __init__(self):
         super().__init__(subscriptions=["my.event"])
@@ -138,7 +140,7 @@ class MyHandler(EventHandler):
     async def handle(self, payload, bus_proxy, raw_event):
         print(f"Received: {payload.message}")
 
-# 4. 组装并运行
+# 4. Wire up and run
 async def main():
     reg = EventRegistry()
     reg.register(MyEvent)
@@ -147,15 +149,15 @@ async def main():
 
     async with EventBus(reg, h_reg) as bus:
         await bus.proxy("cli").publish("my.event", {"message": "Hello, EventBus!"})
-        await asyncio.sleep(1)  # 等待处理器输出
+        await asyncio.sleep(1)  # wait for handler output
 
 asyncio.run(main())
 ```
 
-### 请求-响应模式
+### Request-Response Pattern
 
-> 使用 `request` / `expect` / `pipe` 等高级模板需安装：`pip install infinity_bus[templates]`
-> uv 使用 `uv add infinity_bus --extra templates`
+> Using advanced templates like `request` / `expect` / `pipe` requires: `pip install infinity_bus[templates]`
+> Or with uv: `uv add infinity_bus --extra templates`
 
 ```python
 import asyncio
@@ -168,7 +170,7 @@ from event_bus.templates.request import (
     request, RequestProtocol, ResponseProtocol,
 )
 
-# 1. 定义请求/响应负载
+# 1. Define request/response payloads
 class GetUserRequest(RequestProtocol):
     user_id: int
 
@@ -176,7 +178,7 @@ class GetUserResponse(ResponseProtocol):
     user_name: str
     email: str
 
-# 2. 声明事件
+# 2. Declare events
 class GetUserRequestEvent(EventDeclaration):
     name = "user.get.request"
     payload_type = GetUserRequest
@@ -185,7 +187,7 @@ class GetUserResponseEvent(EventDeclaration):
     name = "user.get.response"
     payload_type = GetUserResponse
 
-# 3. 实现服务端处理器
+# 3. Implement server-side handler
 class GetUserHandler(EventHandler):
     def __init__(self):
         super().__init__(subscriptions=["user.get.request"])
@@ -202,7 +204,7 @@ class GetUserHandler(EventHandler):
         )
         await bus_proxy.publish("user.get.response", resp)
 
-# 4. 组装并运行
+# 4. Wire up and run
 async def main():
     reg = EventRegistry()
     reg.register(GetUserRequestEvent)
@@ -225,107 +227,107 @@ async def main():
 asyncio.run(main())
 ```
 
-## 🧱 架构
+## 🧱 Architecture
 
-| 组件 | 职责 |
+| Component | Responsibility |
 | - | - |
-| **Event** | 运行时事件实例，含名称、负载、处理链追踪 |
-| **EventDeclaration** | 事件类型元数据声明（名称 + 可选 Pydantic 负载模型） |
-| **EventRegistry** | 集中管理已注册的事件声明，发布时校验 |
-| **EventHandler** | 处理器基类，实现 `handle` 方法定义业务逻辑 |
-| **EventHandlerRegistry** | 管理处理器实例，按事件名匹配处理器列表 |
-| **EventBus** | 事件分发中枢：任务队列、并发控制、错误上报、生命周期 |
-| **Middleware** | 中间件基类，洋葱管道：`before_publish` / `on_publish` 双钩子 |
-| **MiddlewareChain** | 责任链管理器，按序包裹发布流程 |
-| **templates** | 高级模板：`expect` 监听、`request` RPC、`pipe` 管道、`register` 批量注册 |
-| **middlewares** | 内置中间件：日志(JSONL+SQLite)、限流、转换、屏蔽、递归防护 |
+| **Event** | Runtime event instance with name, payload, and handler chain tracking |
+| **EventDeclaration** | Event type metadata declaration (name + optional Pydantic payload model) |
+| **EventRegistry** | Central management of registered event declarations; validates on publish |
+| **EventHandler** | Handler base class; implement `handle` method for business logic |
+| **EventHandlerRegistry** | Manages handler instances; matches handler lists by event name |
+| **EventBus** | Event dispatch hub: task queue, concurrency control, error reporting, lifecycle |
+| **Middleware** | Middleware base class, onion pipeline: `before_publish` / `on_publish` dual hooks |
+| **MiddlewareChain** | Chain of responsibility manager; wraps the publish flow in order |
+| **templates** | Advanced templates: `expect` listener, `request` RPC, `pipe` channel, `register` batch registration |
+| **middlewares** | Built-in middlewares: logging (JSONL+SQLite), rate limiting, transform, block, recursion guard |
 
-## 📚 文档
+## 📚 Documentation
 
-| 文档 | 内容 |
+| Document | Content |
 | - | - |
-| [核心总览](docs/event_bus.md) | Event / EventDeclaration / EventHandler / EventBus / Middleware 核心概念 |
-| [中间件系统](docs/middleware.md) | `Middleware` 基类、`MiddlewareChain` 洋葱管道 |
-| [高级模板](docs/templates/templates.md) | `expect`、`request`、`pipe`、`register` 四大模板总览 |
-| [内置中间件](docs/templates/middlewares/middlewares.md) | 日志、限流、转换、屏蔽、递归防护 |
-| [工程质量](ENGINEERING.md) | 类型安全、测试覆盖、pre-commit 门禁、模块化规范 |
+| [Core Overview](docs/en-us/event_bus.md) | Event / EventDeclaration / EventHandler / EventBus / Middleware core concepts |
+| [Middleware System](docs/en-us/middleware.md) | `Middleware` base class, `MiddlewareChain` onion pipeline |
+| [Advanced Templates](docs/en-us/templates/templates.md) | `expect`, `request`, `pipe`, `register` — the four major templates |
+| [Built-in Middlewares](docs/en-us/templates/middlewares/middlewares.md) | Logging, rate limiting, transform, block, recursion guard |
+| [Engineering Quality](ENGINEERING.md) | Type safety, test coverage, pre-commit gating, modularity standards |
 
-## 🧪 测试
+## 🧪 Testing
 
 ### pip
 
 ```bash
-# 克隆并安装测试依赖
+# Clone and install test dependencies
 git clone https://github.com/yinbailiang/event_bus.git
 cd event_bus
 pip install -e ".[test]"
 
-# 运行全部测试
+# Run all tests
 pytest --cov=src -v
 
-# 仅运行模板测试
+# Run template tests only
 pytest tests/templates/ -v
 ```
 
 ### uv
 
 ```bash
-# 克隆并同步测试依赖
+# Clone and sync test dependencies
 git clone https://github.com/yinbailiang/event_bus.git
 cd event_bus
 uv sync --extra test
 
-# 运行全部测试
+# Run all tests
 uv run pytest --cov=src -v
 
-# 仅运行模板测试
+# Run template tests only
 uv run pytest tests/templates/ -v
 ```
 
-## 🧑‍💻 开发
+## 🧑‍💻 Development
 
-> **开发本项目的唯一工具链是 [uv](https://docs.astral.sh/uv/)。**
-> pre-commit 门禁通过 `uv run` 调用测试和代码质量工具，请先安装 uv。
+> **The sole toolchain for developing this project is [uv](https://docs.astral.sh/uv/).**
+> The pre-commit gating invokes tests and code quality tools via `uv run` — please install uv first.
 
 ```bash
-# 1. 克隆并同步全部依赖（自动创建 venv）
+# 1. Clone and sync all dependencies (auto-creates venv)
 git clone https://github.com/yinbailiang/event_bus.git
 cd event_bus
 uv sync --extra dev
 
-# 2. 安装 pre-commit 门禁
+# 2. Install pre-commit hooks
 uv run pre-commit install
 ```
 
-### 开发循环
+### Development Loop
 
 ```bash
-# lint + 格式化
+# lint + format
 uv run ruff check src/ && uv run ruff format src/ --check
 
-# 类型检查
+# type check
 uv run pyright src/
 
-# 测试 + 覆盖率
+# test + coverage
 uv run pytest --cov=src -v
 
-# 手动运行全部门禁
+# run all gates manually
 uv run pre-commit run --all-files
 ```
 
-| 工具 | 用途 |
+| Tool | Purpose |
 | - | - |
-| `uv` | 极速 Python 包管理器（替代 pip/venv） |
-| `ruff` | Lint + 格式化 |
-| `pyright` | 严格类型检查 |
-| `pytest` + `pytest-cov` | 测试 + 覆盖率 |
-| `interrogate` | docstring 覆盖率 |
-| `pre-commit` | 提交前自动门禁 |
+| `uv` | Blazing-fast Python package manager (replaces pip/venv) |
+| `ruff` | Lint + formatting |
+| `pyright` | Strict type checking |
+| `pytest` + `pytest-cov` | Testing + coverage |
+| `interrogate` | Docstring coverage |
+| `pre-commit` | Pre-commit automated gating |
 
-## 📄 许可证
+## 📄 License
 
 [MIT](LICENSE.md)
 
-## 此项目属于 InfinitySystem
+## Part of InfinitySystem
 
 ![icon](docs/res/infinity_icon/256x256.png)

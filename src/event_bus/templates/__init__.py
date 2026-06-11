@@ -4,6 +4,8 @@ from .middlewares import (
     EventForwardMiddleware,
     EventTransformMiddleware,
     JSONLLoggingMiddleware,
+    MetricsMiddleware,
+    MetricsSnapshot,
     RateLimitMiddleware,
     RecursionDetectedError,
     RecursionGuardMiddleware,
@@ -27,6 +29,8 @@ __all__ = [
     # middlewares
     'SQLiteLoggingMiddleware',
     'JSONLLoggingMiddleware',
+    'MetricsMiddleware',
+    'MetricsSnapshot',
     'RateLimitMiddleware',
     'EventTransformMiddleware',
     'EventBlockMiddleware',

@@ -14,6 +14,7 @@ from .event_transform import (
     make_rename_transform,
 )
 from .logging import JSONLLoggingMiddleware, LogFallback, SQLiteLoggingMiddleware, serialize_data
+from .metrics import MetricsMiddleware, MetricsSnapshot
 from .rate_limit import RateLimitMiddleware
 from .recursion_guard import RecursionDetectedError, RecursionGuardMiddleware
 
@@ -22,6 +23,9 @@ __all__ = [
     'JSONLLoggingMiddleware',
     'SQLiteLoggingMiddleware',
     'LogFallback',
+    # 指标
+    'MetricsMiddleware',
+    'MetricsSnapshot',
     # 限流
     'RateLimitMiddleware',
     # 转发

@@ -275,6 +275,10 @@ class EventBus:
             async with self._handler_semaphore:  # 控制并发处理器数量，避免过载
                 async with asyncio.timeout(handler.handle_timeout):
                     await handler(bus_proxy, event)
+        except BusShuttingDown:
+            logger.debug(
+                'Handler %s skipped publish during shutdown (event=%s)', handler.__class__.__name__, event.name
+            )
         except Exception as e:
             if 'EventBusErrorReporter' not in event.sources:
                 try:
@@ -328,6 +332,8 @@ class EventBus:
         try:
             if exc := task.exception():
                 raise exc
+        except BusShuttingDown:
+            logger.debug('BusShuttingDown Error')
         except asyncio.CancelledError:
             logger.debug(f'Handler task cancelled: {task.get_name()}')
         except asyncio.InvalidStateError:
