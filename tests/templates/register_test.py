@@ -8,7 +8,8 @@ from event_bus import (
     EventDeclaration,
     EventHandler,
     EventHandlerRegistry,
-    EventRegistry
+    EventRegistry,
+    Matcher,
 )
 from event_bus.templates.register import ModuleEventRegister, ModuleHandlerRegister
 
@@ -258,13 +259,14 @@ class TestModuleHandlerRegister:
     def test_register_all_handlers_instantiates_and_registers(
         self,
         module_handlers: ModuleHandlerRegister,
+        empty_event_registry: EventRegistry,
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
         module_handlers.add_handler(_SimpleHandler, depends=lambda: {"extra": "test"})
         module_handlers.register_all_handlers(empty_handler_registry)
 
         assert empty_handler_registry.handlers_count == 1
-        handlers = empty_handler_registry.get_handlers("test.event")
+        handlers = Matcher(empty_event_registry, empty_handler_registry).match("test.event")
         assert len(handlers) == 1
         assert isinstance(handlers[0][1], _SimpleHandler)
         assert handlers[0][1].extra == "test"
@@ -272,6 +274,7 @@ class TestModuleHandlerRegister:
     def test_register_all_handlers_passes_dependencies(
         self,
         module_handlers: ModuleHandlerRegister,
+        empty_event_registry: EventRegistry,
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
         """验证依赖工厂的返回值正确传递给处理器构造器"""
@@ -281,12 +284,13 @@ class TestModuleHandlerRegister:
         )
         module_handlers.register_all_handlers(empty_handler_registry)
 
-        handlers = empty_handler_registry.get_handlers("test.another")
+        handlers = Matcher(empty_event_registry, empty_handler_registry).match("test.another")
         assert cast(_AnotherHandler, handlers[0][1]).db is fake_db
 
     def test_register_all_handlers_multiple_handlers(
         self,
         module_handlers: ModuleHandlerRegister,
+        empty_event_registry: EventRegistry,
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
         """注册多个处理器，全部应出现在注册表中"""
@@ -296,8 +300,8 @@ class TestModuleHandlerRegister:
         module_handlers.register_all_handlers(empty_handler_registry)
 
         assert empty_handler_registry.handlers_count == 2
-        assert len(empty_handler_registry.get_handlers("test.event")) == 1
-        assert len(empty_handler_registry.get_handlers("test.another")) == 1
+        assert len(Matcher(empty_event_registry, empty_handler_registry).match("test.event")) == 1
+        assert len(Matcher(empty_event_registry, empty_handler_registry).match("test.another")) == 1
 
     def test_register_all_handlers_empty_noop(
         self,
@@ -310,6 +314,7 @@ class TestModuleHandlerRegister:
 
     def test_register_all_handlers_default_depends_empty_dict(
         self,
+        empty_event_registry: EventRegistry,
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
         """默认 depends (lambda: {}) 时处理器应使用默认参数构造"""
@@ -317,11 +322,12 @@ class TestModuleHandlerRegister:
         reg.add_handler(_SimpleHandler, depends=lambda: {})
         reg.register_all_handlers(empty_handler_registry)
 
-        handlers = empty_handler_registry.get_handlers("test.event")
+        handlers = Matcher(empty_event_registry, empty_handler_registry).match("test.event")
         assert cast(_SimpleHandler, handlers[0][1]).extra == "default"
 
     def test_register_all_handlers_depends_factory_called_per_registration(
         self,
+        empty_event_registry: EventRegistry,
         empty_handler_registry: EventHandlerRegistry,
     ) -> None:
         """每次 register_all_handlers 调用时 depends 工厂被重新调用"""
@@ -342,7 +348,7 @@ class TestModuleHandlerRegister:
 
         assert call_count == 2
         # 第二次调用时 extra 应为 "2"
-        handlers = reg2.get_handlers("test.event")
+        handlers = Matcher(empty_event_registry, reg2).match("test.event")
         assert cast(_SimpleHandler, handlers[0][1]).extra == "2"
 
     # ---- __repr__ ----

@@ -16,6 +16,7 @@ from event_bus import (
     EventHandler,
     EventRegistry,
     EventHandlerRegistry,
+    Matcher,
     BusShuttingDown,
     Event
 )
@@ -89,7 +90,9 @@ def mock_bus_proxy(event_registry: EventRegistry, handler_registry: EventHandler
 # ---------------------------------------------------------------------------
 async def trigger_response(handler_registry: EventHandlerRegistry, resp_event: str, payload: BaseModel) -> None:
     """手动触发已注册的响应处理器，模拟事件总线分发"""
-    handlers: List[tuple[str, EventHandler]] = handler_registry.get_handlers(resp_event)
+    from event_bus import EventRegistry
+    matcher = Matcher(EventRegistry(), handler_registry)
+    handlers: List[tuple[str, EventHandler]] = matcher.match(resp_event)
     for _, handler in handlers:
         # 构造一个模拟的 Event 和 Proxy
         event = Event(name=resp_event, data=payload)

@@ -16,6 +16,7 @@ from event_bus import (
     EventHandler,
     EventHandlerRegistry,
     EventRegistry,
+    Matcher,
     MiddlewareChain,
     TaskErrorEvent,
     TaskErrorPayload,
@@ -294,8 +295,14 @@ def handler_registry() -> EventHandlerRegistry:
 
 
 @pytest.fixture
+def matcher(base_event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> Matcher:
+    """基于事件注册表和处理器注册表的预计算匹配器"""
+    return Matcher(base_event_registry, handler_registry)
+
+
+@pytest.fixture
 def event_bus_factory(
-    base_event_registry: EventRegistry, handler_registry: EventHandlerRegistry
+    base_event_registry: EventRegistry, handler_registry: EventHandlerRegistry, matcher: Matcher
 ) -> Callable[..., EventBus]:
     """可配置参数的 EventBus 工厂函数"""
 
@@ -304,11 +311,15 @@ def event_bus_factory(
         max_handler_semaphore: int = 20,
         registry: Optional[EventRegistry] = None,
         h_registry: Optional[EventHandlerRegistry] = None,
+        m: Optional[Matcher] = None,
         middleware_chain: Optional[MiddlewareChain] = None,
     ) -> EventBus:
+        _registry = registry or base_event_registry
+        _h_registry = h_registry or handler_registry
         return EventBus(
-            registry or base_event_registry,
-            h_registry or handler_registry,
+            _registry,
+            _h_registry,
+            m or Matcher(_registry, _h_registry),
             max_queue_size=max_queue_size,
             max_handler_semaphore=max_handler_semaphore,
             middleware_chain=middleware_chain,

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from .event import Event, EventDeclaration, EventRegistry
 from .handler import EventHandler, EventHandlerRegistry
+from .matcher import Matcher
 from .middleware import MiddlewareChain
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,7 @@ class EventBus:
         self,
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
+        matcher: Optional[Matcher] = None,
         max_queue_size: int = 1024,
         max_handler_semaphore: int = 256,
         shutdown: ShutdownConfig = ShutdownConfig(),
@@ -98,6 +100,7 @@ class EventBus:
     ) -> None:
         self._events: EventRegistry = event_registry
         self._handlers: EventHandlerRegistry = handler_registry
+        self._matcher: Matcher = matcher or Matcher(event_registry, handler_registry)
         self._mw_chain: MiddlewareChain = middleware_chain or MiddlewareChain()
 
         if self._events.get(ShutdownEvent.name) is None:
@@ -301,7 +304,7 @@ class EventBus:
             event: Optional[Event] = None
             try:
                 event = await self._queue.get()
-                for handler_id, handler in self._handlers.get_handlers(event.name):
+                for handler_id, handler in self._matcher.match(event.name):
                     self._register_task(
                         asyncio.create_task(
                             self._handler_wrapper(

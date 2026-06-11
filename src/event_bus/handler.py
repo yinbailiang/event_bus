@@ -69,6 +69,12 @@ class EventHandlerRegistry:
 
     def __init__(self) -> None:
         self._handlers: Dict[str, EventHandler] = {}
+        self._version: int = 0
+
+    @property
+    def version(self) -> int:
+        """注册表版本号，每次变更递增。"""
+        return self._version
 
     def __len__(self) -> int:
         """返回已注册处理器数量。"""
@@ -85,11 +91,13 @@ class EventHandlerRegistry:
     def clear(self) -> None:
         """清除所有已注册处理器。"""
         self._handlers.clear()
+        self._version += 1
 
     def register(self, handler: EventHandler) -> str:
         """注册一个事件处理器实例"""
         id = uuid.uuid4().hex
         self._handlers[id] = handler
+        self._version += 1
         return id
 
     def get(self, handler_id: str) -> Optional[EventHandler]:
@@ -100,24 +108,9 @@ class EventHandlerRegistry:
         """注销一个事件处理器实例"""
         if handler_id in self._handlers:
             del self._handlers[handler_id]
+            self._version += 1
             return True
         return False
-
-    def get_handlers(self, event_type: str) -> List[tuple[str, EventHandler]]:
-        """获取匹配事件类型的所有处理器实例及其注册ID"""
-        matched: List[tuple[str, EventHandler]] = []
-        for handler_id, handler in self._handlers.items():
-            for subscription in handler.subscriptions:
-                if self._match_pattern(event_type, subscription):
-                    matched.append((handler_id, handler))
-                    break
-        return matched
-
-    def _match_pattern(self, event_type: str, subscription: Regex | str) -> bool:
-        """匹配订阅模式与事件类型。"""
-        if isinstance(subscription, Regex):
-            return subscription.fullmatch(event_type) is not None
-        return event_type == subscription
 
     @property
     def handlers_count(self) -> int:

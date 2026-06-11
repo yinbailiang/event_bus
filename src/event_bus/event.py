@@ -39,17 +39,25 @@ class EventRegistry:
 
     def __init__(self) -> None:
         self._events: Dict[str, Type[EventDeclaration]] = {}
+        self._version: int = 0
+
+    @property
+    def version(self) -> int:
+        """注册表版本号，每次变更递增。"""
+        return self._version
 
     def register(self, event_decl: Type[EventDeclaration]) -> None:
         """手动注册事件声明"""
         if event_decl.name in self._events:
             raise ValueError(f'重复的事件声明 {event_decl.name}')
         self._events[event_decl.name] = event_decl
+        self._version += 1
 
     def unregister(self, event_name: str) -> None:
         """注销事件声明"""
         if event_name in self._events:
             del self._events[event_name]
+            self._version += 1
 
     def get(self, name: str) -> Optional[Type[EventDeclaration]]:
         return self._events.get(name)

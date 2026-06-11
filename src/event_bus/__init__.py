@@ -20,6 +20,9 @@ from .handler import (
     EventHandlerRegistry,
     Regex,
 )
+from .matcher import (
+    Matcher,
+)
 from .middleware import (
     BeforePublishNext,
     Middleware,
@@ -35,6 +38,7 @@ __all__: list[str] = [
     'EventHandler',
     'EventHandlerRegistry',
     'Regex',
+    'Matcher',
     'Middleware',
     'MiddlewareChain',
     'BeforePublishNext',
