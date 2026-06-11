@@ -228,13 +228,8 @@ a_to_b, b_to_a = make_bidirectional_forward(
 )
 
 # 分别挂载到各自总线
-chain_a = MiddlewareChain()
-chain_a.add(a_to_b)
-bus_a = EventBus(..., middleware_chain=chain_a)
-
-chain_b = MiddlewareChain()
-chain_b.add(b_to_a)
-bus_b = EventBus(..., middleware_chain=chain_b)
+bus_a.proxy('forward').middleware.add(a_to_b)
+bus_b.proxy('forward').middleware.add(b_to_a)
 ```
 
 > **注意**：``anti_recursion`` 防止的是 A→B→A 的直接回环。若业务处理器在收到转发
