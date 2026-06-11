@@ -302,7 +302,7 @@ def matcher(base_event_registry: EventRegistry, handler_registry: EventHandlerRe
 
 @pytest.fixture
 def event_bus_factory(
-    base_event_registry: EventRegistry, handler_registry: EventHandlerRegistry, matcher: Matcher
+    base_event_registry: EventRegistry, handler_registry: EventHandlerRegistry
 ) -> Callable[..., EventBus]:
     """可配置参数的 EventBus 工厂函数"""
 
@@ -311,15 +311,11 @@ def event_bus_factory(
         max_handler_semaphore: int = 20,
         registry: Optional[EventRegistry] = None,
         h_registry: Optional[EventHandlerRegistry] = None,
-        m: Optional[Matcher] = None,
         middleware_chain: Optional[MiddlewareChain] = None,
     ) -> EventBus:
-        _registry = registry or base_event_registry
-        _h_registry = h_registry or handler_registry
         return EventBus(
-            _registry,
-            _h_registry,
-            m or Matcher(_registry, _h_registry),
+            registry or base_event_registry,
+            h_registry or handler_registry,
             max_queue_size=max_queue_size,
             max_handler_semaphore=max_handler_semaphore,
             middleware_chain=middleware_chain,
