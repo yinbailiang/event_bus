@@ -1,7 +1,7 @@
 # Built-in Middlewares Overview
 
-EventBus provides 7 out-of-the-box middlewares covering common cross-cutting concerns:
-logging, rate limiting, transform, blocking, recursion guard, and cross-bus forwarding.
+EventBus provides 8 out-of-the-box middlewares covering common cross-cutting concerns:
+logging, metrics, rate limiting, transform, blocking, recursion guard, and cross-bus forwarding.
 All middlewares are registered via `MiddlewareChain`, forming an onion pipeline in
 registration order.
 
@@ -15,6 +15,7 @@ registration order.
 | `RecursionGuardMiddleware` | `before_publish` | Dual-layer recursion detection | [recursion_guard.md](recursion_guard.md) |
 | `EventBlockMiddleware` | `before_publish` | Rule-based event blocking (discard) | [event_block.md](event_block.md) |
 | `EventTransformMiddleware` | `before_publish` | Event name transform / field inject / redact | [event_transform.md](event_transform.md) |
+| `MetricsMiddleware` | `before_publish` + `on_publish` | Prometheus / OTel style metrics collection | [metrics.md](metrics.md) |
 | `EventForwardMiddleware` | `on_publish` | Unidirectional cross-bus event forwarding | [event_forward.md](event_forward.md) |
 | `JSONLLoggingMiddleware` | `on_publish` | JSONL file persistent logging | [logging.md](logging.md) |
 | `SQLiteLoggingMiddleware` | `on_publish` | SQLite database persistent logging | [logging.md](logging.md) |
@@ -32,22 +33,25 @@ Publish Request
 │  RecursionGuardMiddleware  ← Detect recursion, prevent loops │
 │  EventBlockMiddleware      ← Block by rules                  │
 │  EventTransformMiddleware  ← Rename / inject / redact         │
+│  MetricsMiddleware         ← Metrics collection (timer start)  │
 │  Core publish logic        ← Validate → Build Event → Enqueue│
 └──────────────────────────────────────────────────────────────┘
   │
   ▼
 ┌─ on_publish chain ─────────────────────────────────────────┐
 │  EventForwardMiddleware    ← Forward to other buses          │
+│  MetricsMiddleware         ← Record full publish latency (timer end) │
 │  JSONLLoggingMiddleware    ← Write to JSONL file              │
 │  SQLiteLoggingMiddleware   ← Write to SQLite database         │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 > **Recommended registration order**: Rate Limit → Recursion Guard → Block → Transform →
-> Forward → Logging.
+> Metrics → Forward → Logging.
+> The metrics middleware spans both `before_publish` (timer start) and `on_publish` (timer end);
+> placing it after Transform ensures transformed event names are correctly recorded in metrics.
 > Placing forwarding before logging in the `on_publish` phase ensures log middlewares only
-> record events from the local bus. To include forwarded sources in logs, place forwarding
-> after logging.
+> record events from the local bus.
 
 ---
 
@@ -59,6 +63,9 @@ from event_bus.templates.middlewares import (
     JSONLLoggingMiddleware,
     SQLiteLoggingMiddleware,
     LogFallback,
+    # Metrics
+    MetricsMiddleware,
+    MetricsSnapshot,
     # Rate Limiting
     RateLimitMiddleware,
     # Transform
