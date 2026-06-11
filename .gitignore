@@ -34,3 +34,7 @@ experimental/
 # Logs
 logs/
 *.log
+
+# Agent runtime data
+.agents/MEMORY/memorys/
+.agents/TEMP_FILES/tmps/
