@@ -4,15 +4,13 @@
 
 **InfinityBus** — 强类型、可扩展的异步事件总线（Python 3.12+）。
 
-设计哲学：**可扩展性优先**——功能通过中间件洋葱管道和模板注入，不硬编码在核心类中。
-
 ## 开发工具链
 
 **本项目唯一合法的 Python 工具链是 [uv](https://docs.astral.sh/uv/)。**
 
 - 所有 Python 命令必须通过 `uv run` 执行
 - 执行任何代码修改前，先确认 uv 可用：`uv --version`
-- 若 uv 缺失，提示用户安装 uv（https://docs.astral.sh/uv/），不得绕过
+- 若 uv 缺失，提示用户安装 [uv](https://docs.astral.sh/uv/)，不得绕过
 - 首次设置开发环境：
 
   ```bash
