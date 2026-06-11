@@ -2,7 +2,8 @@
 
 ## 概述
 
-`EventHandler` 是事件处理器的抽象基类，通过订阅模式（`str` 全字匹配，`Regex` 正则匹配）监听感兴趣的事件。`EventHandlerRegistry` 管理所有处理器实例并负责事件路由匹配。
+`EventHandler` 是事件处理器的抽象基类，通过订阅模式（`str` 全字匹配，`Regex` 正则匹配）监听感兴趣的事件。
+`EventHandlerRegistry` 管理所有处理器实例的增删查。
 
 ---
 
@@ -75,9 +76,7 @@ class AuditHandler(EventHandler):
 
 ## EventHandlerRegistry
 
-处理器注册表，管理事件处理器实例与事件类型的匹配关系。
-
-**匹配规则**：`str` 订阅 → 全字匹配；`Regex` 订阅 → 正则全匹配。
+处理器注册表，管理事件处理器实例的增删查。**匹配路由由 [Matcher](matcher.md) 负责**。
 
 ```python
 class EventHandlerRegistry:
@@ -85,12 +84,13 @@ class EventHandlerRegistry:
     def register(self, handler: EventHandler) -> str
     def unregister(self, handler_id: str) -> bool
     def get(self, handler_id: str) -> Optional[EventHandler]
-    def get_handlers(self, event_type: str) -> List[tuple[str, EventHandler]]
     def clear(self) -> None
     def __len__(self) -> int
     def __contains__(self, handler_id: str) -> bool
     def __iter__(self) -> Iterator[tuple[str, EventHandler]]
 
+    @property
+    def version(self) -> int
     @property
     def handlers_count(self) -> int
     @property
@@ -99,40 +99,29 @@ class EventHandlerRegistry:
 
 | 方法 / 属性 | 说明 |
 | - | - |
-| `__init__()` | 构造注册表。 |
-| `register(handler)` | 注册处理器实例，返回唯一 handler ID（UUID hex）。 |
-| `unregister(handler_id)` | 注销处理器。返回 `True` 表示成功，`False` 表示 ID 不存在。 |
+| `register(handler)` | 注册处理器实例，返回唯一 handler ID（UUID hex）。版本号递增。 |
+| `unregister(handler_id)` | 注销处理器。返回 `True` 表示成功，`False` 表示 ID 不存在。版本号递增。 |
 | `get(handler_id)` | 按 ID 获取处理器实例。 |
-| `get_handlers(event_type)` | 获取匹配 `event_type` 的 `(handler_id, handler)` 元组列表。`str` 订阅全字匹配，`Regex` 订阅正则全匹配。 |
-| `clear()` | 清除所有已注册处理器。 |
+| `clear()` | 清除所有已注册处理器。版本号递增。 |
 | `__len__()` | 支持 `len(registry)`。 |
 | `__contains__()` | 支持 `handler_id in registry`。 |
 | `__iter__()` | 支持 `for hid, h in registry` 迭代。 |
-| `handlers_count` | （属性）当前注册的处理器总数。 |
-| `all_handlers` | （属性）返回所有注册处理器的副本 `Dict[str, EventHandler]`。 |
+| `version` | 注册表版本号，每次变更（增/删/清空）递增，供 [Matcher](matcher.md) 感知变化。 |
+| `handlers_count` | 当前注册的处理器总数。 |
+| `all_handlers` | 返回所有注册处理器的副本 `Dict[str, EventHandler]`。 |
 
 ### 使用示例
 
 ```python
-from event_bus import EventHandlerRegistry, Regex
+from event_bus import EventHandlerRegistry, EventHandler
 
 handler_registry = EventHandlerRegistry()
+handler_id = handler_registry.register(my_handler)
+assert handler_id in handler_registry
+assert handler_registry.version == 1  # 每次注册递增
 
-# str 订阅 → 精确匹配
-hid = handler_registry.register(LoginHandler(["user.login"]))
-
-# Regex 订阅 → 正则匹配
-handler_registry.register(AuditHandler([Regex(r"user\..*")]))
-
-# 获取匹配某个事件的所有处理器
-matched = handler_registry.get_handlers("user.login")
-for handler_id, handler in matched:
-    print(f"Handler {handler_id}: {handler.__class__.__name__}")
-
-# 注销处理器
-handler_registry.unregister(hid)
-
-# 容器协议
-print(len(handler_registry))
-print(hid in handler_registry)
+handler_registry.unregister(handler_id)
+assert handler_registry.version == 2  # 注销也递增
 ```
+
+> **注意**：`get_handlers(event_type)` 已移除。匹配功能移至 [Matcher](matcher.md)，总线内部自动使用。

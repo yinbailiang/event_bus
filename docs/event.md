@@ -81,14 +81,18 @@ class EventRegistry:
     def unregister(self, event_name: str) -> None
     def get(self, name: str) -> Optional[Type[EventDeclaration]]
     def list_names(self) -> List[str]
+
+    @property
+    def version(self) -> int
 ```
 
-| 方法 | 说明 |
+| 方法 / 属性 | 说明 |
 | - | - |
 | `register(event_decl)` | 注册一个事件声明类。若同名已存在则抛出 `ValueError`。 |
 | `unregister(event_name)` | 注销指定名称的事件声明（不存在则静默忽略）。 |
 | `get(name)` | 按名称查找事件声明，不存在返回 `None`。 |
 | `list_names()` | 返回所有已注册事件名称的列表。 |
+| `version` | 注册表版本号，每次增删递增，供 [Matcher](matcher.md) 感知变化。 |
 
 ### 使用示例
 
