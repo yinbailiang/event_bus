@@ -326,6 +326,8 @@ uv run pre-commit run --all-files
 | `interrogate` | docstring 覆盖率 |
 | `pre-commit` | 提交前自动门禁 |
 
+> 📖 完整规范见 [CONTRIBUTING.md](CONTRIBUTING.md)
+
 ## 📄 许可证
 
 [MIT](LICENSE.md)

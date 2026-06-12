@@ -326,6 +326,8 @@ uv run pre-commit run --all-files
 | `interrogate` | Docstring coverage |
 | `pre-commit` | Pre-commit automated gating |
 
+> 📖 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+
 ## 📄 License
 
 [MIT](LICENSE.md)
