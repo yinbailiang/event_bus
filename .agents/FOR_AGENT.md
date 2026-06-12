@@ -26,6 +26,7 @@
 | --- | --- |
 | 项目元数据、依赖、工具配置 | `pyproject.toml` |
 | 工程质量标准与指标 | `ENGINEERING.md` |
+| 贡献流程与提交规范 | `CONTRIBUTING.md` |
 | 公开 API 用法与架构说明 | `docs/` |
 | 实际代码结构与实现 | `src/event_bus/` |
 | 测试范例与共享 fixture | `tests/conftest.py` |
@@ -59,6 +60,7 @@
 - **docstring 只描述公开行为**（用途、参数、返回值、异常），不描述内部实现流程
 - **所有python命令必须通过 `uv run` 执行**（如 `uv run pytest`、`uv run pyright src/`）。禁止裸调python命令——项目不依赖全局 Python 环境，裸调会因 venv 未激活而失败
 - 工具链：ruff（lint + format）、pyright（类型检查）、interrogate（docstring 覆盖）、pytest（测试 + 覆盖率）
+- 提交消息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)，详见 `ENGINEERING.md#提交规范`
 
 ---
 
@@ -71,4 +73,5 @@
 | --- | --- |
 | 修改核心 API | [modify-core-api.md](SKILLS/modify-core-api.md) |
 | 编写测试 | [write-tests.md](SKILLS/write-tests.md) |
+| 编写文档 | [write-docs.md](SKILLS/write-docs.md) |
 | 代码审查前检查 | [pre-commit-check.md](SKILLS/pre-commit-check.md) |

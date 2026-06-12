@@ -11,6 +11,7 @@
 ├── SKILLS/                       # 任务技能
 │   ├── modify-core-api.md        #   修改核心 API
 │   ├── write-tests.md            #   编写测试
+│   ├── write-docs.md             #   编写文档
 │   ├── pre-commit-check.md       #   审查前检查
 │   ├── publish.md                #   项目发布
 │   └── write-skill.md            #   创建通用技能
