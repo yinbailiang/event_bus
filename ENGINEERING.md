@@ -179,6 +179,36 @@ src/event_bus/
 
 ---
 
+## 提交规范
+
+遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)：
+
+```text
+<type>(<scope>): <subject>
+```
+
+| type | 场景 |
+| --- | --- |
+| `feat` | 新功能 |
+| `fix` | Bug 修复 |
+| `docs` | 文档变更 |
+| `test` | 测试补全 |
+| `refactor` | 重构（不改行为） |
+| `chore` | 版本号、依赖、构建工具 |
+
+`scope` 对应模块名：`bus`、`event`、`handler`、`middleware`、`templates`、`pipe` 等。
+
+示例：
+```
+feat(templates): add handler decorator for simplified event handling
+fix(bus): resolve race condition in graceful shutdown
+docs(handler): add Chinese and English documentation
+test(templates): add 22 test cases for handler decorator
+chore: bump version to 1.5.2
+```
+
+---
+
 ## CI
 
 测试矩阵覆盖 Python 3.12+，每次 push 自动运行 `pytest` + `pre-commit`。
