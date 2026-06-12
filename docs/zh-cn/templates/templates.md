@@ -8,6 +8,7 @@
 
 | 模板 | 模式 | 适用场景 | 文档 |
 | - | - | - | - |
+| `handler` | 函数→处理器 | 快速定义事件处理器、同步/异步函数自动适配、签名校验 | [simple_handler.md](simple_handler.md) |
 | `expect` | 一次性监听 | 等待特定事件、测试断言、底层等待逻辑 | [expect.md](expect.md) |
 | `request` | 请求-响应 (RPC) | 同步风格的异步调用、服务间通信 | [request.md](request.md) |
 | `pipe` | 双向管道 | 流式数据交换、长连接模拟、持久化双向流 | [pipe.md](pipe.md) |
@@ -19,6 +20,12 @@
 ## 层次关系
 
 ```text
+                    ┌──────────────┐
+                    │   handler    │
+                    │ 函数→处理器    │
+                    └──────┬───────┘
+                           │ 生成 EventHandler 子类
+                           ▼
 ┌─────────────────────────────────────────────────┐
 │                    register                     │
 │  模块级事件/处理器收集 → 应用启动时批量注册       │
@@ -45,7 +52,7 @@
 └──────────────┘
 ```
 
-> `request` 和 `pipe` 内部都依赖 `expect` 实现等待逻辑。`pipe` 同时依赖 `request` 完成握手协议。
+> `handler` 将普通函数转换为 `EventHandler` 子类。`request` 和 `pipe` 内部都依赖 `expect` 实现等待逻辑。`pipe` 同时依赖 `request` 完成握手协议。
 
 ---
 
@@ -53,6 +60,8 @@
 
 ```python
 from event_bus.templates import (
+    # handler
+    'handler',
     # expect
     'expect',
     # pipe
@@ -78,6 +87,7 @@ from event_bus.templates import (
 
 | 你想做什么 | 用这个 |
 | - | - |
+| 快速把函数变成事件处理器 | `handler` |
 | 发一个请求，等一个响应 | `request` |
 | 建立长连接，双向收发数据 | `pipe` |
 | 等待某个事件发生一次 | `expect` |

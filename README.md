@@ -2,6 +2,7 @@
 
 [![Test](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml/badge.svg)](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml)
 [![Coverage](https://img.shields.io/badge/coverage-90%25+-brightgreen)](ENGINEERING.md)
+[![docstring](docs/res/interrogate_badge.svg)](ENGINEERING.md)
 [![Pyright](https://img.shields.io/badge/pyright-strict-blue)](ENGINEERING.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![PyPI Version](https://img.shields.io/pypi/v/infinity_bus)](https://pypi.org/project/infinity_bus/)
@@ -30,7 +31,7 @@
 | Type Safety | Pydantic payload validation · pyright **strict** · **zero** `# type: ignore` in business code |
 | Flexible Subscription | **Regex**-based event name matching · wildcard handlers |
 | Middleware Pipeline | Onion model · `before_publish` / `on_publish` dual hooks · 5+ built-in middlewares |
-| Advanced Templates | `expect` one-shot listener · `request` RPC call · `pipe` bidirectional channel · `register` batch registration |
+| Advanced Templates | `handler` simplified API · `expect` one-shot listener · `request` RPC call · `pipe` bidirectional channel · `register` batch registration |
 | Production Ready | Graceful shutdown · backpressure control · timeout protection · error isolation · observability |
 | Engineering Discipline | 90%+ test coverage · 85%+ docstring coverage · pre-commit automated gating |
 
@@ -115,13 +116,17 @@ uv sync --extra dev
 
 ### Basic Pub/Sub
 
+> Using the `handler` simplified API requires: `pip install infinity_bus[templates]`
+> Or with uv: `uv add infinity_bus --extra templates`
+
 ```python
 import asyncio
 from pydantic import BaseModel
 from event_bus import (
-    EventBus, EventDeclaration, EventHandler,
+    EventBus, EventDeclaration,
     EventRegistry, EventHandlerRegistry,
 )
+from event_bus.templates import handler
 
 # 1. Define payload
 class MyPayload(BaseModel):
@@ -132,20 +137,17 @@ class MyEvent(EventDeclaration):
     name = "my.event"
     payload_type = MyPayload
 
-# 3. Implement handler
-class MyHandler(EventHandler):
-    def __init__(self):
-        super().__init__(subscriptions=["my.event"])
-
-    async def handle(self, payload, bus_proxy, raw_event):
-        print(f"Received: {payload.message}")
+# 3. Implement handler (simplified: function + decorator)
+@handler(MyEvent)
+async def my_handler(payload: MyPayload) -> None:
+    print(f"Received: {payload.message}")
 
 # 4. Wire up and run
 async def main():
     reg = EventRegistry()
     reg.register(MyEvent)
     h_reg = EventHandlerRegistry()
-    h_reg.register(MyHandler())
+    h_reg.register(my_handler())
 
     async with EventBus(reg, h_reg) as bus:
         await bus.proxy("cli").publish("my.event", {"message": "Hello, EventBus!"})
@@ -239,7 +241,7 @@ asyncio.run(main())
 | **EventBus** | Event dispatch hub: task queue, concurrency control, error reporting, lifecycle |
 | **Middleware** | Middleware base class, onion pipeline: `before_publish` / `on_publish` dual hooks |
 | **MiddlewareChain** | Chain of responsibility manager; wraps the publish flow in order |
-| **templates** | Advanced templates: `expect` listener, `request` RPC, `pipe` channel, `register` batch registration |
+| **templates** | Advanced templates: `handler` simplified API, `expect` listener, `request` RPC, `pipe` channel, `register` batch registration |
 | **middlewares** | Built-in middlewares: logging (JSONL+SQLite), rate limiting, transform, block, recursion guard |
 
 ## 📚 Documentation

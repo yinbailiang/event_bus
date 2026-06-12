@@ -2,6 +2,7 @@
 
 [![Test](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml/badge.svg)](https://github.com/yinbailiang/event_bus/actions/workflows/test.yml)
 [![Coverage](https://img.shields.io/badge/coverage-90%25+-brightgreen)](ENGINEERING.md)
+[![docstring](docs/res/interrogate_badge.svg)](ENGINEERING.md)
 [![Pyright](https://img.shields.io/badge/pyright-strict-blue)](ENGINEERING.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![PyPI Version](https://img.shields.io/pypi/v/infinity_bus)](https://pypi.org/project/infinity_bus/)
@@ -30,7 +31,7 @@
 | 类型安全 | Pydantic 负载校验 · pyright **strict** · **业务代码零** `# type: ignore` |
 | 灵活订阅 | **正则表达式**匹配事件名 · 通配符处理器 |
 | 中间件管道 | 洋葱模型 · `before_publish` / `on_publish` 双钩子 · 5+ 内置中间件 |
-| 高级模板 | `expect` 一次性监听 · `request` RPC 调用 · `pipe` 双向管道 · `register` 批量注册 |
+| 高级模板 | `handler` 简化 API · `expect` 一次性监听 · `request` RPC 调用 · `pipe` 双向管道 · `register` 批量注册 |
 | 生产可靠 | 优雅停机 · 背压控制 · 超时保护 · 错误隔离 · 可观测性 |
 | 工程纪律 | 90%+ 测试覆盖 · 85%+ docstring 覆盖 · pre-commit 自动门禁 |
 
@@ -115,13 +116,17 @@ uv sync --extra dev
 
 ### 基础发布/订阅
 
+> 使用 `handler` 简化 API 需安装：`pip install infinity_bus[templates]`
+> uv 使用 `uv add infinity_bus --extra templates`
+
 ```python
 import asyncio
 from pydantic import BaseModel
 from event_bus import (
-    EventBus, EventDeclaration, EventHandler,
+    EventBus, EventDeclaration,
     EventRegistry, EventHandlerRegistry,
 )
+from event_bus.templates import handler
 
 # 1. 定义负载
 class MyPayload(BaseModel):
@@ -132,20 +137,17 @@ class MyEvent(EventDeclaration):
     name = "my.event"
     payload_type = MyPayload
 
-# 3. 实现处理器
-class MyHandler(EventHandler):
-    def __init__(self):
-        super().__init__(subscriptions=["my.event"])
-
-    async def handle(self, payload, bus_proxy, raw_event):
-        print(f"Received: {payload.message}")
+# 3. 实现处理器（简化版：函数 + 装饰器）
+@handler(MyEvent)
+async def my_handler(payload: MyPayload) -> None:
+    print(f"Received: {payload.message}")
 
 # 4. 组装并运行
 async def main():
     reg = EventRegistry()
     reg.register(MyEvent)
     h_reg = EventHandlerRegistry()
-    h_reg.register(MyHandler())
+    h_reg.register(my_handler())
 
     async with EventBus(reg, h_reg) as bus:
         await bus.proxy("cli").publish("my.event", {"message": "Hello, EventBus!"})
@@ -239,7 +241,7 @@ asyncio.run(main())
 | **EventBus** | 事件分发中枢：任务队列、并发控制、错误上报、生命周期 |
 | **Middleware** | 中间件基类，洋葱管道：`before_publish` / `on_publish` 双钩子 |
 | **MiddlewareChain** | 责任链管理器，按序包裹发布流程 |
-| **templates** | 高级模板：`expect` 监听、`request` RPC、`pipe` 管道、`register` 批量注册 |
+| **templates** | 高级模板：`handler` 简化 API、`expect` 监听、`request` RPC、`pipe` 管道、`register` 批量注册 |
 | **middlewares** | 内置中间件：日志(JSONL+SQLite)、限流、转换、屏蔽、递归防护 |
 
 ## 📚 文档

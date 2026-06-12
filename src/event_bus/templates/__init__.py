@@ -21,8 +21,11 @@ from .middlewares import (
 from .pipe import InProcessPipe, InProcessPipeAllocator, Pipe, PipeAllocator, expect_pipe, open_pipe
 from .register import ModuleEventRegister, ModuleHandlerRegister
 from .request import RequestProtocol, ResponseProtocol, request
+from .simple_handler import handler
 
 __all__ = [
+    # handler
+    'handler',
     # expect
     'expect',
     'OneShotEventHandler',

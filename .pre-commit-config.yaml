@@ -44,3 +44,10 @@ repos:
         pass_filenames: false
         always_run: true
         types: [python]
+
+      - id: interrogate-badge
+        name: interrogate badge
+        entry: uv run interrogate src/event_bus/ --generate-badge docs/res/interrogate_badge.svg
+        language: system
+        pass_filenames: false
+        always_run: true

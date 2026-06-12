@@ -4,6 +4,7 @@ Advanced patterns built on top of the core event bus. These are optional — imp
 `event_bus.templates` to use them.
 
 > Some templates require optional dependencies. Install with:
+>
 > ```bash
 > pip install infinity_bus[templates]
 > ```
@@ -14,6 +15,7 @@ Advanced patterns built on top of the core event bus. These are optional — imp
 
 | Template | Description |
 | - | - |
+| [handler](simple_handler.md) | Function-to-handler decorator — convert sync/async functions into EventHandler subclasses with signature validation. |
 | [expect](expect.md) | One-shot event listener — wait for a specific event and get a future. |
 | [request](request.md) | RPC-style request/response over the event bus. |
 | [pipe](pipe.md) | Bidirectional async pipe abstraction (in-process or networked). |
@@ -21,6 +23,20 @@ Advanced patterns built on top of the core event bus. These are optional — imp
 | [middlewares/](middlewares/middlewares.md) | Built-in middlewares: logging, rate-limiting, forwarding, blocking, transform, recursion guard. |
 
 ---
+
+## handler
+
+```python
+from event_bus.templates import handler
+
+@handler(UserCreated)
+async def send_welcome_email(payload: UserCreatedPayload) -> None:
+    print(f"Welcome, {payload.email}!")
+
+handler_registry.register(send_welcome_email())
+```
+
+See [simple_handler.md](simple_handler.md) for signature validation, sync/async support, and custom timeouts.
 
 ## expect
 
