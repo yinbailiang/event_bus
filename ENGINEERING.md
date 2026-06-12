@@ -199,7 +199,8 @@ src/event_bus/
 `scope` 对应模块名：`bus`、`event`、`handler`、`middleware`、`templates`、`pipe` 等。
 
 示例：
-```
+
+```text
 feat(templates): add handler decorator for simplified event handling
 fix(bus): resolve race condition in graceful shutdown
 docs(handler): add Chinese and English documentation
