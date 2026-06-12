@@ -47,7 +47,7 @@
 | Payload Validation | ✅ Pydantic auto-validation | ✅ Pydantic auto-validation | ❌ none | ❌ none (arbitrary objects) |
 | Subscription Model | Regex | class name + wildcard `*` | exact string match | topic hierarchy (`a.b.c`) |
 | Middleware Pipeline | ✅ onion model dual hooks | ❌ | ❌ | ❌ |
-| Advanced Templates | ✅ expect/request/pipe/register | ⚠️ `bus.expect()` only | ❌ | ❌ |
+| Advanced Templates | ✅ handler/expect/request/pipe/register | ⚠️ `bus.expect()` only | ❌ | ❌ |
 | Event Return Values | ⚠️ via `request` template | ✅ built-in `event.event_result()` | ❌ | ❌ |
 | Event Forwarding | ⚠️ EventForwardMiddleware | ✅ built-in `event.forward_to()` | ❌ | ❌ |
 | Dependency Count | 1 core (pydantic) + 1 optional | 6 (anyio, aiofiles...) | 0 | 0 |
@@ -58,9 +58,9 @@
 | Slow Handler Alert | ❌ | ✅ 15s timeout alert | ❌ | N/A |
 | Recursion Guard | ✅ middleware (configurable) | ✅ built-in (non-configurable) | ❌ | N/A |
 | Logging & Auditing | ✅ JSONL + SQLite (middleware) | ✅ built-in JSONL WAL logging | ❌ no built-in | ⚠️ debug tracing |
-| Test Coverage | ✅ 92% (160 tests) | ✅ 83% (138 tests) | ✅ 94% (43 tests) | ✅ 86% (167 tests) |
+| Test Coverage | ✅ 94% (245 tests) | ✅ 83% (138 tests) | ✅ 94% (43 tests) | ✅ 86% (167 tests) |
 | Python Version | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
-| Baseline Version | v1.4.1 `fb7cbed` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
+| Baseline Version | v1.5.2 `5440fdd` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
 
 > **Choose InfinityBus when**: you need to extend functionality via middleware rather than modifying core code; you can't tolerate `# type: ignore` in production code; you want full production-grade features (backpressure, graceful shutdown, regex subscriptions) with minimal dependencies.
 >
@@ -71,7 +71,7 @@
 > **Choose PyPubSub when**: you don't use asyncio; you need very broad Python version compatibility (3.7–3.14); you prefer traditional topic hierarchy string matching.
 >
 > Full commits:
-> · [InfinityBus `fb7cbed`](https://github.com/yinbailiang/event_bus/commit/fb7cbed)
+> · [InfinityBus `5440fdd`](https://github.com/yinbailiang/event_bus/commit/5440fdd)
 > · [bubus `7c09342`](https://github.com/browser-use/bubus/commit/7c09342)
 > · [pyee `5157de2`](https://github.com/jfhbrook/pyee/commit/5157de2) (no coverage in official CI; manually measured via `pytest-cov`)
 > · [PyPubSub `4ec2c47`](https://github.com/schollii/pypubsub/commit/4ec2c47)

@@ -47,7 +47,7 @@
 | 负载校验 | ✅ Pydantic 自动校验 | ✅ Pydantic 自动校验 | ❌ 无 | ❌ 无（任意对象） |
 | 订阅方式 | 正则表达式 | 类名 + 通配符 `*` | 字符串精确匹配 | 主题层级（`a.b.c`） |
 | 中间件管道 | ✅ 洋葱模型双钩子 | ❌ | ❌ | ❌ |
-| 高级模板 | ✅ expect/request/pipe/register | ⚠️ 仅 `bus.expect()` | ❌ | ❌ |
+| 高级模板 | ✅ handler/expect/request/pipe/register | ⚠️ 仅 `bus.expect()` | ❌ | ❌ |
 | 事件返回值 | ⚠️ 通过 `request` 模板 | ✅ 内置 `event.event_result()` | ❌ | ❌ |
 | 事件转发 | ⚠️ EventForwardMiddleware | ✅ 内置 `event.forward_to()` | ❌ | ❌ |
 | 依赖数量 | 1 核心（pydantic）+ 1 可选 | 6（anyio, aiofiles...） | 0 | 0 |
@@ -58,9 +58,9 @@
 | 慢 handler 告警 | ❌ | ✅ 15s 超时告警 | ❌ | N/A |
 | 防递归 | ✅ 中间件（可配置） | ✅ 内置（不可配置） | ❌ | N/A |
 | 日志与审计 | ✅ JSONL + SQLite（中间件） | ✅ 内置 JSONL WAL 日志 | ❌ 无内置 | ⚠️ 调试追踪 |
-| 测试覆盖 | ✅ 92%（160 tests） | ✅ 83%（138 tests） | ✅ 94%（43 tests） | ✅ 86%（167 tests） |
+| 测试覆盖 | ✅ 94%（245 tests） | ✅ 83%（138 tests） | ✅ 94%（43 tests） | ✅ 86%（167 tests） |
 | Python 版本 | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
-| 基准版本 | v1.4.1 `fb7cbed` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
+| 基准版本 | v1.5.2 `5440fdd` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
 
 > **选择 InfinityBus 的理由**：你需要通过中间件扩展功能而非修改核心代码；你无法容忍生产代码中出现 `# type: ignore`；你想用最少的依赖获得完整的生产级特性（背压、优雅停机、正则订阅）。
 >
@@ -71,7 +71,7 @@
 > **选择 PyPubSub 的理由**：你不使用 asyncio；你需要极宽的 Python 版本兼容（3.7–3.14）；你偏好传统的主题层级字符串匹配。
 >
 > 完整 commit：
-> · [InfinityBus `fb7cbed`](https://github.com/yinbailiang/event_bus/commit/fb7cbed)
+> · [InfinityBus `5440fdd`](https://github.com/yinbailiang/event_bus/commit/5440fdd)
 > · [bubus `7c09342`](https://github.com/browser-use/bubus/commit/7c09342)
 > · [pyee `5157de2`](https://github.com/jfhbrook/pyee/commit/5157de2)（官方 CI 无覆盖率，此处为手动 `pytest-cov` 测量）
 > · [PyPubSub `4ec2c47`](https://github.com/schollii/pypubsub/commit/4ec2c47)
