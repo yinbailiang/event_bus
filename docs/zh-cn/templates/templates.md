@@ -63,21 +63,29 @@ from event_bus.templates import (
     # handler
     'handler',
     # expect
-    'expect',
+    'expect', 'OneShotEventHandler', 'temporary_handler',
     # pipe
     'Pipe', 'InProcessPipe', 'InProcessPipeAllocator', 'PipeAllocator',
-    'open_pipe', 'expect_pipe',
+    'open_pipe', 'expect_pipe', 'get_default_allocator',
+    'PipeHandshakeError', 'PipeClosedError', 'PipeTeardownError',
+    'PipeLinkedResponse', 'PipeOpenRequest',
     # register
     'ModuleEventRegister', 'ModuleHandlerRegister',
     # request
     'request', 'RequestProtocol', 'ResponseProtocol',
     # middlewares（详见中间件总览）
-    'EventBlockMiddleware', 'EventTransformMiddleware',
+    'EventBlockMiddleware', 'EventForwardMiddleware', 'EventTransformMiddleware',
     'JSONLLoggingMiddleware', 'SQLiteLoggingMiddleware',
+    'MetricsMiddleware', 'MetricsSnapshot',
     'RateLimitMiddleware', 'RecursionGuardMiddleware',
+    'RecursionDetectedError',
     'make_rename_transform', 'make_field_inject_transform',
     'make_field_redact_transform', 'make_blocklist_predicate',
-    'make_allowlist_predicate', 'RecursionDetectedError',
+    'make_allowlist_predicate', 'make_event_name_filter',
+    'make_bidirectional_forward',
+    # middlewares 类型别名 & 工具
+    'BlockPredicate', 'EventFilter', 'LogFallback',
+    'TargetBusProvider', 'TransformFunc', 'serialize_data',
 )
 ```
 

@@ -11,16 +11,106 @@ Advanced patterns built on top of the core event bus. These are optional — imp
 
 ---
 
-## Table of Contents
+## Quick Index
 
-| Template | Description |
+| Template | Pattern | Use Case | Docs |
+| - | - | - | - |
+| `handler` | Function→Handler | Quickly define event handlers, sync/async auto-adapt, signature validation | [simple_handler.md](simple_handler.md) |
+| `expect` | One-shot Listener | Wait for specific events, test assertions, low-level wait logic | [expect.md](expect.md) |
+| `request` | Request-Response (RPC) | Sync-style async calls, inter-service communication | [request.md](request.md) |
+| `pipe` | Bidirectional Pipe | Streaming data exchange, long-connection simulation, persistent bidirectional flow | [pipe.md](pipe.md) |
+| `register` | Bulk Registration + DI | Large project modular organization, deferred registration, avoid circular imports | [register.md](register.md) |
+| [middlewares/](middlewares/middlewares.md) | Middleware Collection | Logging, rate-limiting, transform, blocking, recursion guard | [Middlewares Overview](middlewares/middlewares.md) |
+
+---
+
+## Hierarchy
+
+```text
+                    ┌──────────────┐
+                    │   handler    │
+                    │  Fn→Handler  │
+                    └──────┬───────┘
+                           │ Generates EventHandler subclass
+                           ▼
+┌─────────────────────────────────────────────────┐
+│                    register                     │
+│  Module-level event/handler collection →        │
+│  bulk registration at app startup              │
+└────────────────────┬────────────────────────────┘
+                     │ Registers into
+                     ▼
+┌─────────────────────────────────────────────────┐
+│                   EventBus                      │
+│      Publish/Subscribe · Middleware Chain       │
+│               · Dispatch Loop                  │
+└──────┬────────────────────────────┬─────────────┘
+       │                            │
+       ▼                            ▼
+┌──────────────┐            ┌──────────────┐
+│   request    │            │     pipe     │
+│  RPC wrapper │◄── depends │  Bidirectional│
+│ (uses expect)│            │  handshake    │
+└──────┬───────┘            │ (uses request │
+       │                    │   + expect)   │
+       │ depends             └──────────────┘
+       ▼
+┌──────────────┐
+│    expect    │
+│  One-shot    │
+│  listener    │
+└──────────────┘
+```
+
+> `handler` converts plain functions into `EventHandler` subclasses. Both `request` and `pipe` internally depend on `expect` for wait logic. `pipe` also depends on `request` for the handshake protocol.
+
+---
+
+## All Exports
+
+```python
+from event_bus.templates import (
+    # handler
+    'handler',
+    # expect
+    'expect', 'OneShotEventHandler', 'temporary_handler',
+    # pipe
+    'Pipe', 'InProcessPipe', 'InProcessPipeAllocator', 'PipeAllocator',
+    'open_pipe', 'expect_pipe', 'get_default_allocator',
+    'PipeHandshakeError', 'PipeClosedError', 'PipeTeardownError',
+    'PipeLinkedResponse', 'PipeOpenRequest',
+    # register
+    'ModuleEventRegister', 'ModuleHandlerRegister',
+    # request
+    'request', 'RequestProtocol', 'ResponseProtocol',
+    # middlewares (see middlewares overview)
+    'EventBlockMiddleware', 'EventForwardMiddleware', 'EventTransformMiddleware',
+    'JSONLLoggingMiddleware', 'SQLiteLoggingMiddleware',
+    'MetricsMiddleware', 'MetricsSnapshot',
+    'RateLimitMiddleware', 'RecursionGuardMiddleware',
+    'RecursionDetectedError',
+    'make_rename_transform', 'make_field_inject_transform',
+    'make_field_redact_transform', 'make_blocklist_predicate',
+    'make_allowlist_predicate', 'make_event_name_filter',
+    'make_bidirectional_forward',
+    # middlewares type aliases & utilities
+    'BlockPredicate', 'EventFilter', 'LogFallback',
+    'TargetBusProvider', 'TransformFunc', 'serialize_data',
+)
+```
+
+---
+
+## Selection Guide
+
+| You want to… | Use this |
 | - | - |
-| [handler](simple_handler.md) | Function-to-handler decorator — convert sync/async functions into EventHandler subclasses with signature validation. |
-| [expect](expect.md) | One-shot event listener — wait for a specific event and get a future. |
-| [request](request.md) | RPC-style request/response over the event bus. |
-| [pipe](pipe.md) | Bidirectional async pipe abstraction (in-process or networked). |
-| [register](register.md) | Bulk event/handler registration with decorator syntax. |
-| [middlewares/](middlewares/middlewares.md) | Built-in middlewares: logging, rate-limiting, forwarding, blocking, transform, recursion guard. |
+| Quickly turn a function into an event handler | `handler` |
+| Send a request, wait for a response | `request` |
+| Establish a long connection, bidirectional send/receive | `pipe` |
+| Wait for a specific event to occur once | `expect` |
+| Organize events and handlers by module | `register` |
+| Add cross-cutting logic to the publish flow | [middlewares/](middlewares/middlewares.md) |
 
 ---
 
