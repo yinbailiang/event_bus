@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -14,6 +15,17 @@ from event_bus import (
     Middleware,
     OnPublishNext,
 )
+
+# ---------------------------------------------------------------------------
+# aiofiles 惰性导入 —— 仅 JSONLLoggingMiddleware 需要
+# ---------------------------------------------------------------------------
+_aiofiles: Any = None
+_aiofiles_import_error: Optional[ImportError] = None
+
+try:
+    import aiofiles as _aiofiles
+except ImportError as _e:
+    _aiofiles_import_error = _e
 
 # ---------------------------------------------------------------------------
 # aiosqlite 惰性导入 —— 仅 SQLiteLoggingMiddleware 需要
@@ -61,11 +73,15 @@ class JSONLLoggingMiddleware(Middleware):
 
     特性
     ----
-    - **零依赖**：纯文件追加，无需数据库驱动。
+    - **异步 I/O**：基于 ``aiofiles`` 异步写入，保持文件句柄打开以获得最佳性能。
     - **人类可读**：每行一条格式化的 JSON，可直接用 ``tail -f``、``jq`` 等工具消费。
     - **降级机制**：文件不可写时自动 fallback 到 ``logging.warning`` 或自定义回调。
     - **不阻塞**：文件写入失败仅警告，不影响事件正常流程。
     - **自动建目录**：文件路径的父目录不存在时自动创建。
+
+    依赖
+    ----
+    需要 ``aiofiles`` 包。可通过 ``infinity_bus[templates]`` 安装。
 
     参数
     ----
@@ -87,21 +103,25 @@ class JSONLLoggingMiddleware(Middleware):
         self._fallback: LogFallback = fallback or (lambda line: logger.warning('JSONL fallback: %s', line))
         self._extra = extra_fields or {}
         self._ready: bool = False
+        self._file_handle: Any = None  # aiofiles 异步文件句柄
+        self._write_lock = asyncio.Lock()  # 保证并发写入时每行 JSONL 的原子性
 
     # ------------------------------------------------------------------
     # 生命周期
     # ------------------------------------------------------------------
 
     async def on_setup(self, bus: EventBus) -> None:  # noqa: ARG002
-        """创建目录并测试文件可写性。"""
-        import os
+        """创建目录并以追加模式打开 aiofiles 文件句柄。"""
+        if _aiofiles is None:
+            raise ImportError(
+                'JSONLLoggingMiddleware 需要 aiofiles 包，请执行: pip install infinity_bus[templates]'
+            ) from _aiofiles_import_error
 
         try:
             parent = os.path.dirname(self._file_path)
             if parent:
                 os.makedirs(parent, exist_ok=True)
-            # 测试文件是否可写
-            await asyncio.to_thread(self._test_write)
+            self._file_handle = await _aiofiles.open(self._file_path, mode='a', encoding='utf-8')
             self._ready = True
             logger.info('JSONLLoggingMiddleware 就绪: %s', self._file_path)
         except Exception:
@@ -109,8 +129,14 @@ class JSONLLoggingMiddleware(Middleware):
             self._ready = False
 
     async def on_teardown(self, bus: EventBus) -> None:  # noqa: ARG002
-        """No-op."""
-        pass
+        """关闭 aiofiles 文件句柄。"""
+        if self._file_handle is not None:
+            try:
+                await self._file_handle.close()
+            except Exception:
+                logger.exception('关闭 JSONL 文件句柄失败')
+            finally:
+                self._file_handle = None
 
     # ------------------------------------------------------------------
     # 钩子
@@ -155,17 +181,6 @@ class JSONLLoggingMiddleware(Middleware):
         }
         self._fallback(json.dumps(record, ensure_ascii=False))
 
-    def _test_write(self) -> None:
-        """同步方法：测试文件是否可写（由 asyncio.to_thread 调用）。"""
-        with open(self._file_path, 'a', encoding='utf-8'):
-            pass
-
-    def _write_line(self, line: str) -> None:
-        """同步方法：追加一行到 JSONL 文件（由 asyncio.to_thread 调用）。"""
-        with open(self._file_path, 'a', encoding='utf-8') as f:
-            f.write(line + '\n')
-            f.flush()
-
     async def _log_event(self, event: Event) -> None:
         record: Dict[str, Any] = {
             'name': event.name,
@@ -179,9 +194,11 @@ class JSONLLoggingMiddleware(Middleware):
         }
         line = json.dumps(record, ensure_ascii=False)
 
-        if self._ready:
+        if self._ready and self._file_handle is not None:
             try:
-                await asyncio.to_thread(self._write_line, line)
+                async with self._write_lock:
+                    await self._file_handle.write(line + '\n')
+                    await self._file_handle.flush()
                 return
             except Exception:
                 logger.exception('JSONL 写入失败，降级处理')
