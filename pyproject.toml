@@ -37,6 +37,7 @@ Repository = "https://github.com/yinbailiang/event_bus"
 
 [project.optional-dependencies]
 templates = [
+    "aiofiles",
     "aiosqlite",
     "prometheus-client",
     "opentelemetry-api",

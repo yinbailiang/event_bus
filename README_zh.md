@@ -50,7 +50,7 @@
 | 高级模板 | ✅ handler/expect/request/pipe/register | ⚠️ 仅 `bus.expect()` | ❌ | ❌ |
 | 事件返回值 | ⚠️ 通过 `request` 模板 | ✅ 内置 `event.event_result()` | ❌ | ❌ |
 | 事件转发 | ⚠️ EventForwardMiddleware | ✅ 内置 `event.forward_to()` | ❌ | ❌ |
-| 依赖数量 | 1 核心（pydantic）+ 1 可选 | 6（anyio, aiofiles...） | 0 | 0 |
+| 依赖数量 | 1 核心（pydantic）+ 5 可选 | 6（anyio, aiofiles...） | 0 | 0 |
 | 优雅停机 | ✅ 排空队列 + 等待活跃任务 | ✅ wait_until_idle + 队列关闭 | ⚠️ `wait_for_complete` + `cancel` | N/A（同步） |
 | 超时保护 | ✅ 每 handler 独立超时 | ✅ event_result.timeout | ❌ | N/A |
 | 错误隔离 | ✅ TaskErrorEvent 统一上报 | ✅ 错误记录不中断总线 | ❌ | N/A |

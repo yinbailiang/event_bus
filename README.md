@@ -50,7 +50,7 @@
 | Advanced Templates | ✅ handler/expect/request/pipe/register | ⚠️ `bus.expect()` only | ❌ | ❌ |
 | Event Return Values | ⚠️ via `request` template | ✅ built-in `event.event_result()` | ❌ | ❌ |
 | Event Forwarding | ⚠️ EventForwardMiddleware | ✅ built-in `event.forward_to()` | ❌ | ❌ |
-| Dependency Count | 1 core (pydantic) + 1 optional | 6 (anyio, aiofiles...) | 0 | 0 |
+| Dependency Count | 1 core (pydantic) + 5 optional | 6 (anyio, aiofiles...) | 0 | 0 |
 | Graceful Shutdown | ✅ drain queue + await active tasks | ✅ wait_until_idle + queue close | ⚠️ `wait_for_complete` + `cancel` | N/A (sync) |
 | Timeout Protection | ✅ per-handler timeout | ✅ event_result.timeout | ❌ | N/A |
 | Error Isolation | ✅ TaskErrorEvent unified reporting | ✅ errors logged, bus uninterrupted | ❌ | N/A |
