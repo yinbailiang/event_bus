@@ -1,6 +1,6 @@
 """event_bus - 基于 asyncio 的轻量级事件总线"""
 
-__version__ = '1.5.3'
+__version__ = '1.5.4'
 
 from .bus import (
     BusShuttingDown,
