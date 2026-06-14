@@ -157,13 +157,14 @@ class JSONLLoggingMiddleware(Middleware):
 
     def _test_write(self) -> None:
         """同步方法：测试文件是否可写（由 asyncio.to_thread 调用）。"""
-        with open(self._file_path, 'a', encoding='utf-8') as f:
-            f.write('')
+        with open(self._file_path, 'a', encoding='utf-8'):
+            pass
 
     def _write_line(self, line: str) -> None:
         """同步方法：追加一行到 JSONL 文件（由 asyncio.to_thread 调用）。"""
         with open(self._file_path, 'a', encoding='utf-8') as f:
             f.write(line + '\n')
+            f.flush()
 
     async def _log_event(self, event: Event) -> None:
         record: Dict[str, Any] = {
