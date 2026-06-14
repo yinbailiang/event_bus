@@ -36,7 +36,7 @@
 | 工程纪律 | 90%+ 测试覆盖 · 85%+ docstring 覆盖 · pre-commit 自动门禁 |
 
 > 和同类项目不同：InfinityBus 是**可扩展的**（中间件洋葱管道），而非把所有功能硬编码在核心类里。
-> 详见 [中间件系统](docs/middleware.md)。
+> 详见 [中间件系统](docs/zh-cn/middleware.md)。
 
 ## 🔍 同类对比
 

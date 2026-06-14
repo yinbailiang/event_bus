@@ -36,7 +36,7 @@
 | Engineering Discipline | 90%+ test coverage · 85%+ docstring coverage · pre-commit automated gating |
 
 > Unlike similar projects: InfinityBus is **extensible** (middleware onion pipeline), rather than hardcoding all functionality in the core class.
-> See [Middleware System](docs/middleware.md) for details.
+> See [Middleware System](docs/en-us/middleware.md) for details.
 
 ## 🔍 Comparison
 
