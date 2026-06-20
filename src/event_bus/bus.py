@@ -267,14 +267,16 @@ class EventBus:
         """创建一个事件总线代理实例，供事件处理器调用"""
         return EventBus.Proxy(self, source, raw_event)
 
-    async def _handler_wrapper(
-        self, handler: EventHandler, handler_id: str, bus_proxy: 'EventBus.Proxy', event: Event
-    ) -> None:
-        """事件处理器包装器"""
+    async def _handler_wrapper(self, handler: EventHandler, handler_id: str, bus: 'EventBus', event: Event) -> None:
+        """事件处理器包装器。
+
+        接收原始 ``EventBus`` 实例，传递给 ``handler.__call__``。
+        ``__call__`` 内部自行调用 ``bus.proxy()`` 创建代理。
+        """
         try:
             async with self._handler_semaphore:  # 控制并发处理器数量，避免过载
                 async with asyncio.timeout(handler.handle_timeout):
-                    await handler(bus_proxy, event)
+                    await handler(bus, event)
         except BusShuttingDown:
             logger.debug(
                 'Handler %s skipped publish during shutdown (event=%s)', handler.__class__.__name__, event.name
@@ -308,13 +310,7 @@ class EventBus:
             try:
                 event = await self._queue.get()
                 for handler_id, handler in self._matcher.match(event.name):
-                    self._register_task(
-                        asyncio.create_task(
-                            self._handler_wrapper(
-                                handler, handler_id, self.proxy(handler.__class__.__name__, event), event
-                            )
-                        )
-                    )
+                    self._register_task(asyncio.create_task(self._handler_wrapper(handler, handler_id, self, event)))
             except Exception:
                 logger.exception('Unexpected error in dispatch loop')
             finally:

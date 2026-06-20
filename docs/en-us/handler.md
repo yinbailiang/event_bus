@@ -20,7 +20,7 @@ class EventHandler(ABC):
         handle_timeout: Optional[float] = 32.0
     ) -> None
 
-    async def __call__(self, bus_proxy: EventBus.Proxy, event: Event) -> None
+    async def __call__(self, bus: EventBus, event: Event) -> None
 
     @abstractmethod
     async def handle(
@@ -35,6 +35,7 @@ class EventHandler(ABC):
 | - | - | - | - |
 | `subscriptions` | `Optional[List[Regex \| str]]` | `[]` | Event patterns this handler listens to. |
 | `handle_timeout` | `Optional[float]` | `32.0` | Per-invocation timeout (seconds). `None` = no limit. |
+| `__call__` | — | — | Internal entry point. Receives the raw ``EventBus``, creates a proxy via ``bus.proxy(handler_name, event)``, then delegates to ``handle()``. |
 
 ### `handle()` Signature
 

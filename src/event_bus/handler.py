@@ -56,8 +56,14 @@ class EventHandler(ABC):
         self.subscriptions: List[Regex | str] = subscriptions.copy() if subscriptions is not None else []
         self.handle_timeout: Optional[float] = handle_timeout
 
-    async def __call__(self, bus_proxy: 'EventBus.Proxy', event: Event) -> None:
-        """事件处理器入口，自动解包事件数据"""
+    async def __call__(self, bus: 'EventBus', event: Event) -> None:
+        """事件处理器入口，自动组装代理并解包事件数据。
+
+        总线内部调用，接收原始 ``EventBus`` 实例，
+        内部调用 ``bus.proxy(handler_name, event)`` 创建代理后
+        传递给 ``handle()``。
+        """
+        bus_proxy = bus.proxy(self.__class__.__name__, event)
         await self.handle(event.data, bus_proxy, event)
 
     @abstractmethod

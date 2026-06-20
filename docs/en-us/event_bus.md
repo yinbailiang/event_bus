@@ -57,7 +57,7 @@ before_publish chain (Middleware 1 → 2 → ... → core)
        └─ create_task(handler_wrapper)
             ├─ semaphore (concurrency limit)
             ├─ asyncio.timeout
-            └─ handler(bus_proxy, event)
+            └─ handler(bus, event)
 ```
 
 ## Quick Example

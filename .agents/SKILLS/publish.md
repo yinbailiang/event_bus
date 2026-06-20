@@ -24,7 +24,7 @@
    git branch
    ```
 
-2. **更新版本号** — 编辑 `pyproject.toml` 中的 `version` 字段，遵循 [SemVer](https://semver.org/lang/zh-CN/)：
+2. **更新版本号** — 编辑 `pyproject.toml` 和 `__init__.py` 中的 `version` 字段，遵循 [SemVer](https://semver.org/lang/zh-CN/)：
 
    | 类型 | 场景 | 示例 |
    | - | - | - |

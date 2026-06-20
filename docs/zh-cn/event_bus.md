@@ -37,6 +37,29 @@ graph TD
     EB -->|dispatch| EH
 ```
 
+### 发布流程
+
+```text
+bus.proxy(source).publish(name, data)
+  │
+  ▼
+before_publish 链 (中间件 1 → 2 → ... → 核心)
+  │
+  ├─ 校验 EventDeclaration
+  ├─ 校验 payload (Pydantic)
+  ├─ 构造 Event
+  └─ 入队 → 触发 on_publish 链
+       │
+       ▼
+    分发循环
+       │
+       ├─ Matcher.match(name)
+       └─ create_task(handler_wrapper)
+            ├─ semaphore (并发限制)
+            ├─ asyncio.timeout
+            └─ handler(bus, event)
+```
+
 ---
 
 ## 快速开始
