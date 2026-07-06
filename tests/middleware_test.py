@@ -314,68 +314,80 @@ class ErrorCapturingMiddleware(Middleware):
 class TestMiddlewareChainCRUD:
     """MiddlewareChain 的增删查操作"""
 
-    def test_add_middleware(self) -> None:
+    @pytest.mark.asyncio
+    async def test_add_middleware(self) -> None:
         """添加到末尾"""
         chain = MiddlewareChain()
         mw1 = LoggingMiddleware("mw1")
         mw2 = LoggingMiddleware("mw2")
 
-        chain.add(mw1).add(mw2)
+        await chain.add(mw1)
+        await chain.add(mw2)
         assert chain.middlewares == [mw1, mw2]
 
-    def test_add_duplicate_raises(self) -> None:
+    @pytest.mark.asyncio
+    async def test_add_duplicate_raises(self) -> None:
         """重复添加同一个实例应抛出 ValueError"""
         chain = MiddlewareChain()
         mw = LoggingMiddleware("dup")
-        chain.add(mw)
+        await chain.add(mw)
         with pytest.raises(ValueError, match="already in the chain"):
-            chain.add(mw)
+            await chain.add(mw)
 
-    def test_insert_at_position(self) -> None:
+    @pytest.mark.asyncio
+    async def test_insert_at_position(self) -> None:
         """在指定位置插入"""
         chain = MiddlewareChain()
         mw1 = LoggingMiddleware("mw1")
         mw2 = LoggingMiddleware("mw2")
         mw3 = LoggingMiddleware("mw3")
 
-        chain.add(mw1).add(mw3)
-        chain.insert(1, mw2)  # [mw1, mw2, mw3]
+        await chain.add(mw1)
+        await chain.add(mw3)
+        await chain.insert(1, mw2)  # [mw1, mw2, mw3]
         assert chain.middlewares == [mw1, mw2, mw3]
 
         mw0 = LoggingMiddleware("mw0")
-        chain.insert(0, mw0)  # [mw0, mw1, mw2, mw3]
+        await chain.insert(0, mw0)  # [mw0, mw1, mw2, mw3]
         assert chain.middlewares == [mw0, mw1, mw2, mw3]
 
-    def test_insert_duplicate_raises(self) -> None:
+    @pytest.mark.asyncio
+    async def test_insert_duplicate_raises(self) -> None:
         """插入已存在的实例应抛出 ValueError"""
         chain = MiddlewareChain()
         mw1 = LoggingMiddleware("mw1")
         mw2 = LoggingMiddleware("mw2")
-        chain.add(mw1).add(mw2)
+        await chain.add(mw1)
+        await chain.add(mw2)
         with pytest.raises(ValueError, match="already in the chain"):
-            chain.insert(0, mw1)
+            await chain.insert(0, mw1)
 
-    def test_remove_middleware(self) -> None:
+    @pytest.mark.asyncio
+    async def test_remove_middleware(self) -> None:
         """移除指定中间件"""
         chain = MiddlewareChain()
         mw1 = LoggingMiddleware("mw1")
         mw2 = LoggingMiddleware("mw2")
-        chain.add(mw1).add(mw2)
-        chain.remove(mw1)
+        await chain.add(mw1)
+        await chain.add(mw2)
+        await chain.remove(mw1)
         assert chain.middlewares == [mw2]
 
-    def test_clear_all(self) -> None:
+    @pytest.mark.asyncio
+    async def test_clear_all(self) -> None:
         """清空所有中间件"""
         chain = MiddlewareChain()
-        chain.add(LoggingMiddleware("mw1")).add(LoggingMiddleware("mw2"))
-        chain.clear()
+        await chain.add(LoggingMiddleware("mw1"))
+        await chain.add(LoggingMiddleware("mw2"))
+        await chain.clear()
         assert chain.middlewares == []
 
-    def test_middlewares_returns_copy(self) -> None:
+    @pytest.mark.asyncio
+    async def test_middlewares_returns_copy(self) -> None:
         """middlewares 属性返回副本，外部修改不影响内部状态"""
         chain = MiddlewareChain()
         mw = LoggingMiddleware("mw")
-        chain.add(mw)
+        await chain.add(mw)
         copy = chain.middlewares
         copy.clear()
         assert chain.middlewares == [mw]
@@ -396,7 +408,8 @@ class TestMiddlewareChainLifecycle:
         mw1 = LoggingMiddleware("mw1")
         mw2 = LoggingMiddleware("mw2")
 
-        chain.add(mw1).add(mw2)
+        await chain.add(mw1)
+        await chain.add(mw2)
         # 需要传入一个 mock bus
         bus = _mock_bus()
         failed = await chain.setup(bus)
@@ -415,7 +428,9 @@ class TestMiddlewareChainLifecycle:
         fail_mw = FailingSetupMiddleware("fail")
         mw2 = LoggingMiddleware("mw2")
 
-        chain.add(mw1).add(fail_mw).add(mw2)
+        await chain.add(mw1)
+        await chain.add(fail_mw)
+        await chain.add(mw2)
         bus = _mock_bus()
         failed = await chain.setup(bus)
 
@@ -436,9 +451,11 @@ class TestMiddlewareChainLifecycle:
         chain = MiddlewareChain()
         mw1 = LoggingMiddleware("mw1", shared_log=shared_log)
         mw2 = LoggingMiddleware("mw2", shared_log=shared_log)
-        chain.add(mw1).add(mw2)
+        await chain.add(mw1)
+        await chain.add(mw2)
 
         bus = _mock_bus()
+        await chain.setup(bus)
         await chain.teardown(bus)
 
         assert mw1.teardown_called
@@ -455,9 +472,11 @@ class TestMiddlewareChainLifecycle:
         throw_mw = ThrowingTeardownMiddleware("throw")
         mw1 = LoggingMiddleware("mw1")
 
-        chain.add(throw_mw).add(mw1)
+        await chain.add(throw_mw)
+        await chain.add(mw1)
         bus = _mock_bus()
         # 不应抛出异常
+        await chain.setup(bus)
         await chain.teardown(bus)
 
         assert throw_mw.teardown_attempted
@@ -479,7 +498,8 @@ class TestMiddlewareChainBuild:
         chain = MiddlewareChain()
         mw_outer = LoggingMiddleware("outer", shared_log=shared_log)
         mw_inner = LoggingMiddleware("inner", shared_log=shared_log)
-        chain.add(mw_outer).add(mw_inner)
+        await chain.add(mw_outer)
+        await chain.add(mw_inner)
 
         final_called = False
 
@@ -515,7 +535,8 @@ class TestMiddlewareChainBuild:
         chain = MiddlewareChain()
         mw_outer = LoggingMiddleware("outer", shared_log=shared_log)
         mw_inner = LoggingMiddleware("inner", shared_log=shared_log)
-        chain.add(mw_outer).add(mw_inner)
+        await chain.add(mw_outer)
+        await chain.add(mw_inner)
 
         final_called = False
 
@@ -543,7 +564,8 @@ class TestMiddlewareChainBuild:
         chain = MiddlewareChain()
         short = ShortCircuitBeforeMiddleware()
         mw = LoggingMiddleware("mw")
-        chain.add(short).add(mw)
+        await chain.add(short)
+        await chain.add(mw)
 
         final_called = False
 
@@ -604,10 +626,14 @@ class TestMiddlewareChainError:
         chain = MiddlewareChain()
         mw1 = LoggingMiddleware("mw1")
         mw2 = LoggingMiddleware("mw2")
-        chain.add(mw1).add(mw2)
+        await chain.add(mw1)
+        await chain.add(mw2)
+
+        async def _noop(error: Exception, name: str, source: str, data: dict[str, Any] | BaseModel | None) -> None:
+            pass
 
         error = ValueError("test error")
-        await chain.on_publish_error(error, "test.event", "source1", None)
+        await chain.build_on_publish_error(_noop)(error, "test.event", "source1", None)
 
         assert "mw1:on_publish_error:test.event:ValueError" in mw1.calls
         assert "mw2:on_publish_error:test.event:ValueError" in mw2.calls
@@ -640,11 +666,15 @@ class TestMiddlewareChainError:
 
         mw_good = LoggingMiddleware("good")
         bad = BadErrorMiddleware()
-        chain.add(bad).add(mw_good)
+        await chain.add(bad)
+        await chain.add(mw_good)
+
+        async def _noop(error: Exception, name: str, source: str, data: dict[str, Any] | BaseModel | None) -> None:
+            pass
 
         error = ValueError("original error")
         # 不应抛出异常
-        await chain.on_publish_error(error, "test.event", "s", None)
+        await chain.build_on_publish_error(_noop)(error, "test.event", "s", None)
 
         assert any("good:on_publish_error" in c for c in mw_good.calls)
 
@@ -745,7 +775,7 @@ class TestMiddlewareIntegration:
         """总线启动时中间件 on_setup 被调用"""
         mw = LoggingMiddleware("integ")
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         bus = EventBus(
             base_event_registry,
@@ -765,7 +795,7 @@ class TestMiddlewareIntegration:
         """总线停止时中间件 on_teardown 被调用"""
         mw = LoggingMiddleware("integ")
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         bus = EventBus(
             base_event_registry,
@@ -786,7 +816,7 @@ class TestMiddlewareIntegration:
         """发布事件时 before_publish 钩子被调用"""
         mw = LoggingMiddleware("hook")
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         # 需要注册 mw.ping 事件和对应的 handler
         handler = SimplePingHandler()
@@ -815,7 +845,7 @@ class TestMiddlewareIntegration:
         """发布事件后 on_publish 钩子被调用"""
         mw = LoggingMiddleware("hook")
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -843,7 +873,7 @@ class TestMiddlewareIntegration:
         """before_publish → on_publish 调用顺序正确"""
         mw = LoggingMiddleware("mw")
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -874,7 +904,8 @@ class TestMiddlewareIntegration:
         mw1 = LoggingMiddleware("mw1", shared_log=shared_log)
         mw2 = LoggingMiddleware("mw2", shared_log=shared_log)
         chain = MiddlewareChain()
-        chain.add(mw1).add(mw2)
+        await chain.add(mw1)
+        await chain.add(mw2)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -910,7 +941,8 @@ class TestMiddlewareIntegration:
         fail_mw = FailingBeforeMiddleware("fail")
         err_cap = ErrorCapturingMiddleware("err_cap")
         chain = MiddlewareChain()
-        chain.add(fail_mw).add(err_cap)
+        await chain.add(fail_mw)
+        await chain.add(err_cap)
 
         bus = EventBus(
             base_event_registry,
@@ -936,7 +968,7 @@ class TestMiddlewareIntegration:
         """中间件在 before_publish 中对 data 的修改可以传递到 handler"""
         mut_mw = MutatingMiddleware()
         chain = MiddlewareChain()
-        chain.add(mut_mw)
+        await chain.add(mut_mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -967,7 +999,8 @@ class TestMiddlewareIntegration:
         fail_mw = FailingSetupMiddleware("fail")
         good_mw = LoggingMiddleware("good")
         chain = MiddlewareChain()
-        chain.add(fail_mw).add(good_mw)
+        await chain.add(fail_mw)
+        await chain.add(good_mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -1009,6 +1042,304 @@ class TestMiddlewareIntegration:
         assert len(handler.received) >= 1
         assert handler.received[0].key == "k"
         assert handler.received[0].count == 1
+
+
+# ============================================================================
+# 热重载测试 — 总线运行时动态增删中间件
+# ============================================================================
+
+
+class TestMiddlewareHotReload:
+    """运行时通过 ``bus.proxy().middleware`` 动态增删中间件"""
+
+    @pytest.mark.asyncio
+    async def test_add_during_runtime_calls_on_setup_immediately(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """运行时 add 立即调用 on_setup"""
+        chain = MiddlewareChain()
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            mw = LoggingMiddleware("hot")
+            await bus.proxy("admin").middleware.add(mw)
+
+            assert mw.setup_called
+
+    @pytest.mark.asyncio
+    async def test_add_during_runtime_intercepts_subsequent_publishes(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """运行时添加的中间件对后续发布生效"""
+        handler = SimplePingHandler()
+        handler_registry.register(handler)
+
+        chain = MiddlewareChain()
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            # 先发布一次，确认无中间件时 handler 收到
+            await bus.proxy("src").publish("mw.ping", {"key": "before", "count": 1})
+            await handler.wait_received(timeout=2.0)
+            assert len(handler.received) == 1
+
+            # 热添加短路中间件
+            short = ShortCircuitBeforeMiddleware()
+            await bus.proxy("admin").middleware.add(short)
+
+            # 再发布 — 被短路，handler 不再收到
+            await bus.proxy("src").publish("mw.ping", {"key": "after", "count": 2})
+            await asyncio.sleep(0.1)
+
+            assert short.intercepted == ["mw.ping"]
+            assert len(handler.received) == 1  # 仍是 1，第 2 次被拦截
+
+    @pytest.mark.asyncio
+    async def test_remove_during_runtime_calls_on_teardown_immediately(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """运行时 remove 立即调用 on_teardown"""
+        mw = LoggingMiddleware("removable")
+        chain = MiddlewareChain()
+        await chain.add(mw)
+
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            assert not mw.teardown_called
+            await bus.proxy("admin").middleware.remove(mw)
+
+            assert mw.teardown_called
+
+    @pytest.mark.asyncio
+    async def test_remove_during_runtime_stops_intercepting(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """运行时移除短路中间件后，事件恢复正常流通"""
+        handler = SimplePingHandler()
+        handler_registry.register(handler)
+
+        short = ShortCircuitBeforeMiddleware()
+        chain = MiddlewareChain()
+        await chain.add(short)
+
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            # 短路中间件生效
+            await bus.proxy("src").publish("mw.ping", {"key": "blocked", "count": 1})
+            await asyncio.sleep(0.1)
+            assert len(handler.received) == 0
+
+            # 热移除
+            await bus.proxy("admin").middleware.remove(short)
+
+            # 事件恢复正常
+            await bus.proxy("src").publish("mw.ping", {"key": "pass", "count": 2})
+            await handler.wait_received(timeout=2.0)
+            assert len(handler.received) == 1
+
+    @pytest.mark.asyncio
+    async def test_add_failing_setup_during_runtime_raises_and_not_added(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """运行时 add 的中间件 on_setup 失败时抛异常且不加入链"""
+        chain = MiddlewareChain()
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            fail_mw = FailingSetupMiddleware("bad")
+            with pytest.raises(RuntimeError, match="on_setup failed"):
+                await bus.proxy("admin").middleware.add(fail_mw)
+
+            assert fail_mw not in chain.middlewares
+
+    @pytest.mark.asyncio
+    async def test_chain_cache_rebuilt_after_hot_add(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """热添加后责任链缓存失效并重建，新中间件参与洋葱模型"""
+        shared_log: List[str] = []
+        mw_outer = LoggingMiddleware("outer", shared_log=shared_log)
+        chain = MiddlewareChain()
+        await chain.add(mw_outer)
+
+        handler = SimplePingHandler()
+        handler_registry.register(handler)
+
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            # 热添加 inner
+            mw_inner = LoggingMiddleware("inner", shared_log=shared_log)
+            await bus.proxy("admin").middleware.add(mw_inner)
+
+            shared_log.clear()
+
+            await bus.proxy("src").publish("mw.ping", {"key": "second", "count": 2})
+            await handler.wait_received(timeout=2.0)
+
+            # 验证洋葱模型：外层先进入、内层后进入、内层先退出、外层后退出
+            before_entries = [e for e in shared_log if "before_publish" in e]
+            assert before_entries == [
+                "outer:before_publish:mw.ping",
+                "inner:before_publish:mw.ping",
+                "inner:before_publish_after:mw.ping",
+                "outer:before_publish_after:mw.ping",
+            ], f"洋葱模型顺序错误: {before_entries}"
+
+    @pytest.mark.asyncio
+    async def test_insert_during_runtime(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """运行时 insert 在指定位置插入并立即调用 on_setup"""
+        mw1 = LoggingMiddleware("mw1")
+        mw3 = LoggingMiddleware("mw3")
+        chain = MiddlewareChain()
+        await chain.add(mw1)
+        await chain.add(mw3)
+
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            mw2 = LoggingMiddleware("mw2")
+            await bus.proxy("admin").middleware.insert(1, mw2)
+
+            assert mw2.setup_called
+            assert chain.middlewares == [mw1, mw2, mw3]
+
+    @pytest.mark.asyncio
+    async def test_clear_during_runtime_calls_all_on_teardown(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """运行时 clear 调用所有中间件的 on_teardown"""
+        mw1 = LoggingMiddleware("mw1")
+        mw2 = LoggingMiddleware("mw2")
+        chain = MiddlewareChain()
+        await chain.add(mw1)
+        await chain.add(mw2)
+
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            await bus.proxy("admin").middleware.clear()
+
+            assert mw1.teardown_called
+            assert mw2.teardown_called
+            assert chain.middlewares == []
+
+    @pytest.mark.asyncio
+    async def test_remove_nonexistent_during_runtime_raises(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """运行时移除不存在的中间件抛出 ValueError"""
+        chain = MiddlewareChain()
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            ghost = LoggingMiddleware("ghost")
+            with pytest.raises(ValueError, match="not in the chain"):
+                await bus.proxy("admin").middleware.remove(ghost)
+
+    @pytest.mark.asyncio
+    async def test_add_during_runtime_preserves_bus_reference(
+        self,
+        base_event_registry: EventRegistry,
+        handler_registry: EventHandlerRegistry,
+    ) -> None:
+        """运行时 add 的中间件 on_setup 收到的 bus 是正确的实例"""
+        chain = MiddlewareChain()
+        bus = EventBus(
+            base_event_registry,
+            handler_registry,
+            max_queue_size=10,
+            middleware_chain=chain,
+        )
+        async with bus:
+            received_bus: List[EventBus] = []
+
+            class BusCapturingMiddleware(Middleware):
+                async def on_setup(self, bus: EventBus) -> None:
+                    received_bus.append(bus)
+
+                async def on_teardown(self, bus: EventBus) -> None:
+                    pass
+
+                async def before_publish(
+                    self,
+                    event_registry: EventRegistry,
+                    name: str,
+                    source: str,
+                    data: dict[str, Any] | BaseModel | None,
+                    old_event: Event | None,
+                    next: BeforePublishNext,
+                ) -> None:
+                    await next(event_registry, name, source, data, old_event)
+
+                async def on_publish(
+                    self, event: Event, next: OnPublishNext
+                ) -> None:
+                    await next(event)
+
+            mw = BusCapturingMiddleware()
+            await bus.proxy("admin").middleware.add(mw)
+
+            assert len(received_bus) == 1
+            assert received_bus[0] is bus
 
 
 # ============================================================================

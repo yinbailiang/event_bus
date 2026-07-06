@@ -81,7 +81,7 @@ class TestEventForwardMiddleware:
         # 2. 源总线装配转发中间件
         fw = EventForwardMiddleware(target=target_bus, source_name="forward-test")
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -118,7 +118,7 @@ class TestEventForwardMiddleware:
 
         fw = EventForwardMiddleware(target=target_bus, source_name="payload-test")
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -162,7 +162,7 @@ class TestEventForwardMiddleware:
             event_filter=event_filter,
         )
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -207,7 +207,7 @@ class TestEventForwardMiddleware:
             event_filter=event_filter,
         )
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -254,7 +254,7 @@ class TestEventForwardMiddleware:
             forward_system_events=False,  # 默认值
         )
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -309,7 +309,7 @@ class TestEventForwardMiddleware:
             forward_system_events=True,
         )
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             source_registry,
@@ -347,7 +347,7 @@ class TestEventForwardMiddleware:
 
         fw = EventForwardMiddleware(target=get_target, source_name="dynamic-test")
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -393,7 +393,7 @@ class TestEventForwardMiddleware:
             event_filter=count_filter,
         )
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -447,7 +447,7 @@ class TestEventForwardMiddleware:
             event_filter=async_filter,
         )
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -486,7 +486,7 @@ class TestEventForwardMiddleware:
 
         fw = EventForwardMiddleware(target=target_bus, source_name="error-iso")
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -538,7 +538,7 @@ class TestEventForwardMiddleware:
             event_filter=faulty_filter,
         )
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -581,7 +581,7 @@ class TestEventForwardMiddleware:
 
         fw = EventForwardMiddleware(target=target_bus, source_name="no-filter")
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -620,7 +620,7 @@ class TestEventForwardMiddleware:
         # 不指定 source_name，使用默认值
         fw = EventForwardMiddleware(target=target_bus)
         chain = MiddlewareChain()
-        chain.add(fw)
+        await chain.add(fw)
 
         source_bus = EventBus(
             base_event_registry,
@@ -678,8 +678,8 @@ class TestMakeBidirectionalForward:
             source_a_to_b='a→b',
             source_b_to_a='b→a',
         )
-        chain_a.add(a_to_b)
-        chain_b.add(b_to_a)
+        await chain_a.add(a_to_b)
+        await chain_b.add(b_to_a)
 
         async with bus_a:
             async with bus_b:
@@ -741,8 +741,8 @@ class TestMakeBidirectionalForward:
             source_b_to_a='b→a',
             anti_recursion=True,
         )
-        chain_a.add(a_to_b)
-        chain_b.add(b_to_a)
+        await chain_a.add(a_to_b)
+        await chain_b.add(b_to_a)
 
         async with bus_a:
             async with bus_b:
@@ -788,8 +788,8 @@ class TestMakeBidirectionalForward:
             source_b_to_a='b→a',
             anti_recursion=False,
         )
-        chain_a.add(a_to_b)
-        chain_b.add(b_to_a)
+        await chain_a.add(a_to_b)
+        await chain_b.add(b_to_a)
 
         async with bus_a:
             async with bus_b:
@@ -834,8 +834,8 @@ class TestMakeBidirectionalForward:
             event_filter=make_event_name_filter('mw.ping', mode='white'),
             anti_recursion=True,
         )
-        chain_a.add(a_to_b)
-        chain_b.add(b_to_a)
+        await chain_a.add(a_to_b)
+        await chain_b.add(b_to_a)
 
         async with bus_a:
             async with bus_b:
@@ -886,9 +886,9 @@ class TestMakeBidirectionalForward:
         )
 
         chain_a = MiddlewareChain()
-        chain_a.add(a_to_b)
+        await chain_a.add(a_to_b)
         _bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
-        chain_b.add(b_to_a)
+        await chain_b.add(b_to_a)
 
         async with _bus_a:
             async with bus_b:
@@ -921,8 +921,8 @@ class TestMakeBidirectionalForward:
         bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
 
         a_to_b, b_to_a = make_bidirectional_forward(bus_a, bus_b)
-        chain_a.add(a_to_b)
-        chain_b.add(b_to_a)
+        await chain_a.add(a_to_b)
+        await chain_b.add(b_to_a)
 
         async with bus_a:
             async with bus_b:

@@ -68,7 +68,7 @@ class TestRecursionGuardMiddleware:
         """正常链式发布不被拦截"""
         guard = RecursionGuardMiddleware(max_depth=3)
         chain = MiddlewareChain()
-        chain.add(guard)
+        await chain.add(guard)
 
         handler = ChainPublishingHandler("mw.ping", {"key": "nested", "count": 1})
         handler_registry.register(handler)
@@ -98,7 +98,7 @@ class TestRecursionGuardMiddleware:
         """超过阈值时抛出 RecursionDetectedError"""
         guard = RecursionGuardMiddleware(max_depth=2)
         chain = MiddlewareChain()
-        chain.add(guard)
+        await chain.add(guard)
 
         handler = ChainPublishingHandler("mw.ping", {"key": "loop", "count": 1})
         handler_registry.register(handler)
@@ -128,7 +128,7 @@ class TestRecursionGuardMiddleware:
             max_depth=0, max_chain_length=None  # 禁用链路长检查，仅测 per-source
         )
         chain = MiddlewareChain()
-        chain.add(guard)
+        await chain.add(guard)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -158,7 +158,7 @@ class TestRecursionGuardMiddleware:
             ignore_sources={"ChainPublishingHandler"},
         )
         chain = MiddlewareChain()
-        chain.add(guard)
+        await chain.add(guard)
 
         handler = ChainPublishingHandler("mw.ping", {"key": "ignored", "count": 1})
         handler_registry.register(handler)
@@ -188,7 +188,7 @@ class TestRecursionGuardMiddleware:
         """不同 source 之间的链式调用不互相影响"""
         guard = RecursionGuardMiddleware(max_depth=2)
         chain = MiddlewareChain()
-        chain.add(guard)
+        await chain.add(guard)
 
         class HandlerA(EventHandler):
             def __init__(self):
@@ -231,7 +231,7 @@ class TestRecursionGuardMiddleware:
             max_chain_length=5,      # 链长 5 就拦截
         )
         chain = MiddlewareChain()
-        chain.add(guard)
+        await chain.add(guard)
 
         handler = ChainPublishingHandler("mw.ping", {"key": "loop", "count": 1})
         handler_registry.register(handler)

@@ -35,6 +35,13 @@ class ResponseProtocol(BaseModel):
             raise RuntimeError(self.error_msg)
 
 
+def build_response(request: RequestProtocol, response_type: type[ResponseProtocol], **kargs: Any) -> ResponseProtocol:
+    kargs = kargs.copy()
+    kargs['session_id'] = request.session_id
+    kargs['request_id'] = request.request_id
+    return response_type.model_validate(**kargs)
+
+
 async def request(
     bus_proxy: EventBus.Proxy,
     req_event: str,

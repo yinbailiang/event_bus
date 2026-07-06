@@ -43,7 +43,7 @@ class TestEventBlockMiddleware:
         pred = make_blocklist_predicate("mw.ping")
         mw = EventBlockMiddleware(pred, block_reason="test block")
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -72,7 +72,7 @@ class TestEventBlockMiddleware:
         pred = make_blocklist_predicate("some.other.event")
         mw = EventBlockMiddleware(pred)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -100,7 +100,7 @@ class TestEventBlockMiddleware:
         pred = make_allowlist_predicate("user.login")
         mw = EventBlockMiddleware(pred, block_reason="not in allowlist")
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -141,7 +141,7 @@ class TestEventBlockMiddleware:
 
         mw = EventBlockMiddleware(block_sensitive)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -188,7 +188,8 @@ class TestTransformThenBlock:
         block_mw = EventBlockMiddleware(pred)
 
         chain = MiddlewareChain()
-        chain.add(trans_mw).add(block_mw)  # transform 在外层，先执行
+        await chain.add(trans_mw)
+        await chain.add(block_mw)  # transform 在外层，先执行
 
         handler = SimplePingHandler()
         handler_registry.register(handler)

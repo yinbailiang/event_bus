@@ -3,8 +3,9 @@
 import json
 import os
 import tempfile
-from typing import List
+from typing import Any, List
 
+from pydantic import BaseModel
 import pytest
 
 from event_bus import (
@@ -51,7 +52,7 @@ class TestSQLiteLoggingMiddleware:
 
         mw = SQLiteLoggingMiddleware(":memory:")
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -93,7 +94,7 @@ class TestSQLiteLoggingMiddleware:
         try:
             mw = SQLiteLoggingMiddleware(db_path)
             chain = MiddlewareChain()
-            chain.add(mw)
+            await chain.add(mw)
 
             handler = SimplePingHandler()
             handler_registry.register(handler)
@@ -134,7 +135,7 @@ class TestSQLiteLoggingMiddleware:
 
         mw = SQLiteLoggingMiddleware(":memory:", fallback=fake_fallback)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         bus = EventBus(
             base_event_registry,
@@ -143,7 +144,9 @@ class TestSQLiteLoggingMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await chain.on_publish_error(
+            async def _noop(error: Exception, name: str, source: str, data: dict[str, Any] | BaseModel | None) -> None:
+                pass
+            await chain.build_on_publish_error(_noop)(
                 ValueError("boom"), "test.event", "src", {"key": "v"}
             )
 
@@ -173,7 +176,7 @@ class TestJSONLLoggingMiddleware:
         try:
             mw = JSONLLoggingMiddleware(file_path)
             chain = MiddlewareChain()
-            chain.add(mw)
+            await chain.add(mw)
 
             handler = SimplePingHandler()
             handler_registry.register(handler)
@@ -231,7 +234,7 @@ class TestJSONLLoggingMiddleware:
                 fallback=fake_fallback,
             )
             chain = MiddlewareChain()
-            chain.add(mw)
+            await chain.add(mw)
 
             handler = SimplePingHandler()
             handler_registry.register(handler)
@@ -271,7 +274,7 @@ class TestJSONLLoggingMiddleware:
 
         mw = JSONLLoggingMiddleware(':memory:', fallback=fake_fallback)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         bus = EventBus(
             base_event_registry,
@@ -280,7 +283,9 @@ class TestJSONLLoggingMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await chain.on_publish_error(
+            async def _noop(error: Exception, name: str, source: str, data: dict[str, Any] | BaseModel | None) -> None:
+                pass
+            await chain.build_on_publish_error(_noop)(
                 ValueError('boom'), 'test.event', 'src', {'key': 'v'},
             )
 

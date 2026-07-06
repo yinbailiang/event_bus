@@ -18,9 +18,9 @@ def metrics() -> MetricsMiddleware:
 
 
 @pytest.fixture
-def chain_with_metrics(metrics: MetricsMiddleware) -> MiddlewareChain:
+async def chain_with_metrics(metrics: MetricsMiddleware) -> MiddlewareChain:
     chain = MiddlewareChain()
-    chain.add(metrics)
+    await chain.add(metrics)
     return chain
 
 
@@ -269,7 +269,7 @@ class TestMetricsCustomBuckets:
         """自定义桶边界在快照中体现。"""
         custom = MetricsMiddleware(histogram_bounds=(0.01, 0.1, 1.0))
         chain = MiddlewareChain()
-        chain.add(custom)
+        await chain.add(custom)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -358,7 +358,7 @@ class TestPrometheusIntegration:
         metrics.integrate_prometheus(registry)
 
         chain = MiddlewareChain()
-        chain.add(metrics)
+        await chain.add(metrics)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -396,7 +396,7 @@ class TestPrometheusIntegration:
         metrics.integrate_prometheus(registry)
 
         chain = MiddlewareChain()
-        chain.add(metrics)
+        await chain.add(metrics)
 
         bus = EventBus(
             base_event_registry,
@@ -436,7 +436,7 @@ class TestPrometheusIntegration:
         metrics.integrate_prometheus(registry)
 
         chain = MiddlewareChain()
-        chain.add(metrics)
+        await chain.add(metrics)
 
         bus = EventBus(
             base_event_registry,
@@ -515,7 +515,7 @@ class TestOpenTelemetryIntegration:
         metrics._otel_integrated = True
 
         chain = MiddlewareChain()
-        chain.add(metrics)
+        await chain.add(metrics)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -557,7 +557,7 @@ class TestOpenTelemetryIntegration:
         metrics._otel_integrated = True
 
         chain = MiddlewareChain()
-        chain.add(metrics)
+        await chain.add(metrics)
 
         bus = EventBus(
             base_event_registry,

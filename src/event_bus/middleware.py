@@ -26,6 +26,12 @@ OnPublishNext = Callable[
 ]
 """on_publish 链中 next 回调的签名"""
 
+OnPublishErrorNext = Callable[
+    [Exception, str, str, Dict[str, Any] | BaseModel | None],
+    Any,
+]
+"""on_publish_error 链中 next 回调的签名"""
+
 
 class Middleware(ABC):
     """事件总线中间件基类。"""
@@ -35,7 +41,15 @@ class Middleware(ABC):
         pass
 
     async def on_teardown(self, bus: EventBus) -> None:
-        """总线停止前回调。"""
+        """总线停止前或运行时被移除时回调。
+
+        .. warning::
+
+           运行时 ``remove()`` 不会等待正在执行的钩子完成。
+           ``on_teardown`` 被调用后，已进入 ``before_publish`` / ``on_publish``
+           的中间件实例仍可能继续执行 —— 中间件作者应确保自身状态清理
+           不影响这些残留调用。
+        """
         pass
 
     @abstractmethod
@@ -83,38 +97,69 @@ class MiddlewareChain:
     """中间件链管理器。"""
 
     def __init__(self) -> None:
+        self._bus: EventBus | None = None
         self._middlewares: list[Middleware] = []
         self._cached_before: BeforePublishNext | None = None
         self._cached_on: OnPublishNext | None = None
+        self._cached_on_error: OnPublishErrorNext | None = None
 
     def _invalidate(self) -> None:
         """清空缓存（中间件列表变更时调用）。"""
         self._cached_before = None
         self._cached_on = None
+        self._cached_on_error = None
 
-    def add(self, middleware: Middleware) -> 'MiddlewareChain':
+    async def add(self, middleware: Middleware) -> 'MiddlewareChain':
         """在链**末尾**追加一个中间件。"""
         if middleware in self._middlewares:
             raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
+        if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_setup 方法
+            try:
+                await middleware.on_setup(self._bus)
+            except Exception:
+                raise RuntimeError(f'Middleware {middleware.__class__.__name__} on_setup failed')
         self._middlewares.append(middleware)
         self._invalidate()
         return self
 
-    def insert(self, index: int, middleware: Middleware) -> 'MiddlewareChain':
+    async def insert(self, index: int, middleware: Middleware) -> 'MiddlewareChain':
         """在指定位置插入中间件。"""
         if middleware in self._middlewares:
             raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
+        if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_setup 方法
+            try:
+                await middleware.on_setup(self._bus)
+            except Exception:
+                raise RuntimeError(f'Middleware {middleware.__class__.__name__} on_setup failed')
         self._middlewares.insert(index, middleware)
         self._invalidate()
         return self
 
-    def remove(self, middleware: Middleware) -> None:
-        """移除指定中间件实例。"""
+    async def remove(self, middleware: Middleware) -> None:
+        """移除指定中间件实例。
+
+        调用 ``on_teardown`` 后立即从链中移除。已在飞行的链引用不会
+        被撤销 —— 中间件作者应自行处理 ``on_teardown`` 后仍被调用的
+        情况（参见 :meth:`Middleware.on_teardown`）。
+        """
+        if middleware not in self._middlewares:
+            raise ValueError(f'Middleware {middleware.__class__.__name__} is not in the chain')
+        if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_teardown 方法
+            try:
+                await middleware.on_teardown(self._bus)
+            except Exception:
+                logger.exception('Middleware %s on_teardown failed', middleware.__class__.__name__)
         self._middlewares.remove(middleware)
         self._invalidate()
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """清空所有中间件。"""
+        for middleware in list(self._middlewares):
+            if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_teardown 方法
+                try:
+                    await middleware.on_teardown(self._bus)
+                except Exception:
+                    logger.exception('Middleware %s on_teardown failed', middleware.__class__.__name__)
         self._middlewares.clear()
         self._invalidate()
 
@@ -125,20 +170,26 @@ class MiddlewareChain:
 
     async def setup(self, bus: EventBus) -> List[Middleware]:
         """按注册顺序通知所有中间件执行初始化。"""
+        if self._bus is not None:
+            raise RuntimeError('MiddlewareChain has already been setup')
+        self._bus = bus
         error_middlewares: List[Middleware] = []
-        for mw in self._middlewares:
+        for mw in list(self._middlewares):
             try:
                 await mw.on_setup(bus)
             except Exception:
                 error_middlewares.append(mw)
                 logger.exception('Middleware %s on_setup failed', mw.__class__.__name__)
         for error_mw in error_middlewares:
-            self.remove(error_mw)
+            await self.remove(error_mw)
         return error_middlewares
 
     async def teardown(self, bus: EventBus) -> None:
-        """按注册**逆序**通知所有中间件执行清理。"""
-        for mw in reversed(self._middlewares):
+        """按注册**逆序**通知所有中间件执行清理，重复调用安全（幂等）。"""
+        if self._bus is None:
+            return
+        self._bus = None
+        for mw in reversed(list(self._middlewares)):
             try:
                 await mw.on_teardown(bus)
             except Exception:
@@ -168,22 +219,17 @@ class MiddlewareChain:
             self._cached_on = handler
         return self._cached_on
 
-    async def on_publish_error(
+    def build_on_publish_error(
         self,
-        error: Exception,
-        name: str,
-        source: str,
-        data: dict[str, Any] | BaseModel | None,
-    ) -> None:
-        """按注册顺序通知所有中间件发布异常。"""
-        for mw in self._middlewares:
-            try:
-                await mw.on_publish_error(error, name, source, data)
-            except Exception:
-                logger.exception(
-                    'Middleware %s on_publish_error failed',
-                    mw.__class__.__name__,
-                )
+        final_handler: OnPublishErrorNext,
+    ) -> OnPublishErrorNext:
+        """构建 ``on_publish_error`` 责任链（带缓存，中间件变更后自动重建）。"""
+        if self._cached_on_error is None:
+            handler = final_handler
+            for mw in reversed(self._middlewares):
+                handler = self._wrap_on_error(mw, handler)
+            self._cached_on_error = handler
+        return self._cached_on_error
 
     @staticmethod
     def _wrap_before(
@@ -224,5 +270,34 @@ class MiddlewareChain:
                 event,
                 next_handler,
             )
+
+        return wrapped
+
+    @staticmethod
+    def _wrap_on_error(
+        middleware: Middleware,
+        next_handler: OnPublishErrorNext,
+    ) -> OnPublishErrorNext:
+        """将一个中间件的 on_publish_error 包裹在 next_handler 之外。"""
+
+        async def wrapped(
+            error: Exception,
+            name: str,
+            source: str,
+            data: dict[str, Any] | BaseModel | None,
+        ) -> None:
+            try:
+                await middleware.on_publish_error(
+                    error,
+                    name,
+                    source,
+                    data,
+                )
+            except Exception:
+                logger.exception(
+                    'Middleware %s on_publish_error failed',
+                    middleware.__class__.__name__,
+                )
+            await next_handler(error, name, source, data)
 
         return wrapped

@@ -50,7 +50,7 @@ class TestEventTransformMiddleware:
         transform = make_rename_transform({"mw.ping": "rename.target"})
         mw = EventTransformMiddleware(transform)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         # 监听重命名后的目标事件
         received: List[str] = []
@@ -98,7 +98,7 @@ class TestEventTransformMiddleware:
         transform = make_field_inject_transform(trace_id="abc-123", env="test")
         mw = EventTransformMiddleware(transform)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -130,7 +130,7 @@ class TestEventTransformMiddleware:
         transform = make_field_redact_transform("key")
         mw = EventTransformMiddleware(transform)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -179,7 +179,7 @@ class TestEventTransformMiddleware:
 
         mw = EventTransformMiddleware(add_prefix)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         # 修改订阅以匹配转换后的事件名

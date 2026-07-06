@@ -36,7 +36,7 @@ class TestRateLimitMiddleware:
         """在限制内的事件正常通过"""
         mw = RateLimitMiddleware(max_requests=10, window_seconds=1.0)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -66,7 +66,7 @@ class TestRateLimitMiddleware:
         """超出限制时事件被丢弃"""
         mw = RateLimitMiddleware(max_requests=3, window_seconds=10.0)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -100,7 +100,7 @@ class TestRateLimitMiddleware:
             max_requests=2, window_seconds=10.0, per_event=True
         )
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -137,7 +137,7 @@ class TestRateLimitMiddleware:
         """窗口滑动后旧时间戳被清理，新事件可继续通过"""
         mw = RateLimitMiddleware(max_requests=3, window_seconds=0.1)
         chain = MiddlewareChain()
-        chain.add(mw)
+        await chain.add(mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)
@@ -185,7 +185,8 @@ class TestRateLimitBeforeTransform:
         trans_mw = EventTransformMiddleware(transform)
 
         chain = MiddlewareChain()
-        chain.add(rate_mw).add(trans_mw)
+        await chain.add(rate_mw)
+        await chain.add(trans_mw)
 
         handler = SimplePingHandler()
         handler_registry.register(handler)

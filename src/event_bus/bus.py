@@ -137,7 +137,7 @@ class EventBus:
         try:
             await self._mw_chain.build_before_publish(self._core_publish)(self._events, name, source, data, old_event)
         except Exception as e:
-            await self._mw_chain.on_publish_error(e, name, source, data)
+            await self._mw_chain.build_on_publish_error(self._noop_on_publish_error)(e, name, source, data)
             raise
 
     async def _core_publish(
@@ -191,6 +191,15 @@ class EventBus:
 
         # 发布成功后，运行 on_publish 中间件链
         await self._mw_chain.build_on_publish(EventBus._noop_on_publish)(event)
+
+    @staticmethod
+    async def _noop_on_publish_error(
+        error: Exception,
+        name: str,
+        source: str,
+        data: Optional[Union[Dict[str, Any], BaseModel]],
+    ) -> None:
+        """on_publish_error 链的末端处理器（空操作）"""
 
     @staticmethod
     async def _noop_on_publish(

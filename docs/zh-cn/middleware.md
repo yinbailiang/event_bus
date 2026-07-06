@@ -79,9 +79,11 @@ class Middleware(ABC):
 
 #### `on_setup(bus)` / `on_teardown(bus)`
 
-总线生命周期钩子。`on_setup` 在总线 `start()` 完成后调用，`on_teardown` 在 `stop()` 结束时**逆序**调用。适用于初始化连接池、注册后台任务等场景。
+总线生命周期钩子。`on_setup` 在总线 `start()` 完成后调用，也会在**运行时通过 `add()` / `insert()` 热添加中间件时立即调用**。`on_teardown` 在 `stop()` 结束时**逆序**调用，也会在运行时 `remove()` / `clear()` 时立即调用。适用于初始化连接池、注册后台任务等场景。
 
-> **注意**：`on_setup` 中抛出异常的中间件会被自动从链中移除，防止影响总线正常运行。
+> **注意**：`on_setup` 中抛出异常的中间件会被自动从链中移除（启动时）或拒绝加入（运行时热添加），防止影响总线正常运行。
+>
+> **警告**：运行时 `remove()` 不等待已在飞行的钩子完成。`on_teardown` 被调用后，已进入 `before_publish` / `on_publish` 的中间件实例仍可能继续执行。中间件作者应确保自身状态清理不影响这些残留调用。
 
 #### `before_publish(event_registry, name, source, data, old_event, next)`
 
@@ -125,14 +127,17 @@ class Middleware(ABC):
 ```python
 class MiddlewareChain:
     def __init__(self) -> None
-    def add(self, middleware: Middleware) -> "MiddlewareChain"
-    def insert(self, index: int, middleware: Middleware) -> "MiddlewareChain"
-    def remove(self, middleware: Middleware) -> None
-    def clear(self) -> None
+
+    # 增删（async —— 总线启动后立即触发生命周期）
+    async def add(self, middleware: Middleware) -> "MiddlewareChain"
+    async def insert(self, index: int, middleware: Middleware) -> "MiddlewareChain"
+    async def remove(self, middleware: Middleware) -> None
+    async def clear(self) -> None
 
     @property
     def middlewares(self) -> list[Middleware]
 
+    # 责任链构建
     def build_before_publish(
         self,
         final_handler: BeforePublishNext,
@@ -141,27 +146,28 @@ class MiddlewareChain:
         self,
         final_handler: OnPublishNext,
     ) -> OnPublishNext
+    def build_on_publish_error(
+        self,
+        final_handler: OnPublishErrorNext,
+    ) -> OnPublishErrorNext
 
+    # 生命周期
     async def setup(self, bus: EventBus) -> List[Middleware]
     async def teardown(self, bus: EventBus) -> None
-    async def on_publish_error(
-        self, error: Exception, name: str, source: str,
-        data: dict[str, Any] | BaseModel | None
-    ) -> None
 ```
 
 | 方法 / 属性 | 说明 |
 | - | - |
-| `add(middleware)` | 在链**末尾**追加中间件。返回自身，支持链式调用。重复添加同一实例抛出 `ValueError`。 |
-| `insert(index, middleware)` | 在指定位置插入中间件。重复添加同一实例抛出 `ValueError`。 |
-| `remove(middleware)` | 移除指定中间件实例。 |
-| `clear()` | 清空所有中间件。 |
+| `add(middleware)` | **async**。在链**末尾**追加中间件。总线启动后立即调用 `on_setup`。返回自身，支持 `await` 后再调用。重复添加同一实例抛出 `ValueError`。 |
+| `insert(index, middleware)` | **async**。在指定位置插入中间件。总线启动后立即调用 `on_setup`。重复添加同一实例抛出 `ValueError`。 |
+| `remove(middleware)` | **async**。移除指定中间件实例。总线启动后立即调用 `on_teardown`。不存在的实例抛出 `ValueError`。 |
+| `clear()` | **async**。清空所有中间件。总线启动后立即逐一调用 `on_teardown`。 |
 | `middlewares` | （属性）返回当前中间件列表的副本。 |
 | `build_before_publish(final_handler)` | 构建 ``before_publish`` 责任链。传入核心发布逻辑作为末端处理器，返回包装后的可调用链。 |
 | `build_on_publish(final_handler)` | 构建 ``on_publish`` 责任链。传入空操作作为末端处理器，返回包装后的可调用链。 |
+| `build_on_publish_error(final_handler)` | 构建 ``on_publish_error`` 责任链。传入空操作作为末端处理器，返回包装后的可调用链。 |
 | `setup(bus)` | 按注册顺序调用所有中间件的 `on_setup`。返回初始化失败的中间件列表（这些中间件已被自动移除）。 |
-| `teardown(bus)` | 按注册**逆序**调用所有中间件的 `on_teardown`。单个异常不影响其他。 |
-| `on_publish_error(...)` | 按注册顺序通知所有中间件发布异常。 |
+| `teardown(bus)` | 按注册**逆序**调用所有中间件的 `on_teardown`。单个异常不影响其他。**幂等**——重复调用安全。 |
 
 ---
 
@@ -203,7 +209,7 @@ class LoggingMiddleware(Middleware):
 
 # 注册到总线
 chain = MiddlewareChain()
-chain.add(LoggingMiddleware())
+await chain.add(LoggingMiddleware())
 
 bus = EventBus(reg, h_reg, middleware_chain=chain)
 ```
@@ -260,9 +266,9 @@ class RateLimitMiddleware(Middleware):
 
 ```python
 chain = MiddlewareChain()
-chain.add(LoggingMiddleware())       # 最外层
-chain.add(ValidationMiddleware())    # 中层
-chain.add(RateLimitMiddleware())     # 最内层
+await chain.add(LoggingMiddleware())       # 最外层
+await chain.add(ValidationMiddleware())    # 中层
+await chain.add(RateLimitMiddleware())     # 最内层
 
 # 执行顺序（on_publish 链嵌套在 before_publish 链内部）：
 #   Logging.before 进入 → Validation.before 进入 → RateLimit.before 进入
@@ -273,26 +279,27 @@ chain.add(RateLimitMiddleware())     # 最内层
 #   ← RateLimit.before 退出 ← Validation.before 退出 ← Logging.before 退出
 ```
 
-### 运行时动态管理
+### 运行时热重载
 
-中间件链支持运行时动态增删，且变更即时生效。可通过总线代理在处理器内部访问：
+中间件链支持运行时动态增删，变更即时生效。可通过总线代理在处理器或中间件内部操作：
 
 ```python
-class DynamicMiddleware(Middleware):
-    async def on_setup(self, bus):
-        self._proxy = bus.proxy(self.__class__.__name__)
+class HotReloadHandler(EventHandler):
+    def __init__(self):
+        super().__init__(subscriptions=["admin.toggle"])
 
-    async def on_teardown(self, bus): pass
+    async def handle(self, payload, bus_proxy, raw_event):
+        chain = bus_proxy.middleware
 
-    async def before_publish(self, event_registry, name, source, data, old_event, next):
-        # 根据条件动态注入中间件
-        if name == "sensitive.event":
-            self._proxy.middleware.add(AuditMiddleware())
-        await next(event_registry, name, source, data, old_event)
+        # 热添加 —— on_setup 立即被调用
+        await chain.add(AuditMiddleware())
 
-    async def on_publish(self, event, next):
-        await next(event)
+        # 热移除 —— on_teardown 立即被调用
+        # 注意：已在飞的链仍可能调用该中间件，见 Middleware.on_teardown 文档
+        await chain.remove(some_mw)
+
+        # 热清空
+        await chain.clear()
 ```
 
-> **注意**：处理器通过 `bus_proxy.middleware` 获取的 `MiddlewareChain` 实例与总线共享同一实例，
-> 增删操作直接影响后续所有发布流程。链在每次分发时按需构建，变更即时生效。
+> **注意**：增删操作直接返回，不等待已飞行的钩子完成。被移除的中间件的 `on_teardown` 调用后，已在执行的 `before_publish` / `on_publish` 仍可能继续运行。中间件作者应在 `on_teardown` 中做幂等清理。

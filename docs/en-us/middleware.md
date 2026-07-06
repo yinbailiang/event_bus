@@ -84,9 +84,18 @@ class Middleware(ABC):
 
 ### Lifecycle Hooks
 
-`on_setup` is called after `bus.start()` completes. `on_teardown` is called in
-**reverse registration order** when `stop()` finishes. Middlewares that raise
-exceptions in `on_setup` are automatically removed from the chain.
+`on_setup` is called after `bus.start()` completes, and **immediately when hot-adding
+via `add()` / `insert()` on a running bus**. `on_teardown` is called in **reverse
+registration order** when `stop()` finishes, and immediately when `remove()` /
+`clear()` is called on a running bus.
+
+Middlewares that raise exceptions in `on_setup` are automatically removed from
+the chain (at startup) or rejected (at hot-add).
+
+> **Warning**: Runtime `remove()` does not wait for in-flight hooks to complete.
+> After `on_teardown` is called, a middleware instance that has already entered
+> `before_publish` / `on_publish` may still execute. Middleware authors should
+> ensure their own state cleanup is safe against these residual calls.
 
 ### `before_publish`
 
@@ -120,32 +129,80 @@ in registration order. One middleware's error doesn't block others from being no
 
 ## MiddlewareChain
 
-Manages an ordered list of middlewares with lazy chain building.
+Manages an ordered list of middlewares with lazy chain building and hot-reload support.
 
 ```python
 class MiddlewareChain:
-    def add(self, middleware: Middleware) -> 'MiddlewareChain'
-    def insert(self, index: int, middleware: Middleware) -> 'MiddlewareChain'
-    def remove(self, middleware: Middleware) -> None
-    def clear(self) -> None
+    def __init__(self) -> None
 
-    async def setup(self, bus: EventBus) -> List[Middleware]
-    async def teardown(self, bus: EventBus) -> None
+    # CRUD (async — triggers lifecycle immediately when bus is running)
+    async def add(self, middleware: Middleware) -> 'MiddlewareChain'
+    async def insert(self, index: int, middleware: Middleware) -> 'MiddlewareChain'
+    async def remove(self, middleware: Middleware) -> None
+    async def clear(self) -> None
 
     @property
     def middlewares(self) -> list[Middleware]
+
+    # Chain builders
+    def build_before_publish(
+        self, final_handler: BeforePublishNext
+    ) -> BeforePublishNext
+    def build_on_publish(
+        self, final_handler: OnPublishNext
+    ) -> OnPublishNext
+    def build_on_publish_error(
+        self, final_handler: OnPublishErrorNext
+    ) -> OnPublishErrorNext
+
+    # Lifecycle
+    async def setup(self, bus: EventBus) -> List[Middleware]
+    async def teardown(self, bus: EventBus) -> None
 ```
+
+| Method | Description |
+| - | - |
+| `add(mw)` | **async**. Append to the chain. Calls `on_setup` immediately if bus is running. Returns self. |
+| `insert(i, mw)` | **async**. Insert at position. Calls `on_setup` immediately if bus is running. |
+| `remove(mw)` | **async**. Remove from chain. Calls `on_teardown` immediately if bus is running. Raises `ValueError` if not found. |
+| `clear()` | **async**. Remove all middlewares. Calls `on_teardown` on each if bus is running. |
+| `middlewares` | Returns a copy of the current middleware list. |
+| `build_before_publish(f)` | Build the `before_publish` chain with `f` as the innermost handler. |
+| `build_on_publish(f)` | Build the `on_publish` chain with `f` as the innermost handler. |
+| `build_on_publish_error(f)` | Build the `on_publish_error` chain with `f` as the innermost handler. |
+| `setup(bus)` | Call `on_setup` on all middlewares in registration order. Returns failed ones (auto-removed). |
+| `teardown(bus)` | Call `on_teardown` on all middlewares in **reverse** order. **Idempotent** — safe to call repeatedly. |
+
+### Hot Reload
+
+Middlewares can be added or removed at runtime via `bus.proxy().middleware`.
+Changes take effect on the **next** publish — the chain cache is invalidated
+automatically.
+
+```python
+# Inside a handler or middleware
+chain = bus_proxy.middleware
+
+# Hot-add — on_setup is called immediately
+await chain.add(AuditMiddleware())
+
+# Hot-remove — on_teardown is called immediately
+# Note: in-flight chains may still invoke the middleware after this
+await chain.remove(some_mw)
+
+# Clear all
+await chain.clear()
+```
+
+> **Warning**: `remove()` returns immediately without waiting for in-flight hooks.
+> Middleware authors should make `on_teardown` idempotent — see
+> `Middleware.on_teardown` docs.
 
 ### Building the Chain
 
-On each publish, `build_before_publish()` and `build_on_publish()` lazily construct
-the chain. Results are cached and auto-invalidated when the middleware list changes.
-
-```python
-# Runtime add/remove — next publish picks up changes immediately
-bus.proxy("admin").middleware.add(RateLimitMiddleware(max_requests=10))
-bus.proxy("admin").middleware.remove(some_mw)
-```
+On each publish, `build_before_publish()`, `build_on_publish()`, and
+`build_on_publish_error()` lazily construct the chain. Results are cached
+and auto-invalidated when the middleware list changes.
 
 ---
 
@@ -205,6 +262,6 @@ class TimingMiddleware(Middleware):
 
 # Usage
 chain = MiddlewareChain()
-chain.add(TimingMiddleware())
+await chain.add(TimingMiddleware())
 bus = EventBus(events, handlers, middleware_chain=chain)
 ```
