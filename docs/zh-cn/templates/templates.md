@@ -13,6 +13,7 @@
 | `request` | 请求-响应 (RPC) | 同步风格的异步调用、服务间通信 | [request.md](request.md) |
 | `pipe` | 双向管道 | 流式数据交换、长连接模拟、持久化双向流 | [pipe.md](pipe.md) |
 | `register` | 批量注册 + 依赖注入 | 大型项目模块化组织、延迟注册、避免循环导入 | [register.md](register.md) |
+| `mailbox` | 邮箱模式处理器 | 串行消费、背压控制、自定义任务循环 | [handlers/mailbox.md](handlers/mailbox.md) |
 | [middlewares/](middlewares/middlewares.md) | 中间件集合 | 日志、限流、转换、屏蔽、递归防护 | [中间件总览](middlewares/middlewares.md) |
 
 ---
@@ -73,6 +74,8 @@ from event_bus.templates import (
     'ModuleEventRegister', 'ModuleHandlerRegister',
     # request
     'request', 'RequestProtocol', 'ResponseProtocol',
+    # mailbox
+    'MailboxHandler', 'MailboxConfig',
     # middlewares（详见中间件总览）
     'EventBlockMiddleware', 'EventForwardMiddleware', 'EventTransformMiddleware',
     'JSONLLoggingMiddleware', 'SQLiteLoggingMiddleware',

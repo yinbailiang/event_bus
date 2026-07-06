@@ -20,6 +20,7 @@ Advanced patterns built on top of the core event bus. These are optional — imp
 | `request` | Request-Response (RPC) | Sync-style async calls, inter-service communication | [request.md](request.md) |
 | `pipe` | Bidirectional Pipe | Streaming data exchange, long-connection simulation, persistent bidirectional flow | [pipe.md](pipe.md) |
 | `register` | Bulk Registration + DI | Large project modular organization, deferred registration, avoid circular imports | [register.md](register.md) |
+| `mailbox` | Mailbox Pattern Handler | Serial consumption, backpressure, custom task loop | [handlers/mailbox.md](handlers/mailbox.md) |
 | [middlewares/](middlewares/middlewares.md) | Middleware Collection | Logging, rate-limiting, transform, blocking, recursion guard | [Middlewares Overview](middlewares/middlewares.md) |
 
 ---
@@ -82,8 +83,8 @@ from event_bus.templates import (
     # register
     'ModuleEventRegister', 'ModuleHandlerRegister',
     # request
-    'request', 'RequestProtocol', 'ResponseProtocol',
-    # middlewares (see middlewares overview)
+    'request', 'RequestProtocol', 'ResponseProtocol',    # mailbox
+    'MailboxHandler', 'MailboxConfig',    # middlewares (see middlewares overview)
     'EventBlockMiddleware', 'EventForwardMiddleware', 'EventTransformMiddleware',
     'JSONLLoggingMiddleware', 'SQLiteLoggingMiddleware',
     'MetricsMiddleware', 'MetricsSnapshot',
