@@ -5,13 +5,12 @@
 """
 
 import asyncio
-from typing import Any, AsyncGenerator, Optional
+from typing import AsyncGenerator
 
 import pytest
 from pydantic import BaseModel, Field
 
 from event_bus import (
-    Event,
     EventBus,
     EventDeclaration,
     EventHandler,

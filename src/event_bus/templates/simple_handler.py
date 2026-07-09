@@ -12,16 +12,21 @@ PayloadHandlerFunc = Callable[[Any], Union[Awaitable[None], None]]
 HandlerFunc = Union[NoPayloadHandlerFunc, PayloadHandlerFunc]
 
 
+class GenericEventHandler(EventHandler):
+    def __init__(self) -> None:
+        raise NotImplementedError('请使用 @handler 装饰器生成处理器子类。')
+
+
 def handler(
     event_decl: Type[EventDeclaration],
     *,
     handle_timeout: Optional[float] = 32.0,
-) -> Callable[[HandlerFunc], Type[EventHandler]]:
+) -> Callable[[HandlerFunc], Type[GenericEventHandler]]:
     """将异步函数转换为 :class:`EventHandler` 子类的装饰器。"""
 
     event_name: str = event_decl.name
 
-    def decorator(func: HandlerFunc) -> Type[EventHandler]:
+    def decorator(func: HandlerFunc) -> Type[GenericEventHandler]:
         """校验函数签名并生成对应的 :class:`EventHandler` 子类。"""
         sig = signature(func)
         params = list(sig.parameters.values())
@@ -51,11 +56,11 @@ def handler(
 
         _func_has_params = bool(params)
 
-        class _Handler(EventHandler):
+        class _Handler(GenericEventHandler):
             """由 :func:`handler` 装饰器生成的处理器子类。"""
 
-            def __init__(self, _handle_timeout: Optional[float] = handle_timeout) -> None:
-                super().__init__(subscriptions=[event_name], handle_timeout=_handle_timeout)
+            def __init__(self) -> None:
+                EventHandler.__init__(self, subscriptions=[event_decl.name], handle_timeout=handle_timeout)
 
             async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
                 if _func_has_params:

@@ -50,7 +50,7 @@
 5. **打 Tag 并推送** — Tag 必须以 `v` 开头，否则不会触发 publish workflow：
 
    ```bash
-   git tag -a v<新版本号> -m "Release v<新版本号>"
+   git tag -a v<新版本号>
    git push origin v<新版本号>
    ```
 

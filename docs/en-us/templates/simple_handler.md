@@ -28,7 +28,7 @@ def handler(
     event_decl: Type[EventDeclaration],
     *,
     handle_timeout: Optional[float] = 32.0,
-) -> Callable[[HandlerFunc], Type[EventHandler]]
+) -> Callable[[HandlerFunc], Type[GenericEventHandler]]
 ```
 
 | Parameter | Type | Description |
@@ -172,7 +172,7 @@ The generated `EventHandler` subclass:
 
 | Member | Description |
 | - | - |
-| `__init__(_handle_timeout=32.0)` | Constructor; `_handle_timeout` overrides the decorator parameter. |
+| `__init__()` | Constructor; timeout is determined by the decorator parameter `handle_timeout`. |
 | `handle(payload, bus_proxy, raw_event)` | Event handling entry point; unpacks payload and calls the original function. |
 | `subscriptions` | Inherited from `EventHandler`; contains `event_decl.name`. |
 | `handle_timeout` | Inherited from `EventHandler`; matches the decorator parameter. |

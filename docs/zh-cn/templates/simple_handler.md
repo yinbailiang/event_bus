@@ -24,7 +24,7 @@ def handler(
     event_decl: Type[EventDeclaration],
     *,
     handle_timeout: Optional[float] = 32.0,
-) -> Callable[[HandlerFunc], Type[EventHandler]]
+) -> Callable[[HandlerFunc], Type[GenericEventHandler]]
 ```
 
 | 参数 | 类型 | 说明 |
@@ -163,7 +163,7 @@ class SendWelcomeEmail:
 
 | 方法/属性 | 说明 |
 | - | - |
-| `__init__(_handle_timeout=32.0)` | 构造器，`_handle_timeout` 覆盖装饰器参数。 |
+| `__init__()` | 构造器，超时由装饰器参数 `handle_timeout` 决定。 |
 | `handle(payload, bus_proxy, raw_event)` | 事件处理入口，自动解包并调用原函数。 |
 | `subscriptions` | 继承自 `EventHandler`，包含 `event_decl.name`。 |
 | `handle_timeout` | 继承自 `EventHandler`，与装饰器参数一致。 |
