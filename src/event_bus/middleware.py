@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Dict, List
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List
 
 from pydantic import BaseModel
 
@@ -16,19 +16,19 @@ logger = logging.getLogger(__name__)
 
 BeforePublishNext = Callable[
     [EventRegistry, str, str, Dict[str, Any] | BaseModel | None, Event | None],
-    Any,
+    Awaitable[None],
 ]
 """before_publish 链中 next 回调的签名"""
 
 OnPublishNext = Callable[
     [Event],
-    Any,
+    Awaitable[None],
 ]
 """on_publish 链中 next 回调的签名"""
 
 OnPublishErrorNext = Callable[
     [Exception, str, str, Dict[str, Any] | BaseModel | None],
-    Any,
+    Awaitable[None],
 ]
 """on_publish_error 链中 next 回调的签名"""
 
@@ -113,12 +113,13 @@ class MiddlewareChain:
         """在链**末尾**追加一个中间件。"""
         if middleware in self._middlewares:
             raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
+        self._middlewares.append(middleware)
         if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_setup 方法
             try:
                 await middleware.on_setup(self._bus)
             except Exception:
+                self._middlewares.remove(middleware)
                 raise RuntimeError(f'Middleware {middleware.__class__.__name__} on_setup failed')
-        self._middlewares.append(middleware)
         self._invalidate()
         return self
 
@@ -126,12 +127,13 @@ class MiddlewareChain:
         """在指定位置插入中间件。"""
         if middleware in self._middlewares:
             raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
+        self._middlewares.insert(index, middleware)
         if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_setup 方法
             try:
                 await middleware.on_setup(self._bus)
             except Exception:
+                self._middlewares.remove(middleware)
                 raise RuntimeError(f'Middleware {middleware.__class__.__name__} on_setup failed')
-        self._middlewares.insert(index, middleware)
         self._invalidate()
         return self
 

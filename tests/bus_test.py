@@ -362,7 +362,7 @@ async def test_system_events_auto_registered():
     """未预注册 TaskErrorEvent 时，总线自动补注册"""
     reg = EventRegistry()
     hreg = EventHandlerRegistry()
-    bus = EventBus(reg, hreg)
+    _ = EventBus(reg, hreg)
     assert reg.get(TaskErrorEvent.name) is not None
     assert reg.get(ShutdownEvent.name) is not None
 

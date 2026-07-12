@@ -309,7 +309,7 @@ class EventBus:
                     logger.warning(f'Skipping task_error publish during shutdown: {err}')
                 except Exception:
                     logger.exception('Failed to publish task_error event')
-            raise e
+            raise
 
     async def _dispatch_loop(self) -> None:
         """事件分发主循环"""

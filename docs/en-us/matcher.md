@@ -38,36 +38,71 @@ class Matcher:
     def dispatch_table(self) -> Dict[str, List[tuple[str, EventHandler]]]
 ```
 
-| Method/Property | Description |
-| - | - |
-| `match(event_type)` | Returns `[(handler_id, handler), ...]` for matched handlers. O(1) table lookup. |
-| `dispatch_table` | Read-only snapshot of the full dispatch table. Auto-refreshes on version change. |
+### Constructor Parameters
 
----
+| Parameter | Type | Description |
+| - | - | - |
+| `event_registry` | `EventRegistry` | Provides all known event type names. |
+| `handler_registry` | `EventHandlerRegistry` | Provides all registered handlers and their subscriptions. |
 
-## How It Works
+The dispatch table is pre-computed at construction time by iterating over all known event types.
 
 ### Pre-computed Dispatch Table
 
-On construction (and whenever registries change), single-pass rebuild:
+The dispatch table is a `{event_name: [handler_id, ...]}` mapping:
 
-1. **Separate subscriptions**:
-   - Exact `str` → build reverse index `{event_name: [handler_id, ...]}`
-   - `Regex` → scan list (checked against each event name)
-2. **Merge per event**: for each known event name, combine reverse-index hits + regex scan results
-3. **Deduplicate** handlers (no duplicate invocations)
+- **Exact `str` subscriptions** → reverse index `{event_type: [hid, ...]}`, O(1) lookup
+- **`Regex` subscriptions** → separate scan list, only `fullmatch` against regex subscriptions
+
+Only handler IDs (strings) are stored in memory. `match()` resolves them to `(hid, handler)` tuples on demand from the registry.
 
 ### Version-Aware Caching
 
-```python
-# Registries change → version increments → next match() auto-rebuilds
-events.register(NewEvent)
-handlers.register(NewHandler())
-# Matcher._is_stale() → True → _rebuild() on next match()
+Both registries expose a `version` property (incremented on every add/remove). `Matcher` automatically compares versions on every `match()` / `dispatch_table` access, rebuilding the dispatch table when a change is detected — no manual notification needed.
+
+```text
+match() call → check version (O(1) int compare) → stale? → _rebuild()
+                                                   ↓ fresh
+                                            lookup table (O(1) dict)
 ```
 
-The dispatch loop simply calls `matcher.match(event.name)` — version checking
-and rebuilding are transparent.
+### `match()`
+
+```python
+def match(self, event_type: str) -> List[tuple[str, EventHandler]]
+```
+
+- Known event → O(1) dispatch table lookup
+- Returns `(handler_id, handler)` tuple list
+- Auto-detects registry version changes
+
+### `dispatch_table`
+
+```python
+@property
+def dispatch_table(self) -> Dict[str, List[tuple[str, EventHandler]]]
+```
+
+Returns a read-only snapshot of the current dispatch table. Auto-refreshes on version change. Primarily used for debugging and observability.
+
+---
+
+## Relationship with EventBus
+
+`EventBus` internally creates a `Matcher` at construction time. The dispatch loop uses `self._matcher.match(event.name)` to find handlers:
+
+```python
+class EventBus:
+    def __init__(self, event_registry, handler_registry, ...):
+        self._matcher = Matcher(event_registry, handler_registry)  # internal, automatic
+
+    async def _dispatch_loop(self):
+        ...
+        for handler_id, handler in self._matcher.match(event.name):
+            ...
+```
+
+Users do not need to interact with `Matcher` directly — just provide the two registries.
 
 ---
 

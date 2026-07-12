@@ -83,8 +83,10 @@ from event_bus.templates import (
     # register
     'ModuleEventRegister', 'ModuleHandlerRegister',
     # request
-    'request', 'RequestProtocol', 'ResponseProtocol',    # mailbox
-    'MailboxHandler', 'MailboxConfig',    # middlewares (see middlewares overview)
+    'request', 'RequestProtocol', 'ResponseProtocol',
+    # mailbox
+    'MailboxHandler', 'MailboxConfig',
+    # middlewares (see middlewares overview)
     'EventBlockMiddleware', 'EventForwardMiddleware', 'EventTransformMiddleware',
     'JSONLLoggingMiddleware', 'SQLiteLoggingMiddleware',
     'MetricsMiddleware', 'MetricsSnapshot',

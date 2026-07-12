@@ -32,7 +32,7 @@
 | Flexible Subscription | **Regex**-based event name matching · wildcard handlers |
 | Middleware Pipeline | Onion model · `before_publish` / `on_publish` dual hooks · 5+ built-in middlewares |
 | Advanced Templates | `handler` simplified API · `expect` one-shot listener · `request` RPC call · `pipe` bidirectional channel · `register` batch registration |
-| Production Ready | Graceful shutdown · backpressure control · timeout protection · error isolation · observability |
+| Production-grade architecture | Graceful shutdown · backpressure control · timeout protection · error isolation · observability |
 | Engineering Discipline | 90%+ test coverage · 85%+ docstring coverage · pre-commit automated gating |
 
 > Unlike similar projects: InfinityBus is **extensible** (middleware onion pipeline), rather than hardcoding all functionality in the core class.

@@ -201,6 +201,18 @@ class Proxy:
 | `events_registry` | 只读访问事件注册表。 |
 | `middleware` | 访问中间件链，支持运行时动态增删。变更即时生效。参见 [中间件文档](middleware.md)。 |
 
+### 使用示例
+
+```python
+# 基础发布
+await bus.proxy("my_service").publish("user.login", {"user_id": "42"})
+
+# 链式发布（事件转发）
+class LoginHandler(EventHandler):
+    async def handle(self, payload, bus_proxy, raw_event):
+        await bus_proxy.publish("user.profile_loaded", profile_data)
+```
+
 ---
 
 ## ShutdownConfig
@@ -231,25 +243,55 @@ class ShutdownConfig(BaseModel):
 | 异常类 | 说明 |
 | - | - |
 | `BusShuttingDown` | 总线正在停止时尝试发布新事件抛出。继承自 `Exception`。调用方应捕获并执行清理逻辑。 |
+| `RuntimeError` | 总线尚未启动时尝试发布事件抛出。 |
+| `ValueError` | 未知事件名，或负载不匹配（声明要求负载但未传入、或声明无负载但传入了数据）。 |
+| `TypeError` | 传入的负载类型与事件声明中定义的 `payload_type` 不匹配。 |
 
 ---
 
 ## 内置事件
 
-| 事件声明 | 事件名 | 负载 | 说明 |
-| - | - | - | - |
-| `ShutdownEvent` | `event_bus.__shutdown__` | 无 | 总线开始停止时发布，通知处理器执行清理。 |
-| `TaskErrorEvent` | `event_bus.__task_error__` | `TaskErrorPayload` | 处理器执行失败时发布，用于错误监控。 |
+### ShutdownEvent
 
-### TaskErrorPayload 字段
+```python
+class ShutdownEvent(EventDeclaration):
+    name = 'event_bus.__shutdown__'
+    # payload_type = None (无负载)
+```
 
-| 字段 | 类型 | 说明 |
-| - | - | - |
-| `error_event` | `Event` | 触发异常的事件实例。 |
-| `handler_id` | `Optional[str]` | 发生异常的处理器内部注册 ID。 |
-| `handler_name` | `str` | 发生异常的处理器类名。 |
-| `error_type` | `str` | 异常类型名（如 `"ValueError"`）。 |
-| `error_message` | `str` | 异常消息。 |
+在 `stop()` 调用时自动发布（队列排空前）。处理器可订阅此事件执行清理工作。
+
+### TaskErrorEvent
+
+```python
+class TaskErrorPayload(BaseModel):
+    error_event: Event
+    handler_id: Optional[str]
+    handler_name: str
+    error_type: str
+    error_message: str
+
+class TaskErrorEvent(EventDeclaration):
+    name = 'event_bus.__task_error__'
+    payload_type = TaskErrorPayload
+```
+
+处理器抛出异常时自动发布。来源始终为 `"EventBusErrorReporter"`。可用于集中式错误监控。
+
+```python
+class ErrorMonitor(EventHandler):
+    def __init__(self):
+        super().__init__(["event_bus.__task_error__"])
+
+    async def handle(self, payload, bus_proxy, raw_event):
+        if isinstance(payload, TaskErrorPayload):
+            logger.error(
+                "处理器 %s 在处理 %s 时失败: %s",
+                payload.handler_name,
+                payload.error_event.name,
+                payload.error_message,
+            )
+```
 
 ---
 

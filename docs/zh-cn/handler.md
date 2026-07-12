@@ -37,6 +37,17 @@ class EventHandler(ABC):
 | `__call__` | 总线内部入口，接收原始 ``EventBus`` 实例，内部调用 ``bus.proxy(handler_name, event)`` 创建代理后传递给 ``handle()``。 |
 | `handle(payload, bus_proxy, raw_event)` | **子类必须实现**。`payload` 为已解包的负载（可能为 `None`）。`bus_proxy` 提供受限的总线访问。`raw_event` 为完整事件对象。 |
 
+### `handle()` 签名
+
+```python
+async def handle(
+    self,
+    payload: Optional[BaseModel],      # 已类型化的负载（事件无负载时为 None）
+    bus_proxy: EventBus.Proxy,          # 用于发布后续事件的代理
+    raw_event: Event                    # 完整事件元数据（id、sources、timestamps）
+) -> None:
+```
+
 ### 使用示例
 
 ```python
@@ -56,8 +67,11 @@ class LoginHandler(EventHandler):
 
 `subscriptions` 支持两种匹配方式：
 
-- **`str`** — 全字匹配（`event_type == subscription`），精确匹配事件名；
-- **`Regex`** — 正则全匹配（`Regex.fullmatch(event_type)`），灵活匹配事件名模式。
+| 类型 | 示例 | 匹配规则 |
+| - | - | - |
+| 精确 `str` | `"order.created"` | 仅精确匹配 |
+| `Regex` | `Regex(r"order\..*")` | 匹配 `order.created`、`order.paid` 等 |
+| `Regex` | `Regex(r"(?!system\.).*")` | 匹配除 `system.*` 外的所有事件 |
 
 ```python
 from event_bus import EventHandler, Regex

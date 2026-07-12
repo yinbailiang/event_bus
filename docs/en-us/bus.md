@@ -68,20 +68,97 @@ and creates an internal [Matcher](matcher.md) for event-to-handler routing.
 
 | Property | Type | Description |
 | - | - | - |
-| `is_running` | `bool` | Whether the bus is running. Remains `True` during shutdown drain/wait. |
-| `is_publishing_enabled` | `bool` | Whether new events are accepted. Cleared immediately after `stop()` begins. |
+| `is_running` | `bool` | Whether the bus is running. See [is_running](#is_running). |
+| `is_publishing_enabled` | `bool` | Whether new events are accepted. See [is_publishing_enabled](#is_publishing_enabled). |
 | `active_task_count` | `int` | Number of currently active handler tasks. |
 | `queue_size` | `int` | Number of events currently queued for dispatch. |
 
-#### State Separation During Shutdown
+#### `is_running`
 
-| Phase | `is_running` | `is_publishing_enabled` |
+Indicates the event bus's running state. Its value changes over the lifecycle as follows:
+
+| Phase | `is_running` | Description |
+| - | - | - |
+| After construction, before `start()` | `False` | Bus created but not yet started. |
+| During `start()` | `False` | Dispatch loop being created, not yet marked as running. |
+| After `start()` completes | **`True`** | Dispatch loop started, actively dispatching events. |
+| During `stop()` | **`True`** | Draining queue, waiting for active tasks to complete. |
+| After `stop()` completes | `False` | All resources released. |
+
+> **Key point**: `is_running` remains **`True` throughout the entire drain and wait period of `stop()`**,
+> only becoming `False` after all active tasks complete and middleware teardown finishes.
+> This means during shutdown, `is_running=True` but `is_publishing_enabled=False`
+> (see below).
+
+```python
+bus = EventBus(reg, h_reg)
+print(bus.is_running)  # False
+
+await bus.start()
+print(bus.is_running)  # True
+
+# During stop(): draining queue + waiting on tasks, is_running remains True
+await bus.stop()
+print(bus.is_running)  # False
+```
+
+#### `is_publishing_enabled`
+
+Indicates whether new events can be published to the bus. Its value changes as follows:
+
+| Phase | `is_publishing_enabled` | Description |
+| - | - | - |
+| After construction, before `start()` | `False` | Publishing raises `RuntimeError`. |
+| After `start()` completes | **`True`** | Normal publishing allowed. |
+| After `stop()` publishes `__shutdown__` | **`False`** | New events rejected; publishing raises `BusShuttingDown`. |
+| After `stop()` completes | `False` | — |
+
+> **Key point**: `is_publishing_enabled` is cleared **immediately when `stop()` begins**
+> (right after the `__shutdown__` event is published), before queue draining and active
+> task waiting. This ensures no new events enter the queue during shutdown, while
+> already-enqueued events are still dispatched normally.
+
+##### Difference from `is_running`
+
+| Scenario | `is_running` | `is_publishing_enabled` |
 | - | - | - |
 | Normal operation | `True` | `True` |
-| Shutting down (draining) | `True` | **`False`** |
-| Stopped | `False` | `False` |
+| Shutting down (draining queue, waiting tasks) | `True` | **`False`** |
+| Not started / Stopped | `False` | `False` |
 
-#### Shutdown Sequence Diagram
+These two properties have **state separation during shutdown**: `is_running` stays `True`
+to ensure the queue and tasks are fully processed, while `is_publishing_enabled` becomes
+`False` early to block new events from entering.
+
+##### Usage Scenarios
+
+```python
+# Scenario 1: Health check endpoint
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok" if bus.is_running else "degraded",
+        "can_publish": bus.is_publishing_enabled,
+        "queue_depth": bus.queue_size,
+        "active_handlers": bus.active_task_count,
+    }
+
+# Scenario 2: Wait for bus to fully stop during graceful shutdown
+async def graceful_shutdown():
+    signal.alarm("shutdown")
+    await bus.stop()
+    # At this point is_running == False, safe to exit the process
+    assert not bus.is_running
+
+# Scenario 3: Pre-publish check (usually not needed; publish raises appropriate exceptions)
+async def safe_publish(bus, name, data):
+    if not bus.is_publishing_enabled:
+        logger.warning("Bus no longer accepting new events, skipping publish")
+        return
+    await bus.proxy("my_service").publish(name, data)
+```
+
+##### State Transition Sequence Diagram
 
 ```text
 start()                                   stop()
@@ -142,6 +219,40 @@ class LoginHandler(EventHandler):
 
 ---
 
+## ShutdownConfig
+
+Controls graceful shutdown timeout behavior.
+
+```python
+class ShutdownConfig(BaseModel):
+    queue_timeout_min: float = 1.0
+    queue_timeout_max: float = 15.0
+    tasks_timeout: float = 15.0
+    avg_wait_time: float = 0.05
+```
+
+| Field | Type | Default | Description |
+| - | - | - | - |
+| `queue_timeout_min` | `float` | `1.0` | Minimum queue drain wait (seconds). |
+| `queue_timeout_max` | `float` | `15.0` | Maximum queue drain wait (seconds). |
+| `tasks_timeout` | `float` | `15.0` | Active handler task completion wait (seconds). |
+| `avg_wait_time` | `float` | `0.05` | Estimated per-event processing time (seconds), used for dynamic queue drain timeout calculation. |
+
+Actual queue drain timeout = `max(queue_timeout_min, min(queue_timeout_max, queue_size × avg_wait_time))`.
+
+---
+
+## Exceptions
+
+| Exception | When |
+| - | - |
+| `BusShuttingDown` | Publish attempted while bus is stopping. Inherits from `Exception`. Callers should catch and perform cleanup. |
+| `RuntimeError` | Publish attempted before bus has started. |
+| `ValueError` | Unknown event name, or payload mismatch (required vs. provided). |
+| `TypeError` | Payload type doesn't match the event declaration. |
+
+---
+
 ## Built-in Events
 
 ### ShutdownEvent
@@ -190,28 +301,58 @@ class ErrorMonitor(EventHandler):
 
 ---
 
-## ShutdownConfig
+## Usage Examples
+
+### Basic Assembly & Startup
 
 ```python
-class ShutdownConfig(BaseModel):
-    queue_timeout_min: float = 1.0    # Min queue drain wait (seconds)
-    queue_timeout_max: float = 15.0   # Max queue drain wait (seconds)
-    tasks_timeout: float = 15.0       # Active task completion wait (seconds)
-    avg_wait_time: float = 0.05       # Estimated per-event processing time (seconds)
+from event_bus import EventBus, EventRegistry, EventHandlerRegistry
+
+# 1. Declare events
+class MyPayload(BaseModel):
+    message: str
+
+class MyEvent(EventDeclaration):
+    name = "my.event"
+    payload_type = MyPayload
+
+# 2. Register events
+reg = EventRegistry()
+reg.register(MyEvent)
+
+# 3. Implement handler
+class MyHandler(EventHandler):
+    def __init__(self):
+        super().__init__(subscriptions=["my.event"])
+
+    async def handle(self, payload, bus_proxy, raw_event):
+        print(f"Received: {payload.message}")
+
+# 4. Register handler
+h_reg = EventHandlerRegistry()
+h_reg.register(MyHandler())
+
+# 5. Start bus and publish
+async with EventBus(reg, h_reg) as bus:
+    await bus.proxy("cli").publish("my.event", {"message": "Hello"})
+    await asyncio.sleep(0.1)  # Wait for handler output
 ```
 
-Queue drain timeout is dynamically calculated:
+### Chained Publishing
+
+Handlers can publish new events via `bus_proxy.publish` to form processing chains;
+the bus automatically tracks sources:
+
+```python
+class OrderHandler(EventHandler):
+    def __init__(self):
+        super().__init__(subscriptions=["order.created"])
+
+    async def handle(self, payload, bus_proxy, raw_event):
+        # Process order...
+        # Chain-publish a notification event
+        await bus_proxy.publish("notification.send", {
+            "type": "order_confirmed",
+            "order_id": payload.order_id
+        })
 ```
-timeout = max(queue_timeout_min, min(queue_timeout_max, queue_size × avg_wait_time))
-```
-
----
-
-## Exceptions
-
-| Exception | When |
-| - | - |
-| `BusShuttingDown` | Publish attempted while bus is stopping. Handlers should treat as a cleanup signal. |
-| `RuntimeError` | Publish attempted before bus has started. |
-| `ValueError` | Unknown event name, or payload mismatch (required vs. provided). |
-| `TypeError` | Payload type doesn't match the event declaration. |

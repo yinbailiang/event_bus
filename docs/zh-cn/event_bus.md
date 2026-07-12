@@ -70,15 +70,16 @@ from pydantic import BaseModel
 from event_bus import EventBus, EventRegistry, EventHandlerRegistry
 from event_bus import EventDeclaration, EventHandler
 
-# 1. 声明事件
+# 1. 声明负载
 class MyPayload(BaseModel):
     message: str
 
+# 2. 声明事件
 class MyEvent(EventDeclaration):
     name = "my.event"
     payload_type = MyPayload
 
-# 2. 实现处理器
+# 3. 实现处理器
 class MyHandler(EventHandler):
     def __init__(self):
         super().__init__(subscriptions=["my.event"])
@@ -86,13 +87,13 @@ class MyHandler(EventHandler):
     async def handle(self, payload, bus_proxy, raw_event):
         print(f"Received: {payload.message}")
 
-# 3. 组装
+# 4. 组装
 reg = EventRegistry()
 reg.register(MyEvent)
 h_reg = EventHandlerRegistry()
 h_reg.register(MyHandler())
 
-# 4. 运行
+# 5. 运行
 async def main():
     async with EventBus(reg, h_reg) as bus:
         await bus.proxy("cli").publish("my.event", {"message": "Hello"})

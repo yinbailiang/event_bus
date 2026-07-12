@@ -44,7 +44,7 @@ class EventDeclaration(ABC):
 
 | ClassVar | Type | Description |
 | - | - | - |
-| `name` | `ClassVar[str]` | **Required.** Unique event identifier. Cannot be empty. |
+| `name` | `ClassVar[str]` | **Required.** Unique event identifier. Cannot be empty or whitespace. Automatically validated at subclass definition time — raises `TypeError` if invalid. |
 | `payload_type` | `ClassVar[Optional[Type[BaseModel]]]` | Pydantic model for payload. `None` = no payload. |
 
 ### Usage
@@ -93,3 +93,15 @@ class EventRegistry:
 | `get(name)` | Lookup by name, returns `None` if not found. |
 | `list_names()` | List all registered event names. |
 | `version` | Monotonic version — incremented on every add/remove. Used by [Matcher](matcher.md) for invalidation. |
+
+### Usage
+
+```python
+registry = EventRegistry()
+registry.register(UserLoginEvent)
+registry.register(HeartbeatEvent)
+
+assert registry.get("user.login") is UserLoginEvent
+assert registry.get("unknown.event") is None
+print(registry.list_names())  # ["user.login", "system.heartbeat"]
+```

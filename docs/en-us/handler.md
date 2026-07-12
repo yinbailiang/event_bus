@@ -31,11 +31,12 @@ class EventHandler(ABC):
     ) -> None: ...
 ```
 
-| Parameter | Type | Default | Description |
-| - | - | - | - |
-| `subscriptions` | `Optional[List[Regex \| str]]` | `[]` | Event patterns this handler listens to. |
-| `handle_timeout` | `Optional[float]` | `32.0` | Per-invocation timeout (seconds). `None` = no limit. |
-| `__call__` | — | — | Internal entry point. Receives the raw ``EventBus``, creates a proxy via ``bus.proxy(handler_name, event)``, then delegates to ``handle()``. |
+| Parameter/Method | Description |
+| - | - |
+| `subscriptions` | Event patterns this handler listens to. `str` for exact match (`event_type == subscription`), `Regex` for full regex match. E.g., `["user.login"]` only matches `"user.login"`, `[Regex(r"user\..*")]` matches all `user.*` events. |
+| `handle_timeout` | Per-invocation timeout (seconds). `None` = no limit. Default `32.0`. |
+| `__call__` | Internal entry point. Receives the raw `EventBus`, creates a proxy via `bus.proxy(handler_name, event)`, then delegates to `handle()`. |
+| `handle(payload, bus_proxy, raw_event)` | **Subclass must implement.** `payload` is the unpacked payload (may be `None`). `bus_proxy` provides limited bus access. `raw_event` is the full event object. |
 
 ### `handle()` Signature
 
@@ -48,7 +49,24 @@ async def handle(
 ) -> None:
 ```
 
+### Usage
+
+```python
+from event_bus import EventHandler, Regex
+
+class LoginHandler(EventHandler):
+    def __init__(self):
+        super().__init__(subscriptions=[Regex(r"user\..*")])  # match all user.* events
+
+    async def handle(self, payload, bus_proxy, raw_event):
+        if isinstance(payload, UserLoginPayload):
+            print(f"User {payload.user_id} logged in at {payload.timestamp}")
+            # Chain-publish via bus_proxy.publish
+```
+
 ### Subscription Patterns
+
+`subscriptions` supports two matching modes:
 
 | Type | Example | Matches |
 | - | - | - |
@@ -59,15 +77,14 @@ async def handle(
 ```python
 from event_bus import EventHandler, Regex
 
-class OrderHandler(EventHandler):
+class AuditHandler(EventHandler):
     def __init__(self):
-        super().__init__([
-            "system.heartbeat",           # exact match
-            Regex(r"order\..*"),          # regex match
-        ])
+        # Exact match for single event
+        # Regex match for all order.* and payment.* events
+        super().__init__(subscriptions=["user.login", Regex(r"order\..*"), Regex(r"payment\..*")])
 
     async def handle(self, payload, bus_proxy, raw_event):
-        ...
+        print(f"Audit: {raw_event.name}")
 ```
 
 ---
@@ -91,14 +108,36 @@ class EventHandlerRegistry:
     @property
     def version(self) -> int
     @property
+    def handlers_count(self) -> int
+    @property
     def all_handlers(self) -> Dict[str, EventHandler]
 ```
 
-| Method | Description |
+| Method/Property | Description |
 | - | - |
-| `register(handler)` | Register a handler instance, returns auto-generated ID. |
+| `register(handler)` | Register a handler instance, returns a unique handler ID (UUID hex). Version increments. |
+| `unregister(handler_id)` | Remove by ID. Returns `True` if removed, `False` if ID not found. Version increments. |
 | `get(handler_id)` | Lookup by ID, returns `None` if not found. |
-| `unregister(handler_id)` | Remove by ID. Returns `True` if removed. |
-| `clear()` | Remove all handlers. |
-| `version` | Monotonic version, incremented on every change. |
-| `all_handlers` | Snapshot copy of all registered handlers. |
+| `clear()` | Remove all registered handlers. Version increments. |
+| `__len__()` | Supports `len(registry)`. |
+| `__contains__()` | Supports `handler_id in registry`. |
+| `__iter__()` | Supports `for hid, h in registry` iteration. |
+| `version` | Monotonic version, incremented on every change (add/remove/clear). Used by [Matcher](matcher.md) for invalidation. |
+| `handlers_count` | Total number of registered handlers. |
+| `all_handlers` | Snapshot copy of all registered handlers as `Dict[str, EventHandler]`. |
+
+### Usage
+
+```python
+from event_bus import EventHandlerRegistry, EventHandler
+
+handler_registry = EventHandlerRegistry()
+handler_id = handler_registry.register(my_handler)
+assert handler_id in handler_registry
+assert handler_registry.version == 1  # increments on every register
+
+handler_registry.unregister(handler_id)
+assert handler_registry.version == 2  # unregister also increments
+```
+
+> **Note**: `get_handlers(event_type)` has been removed. Matching logic moved to [Matcher](matcher.md); the bus uses it internally.

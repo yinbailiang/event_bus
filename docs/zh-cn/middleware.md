@@ -169,6 +169,27 @@ class MiddlewareChain:
 | `setup(bus)` | 按注册顺序调用所有中间件的 `on_setup`。返回初始化失败的中间件列表（这些中间件已被自动移除）。 |
 | `teardown(bus)` | 按注册**逆序**调用所有中间件的 `on_teardown`。单个异常不影响其他。**幂等**——重复调用安全。 |
 
+### 责任链构建
+
+每次发布时，`build_before_publish()`、`build_on_publish()` 和 `build_on_publish_error()` 会惰性构建责任链。构建结果被缓存，当中间件列表变更时自动失效。总线内部在每次发布前通过这三个方法将中间件列表包装为可调用的洋葱链。
+
+---
+
+## 内置中间件
+
+详见 [templates/middlewares/](templates/middlewares/middlewares.md) 完整文档。
+
+| 中间件 | 阶段 | 用途 |
+| - | - | - |
+| `JSONLLoggingMiddleware` | `on_publish` | 零依赖 JSONL 文件日志 |
+| `SQLiteLoggingMiddleware` | `on_publish` | SQLite 数据库日志（需 `aiosqlite`） |
+| `RateLimitMiddleware` | `before_publish` | 滑动窗口速率限制（全局或按事件） |
+| `EventTransformMiddleware` | `before_publish` | 事件名 / 字段转换（重命名、脱敏、注入） |
+| `EventBlockMiddleware` | `before_publish` | 按规则屏蔽事件（白名单 / 黑名单） |
+| `EventForwardMiddleware` | `before_publish` | 跨总线事件转发 |
+| `RecursionGuardMiddleware` | `before_publish` | 防止无限事件循环（可配置深度） |
+| `MetricsMiddleware` | `before_publish` | 轻量级 Prometheus / OTel 风格指标 |
+
 ---
 
 ## 使用示例

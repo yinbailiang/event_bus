@@ -206,4 +206,56 @@ from event_bus import EventRegistry, EventHandlerRegistry, EventBus
 
 event_registry = EventRegistry()
 handler_registry = EventHandlerRegistry()
+
+# Batch register by module
+user_events.register_all_events(event_registry)
+user_handlers.register_all_handlers(handler_registry)
+
+bus = EventBus(event_registry, handler_registry)
 ```
+
+---
+
+## Design Intent
+
+| Feature | Description |
+| - | - |
+| **Declaration–Registration Separation** | Collect declarations during module import, register in batch at startup — no import-time side effects. |
+| **Deduplication** | Adding the same event declaration or the same `(handler class, dependency factory)` pair is silently ignored. |
+| **Lazy Instantiation** | Handlers are only instantiated via their dependency factories at `register_all_handlers` call time, ensuring dependencies are available. |
+| **Transactional Registration** | `register_all_handlers` supports `atomic=True` mode: if any handler fails, already-registered handlers are rolled back, guaranteeing all-or-nothing semantics. |
+| **Decorator-Friendly** | `@register.event` and `@register.handler(depends=...)` decorator styles keep code clean. |
+| **Module Isolation** | Each module has its own independent registrar instance; events/handlers can be registered partially or fully as needed. |
+
+---
+
+## Notes
+
+1. **Dependency factory call timing**: The `depends` factory is called during
+   `register_all_handlers()`, not at module import time. Ensure that resources required
+   by the factory (e.g. database connections) are already initialized at registration time.
+2. **Handler parameter names must match dependency dict keys**: The keys returned by
+   `depends` must exactly match the `__init__` parameter names of the handler; otherwise
+   a `TypeError` will be raised at instantiation.
+3. **Registration order**: It is recommended to register all module events first, then
+   handlers. While the registries themselves do not enforce ordering, handlers may depend
+   on event declarations being ready.
+4. **Modules without both event and handler**: If a module only has events or only has
+   handlers, use only the corresponding registrar — there is no need to create the other.
+5. **Deduplication basis**: `ModuleEventRegister` deduplicates by class object itself;
+   `ModuleHandlerRegister` deduplicates by `(handler_type, depends)` tuple. Note that
+   different `depends` factories (even if behaviorally identical) are treated as
+   different entries.
+6. **Transactional registration (`atomic=True`)**: When any handler registration fails,
+   all already-registered handlers are automatically removed (rolled back) and the
+   original exception propagates. Suitable for scenarios requiring all-or-nothing
+   semantics. The default `atomic=False` is relaxed: failures are only logged and
+   remaining handlers continue to register.
+
+---
+
+## Complete Example
+
+See `tests/templates/register_test.py` for complete test cases covering event
+registration, handler registration, deduplication, decorator behavior, and batch
+registration scenarios.

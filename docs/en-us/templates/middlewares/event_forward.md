@@ -205,3 +205,61 @@ bidirectional event sync between two buses.
 | - | - | - | - |
 | `bus_a` | `EventBus \| TargetBusProvider` | (required) | Bus A or its factory callback. |
 | `bus_b` | `EventBus \| TargetBusProvider` | (required) | Bus B or its factory callback. |
+| `source_a_to_b` | `str` | `"a→b"` | Source identifier used on the target bus for the A→B direction. |
+| `source_b_to_a` | `str` | `"b→a"` | Source identifier used on the target bus for the B→A direction. |
+| `event_filter` | `EventFilter \| None` | `None` | Shared event filter callback. |
+| `anti_recursion` | `bool` | `True` | Enable anti-recursion filtering to prevent A→B→A infinite loops. |
+| `forward_system_events` | `bool` | `False` | Whether to forward system events. |
+
+Returns `(a_to_b, b_to_a)`:
+
+- `a_to_b` mounts on Bus A and forwards A's events to B
+- `b_to_a` mounts on Bus B and forwards B's events to A
+
+**Anti-recursion mechanism**: When `anti_recursion=True` (default), each directional
+middleware automatically skips events forwarded by the opposite direction. Specifically:
+
+- `a_to_b` skips events whose `sources` contain `"b→a"`
+- `b_to_a` skips events whose `sources` contain `"a→b"`
+
+```python
+from event_bus import EventBus, MiddlewareChain
+from event_bus.templates import make_bidirectional_forward
+
+# Create bidirectional forward pair in one call
+a_to_b, b_to_a = make_bidirectional_forward(
+    bus_a,
+    bus_b,
+    source_a_to_b='main→audit',
+    source_b_to_a='audit→main',
+)
+
+# Mount on each bus respectively
+bus_a.proxy('forward').middleware.add(a_to_b)
+bus_b.proxy('forward').middleware.add(b_to_a)
+```
+
+> **Note**: `anti_recursion` prevents the direct A→B→A loop. If a business handler
+> **actively publishes a new event** after receiving a forwarded event, that new event
+> will still be forwarded normally (this is expected behavior). For stricter recursion
+> control, use `RecursionGuardMiddleware` together.
+
+---
+
+## Notes
+
+1. **Target bus lifecycle**: `EventForwardMiddleware` does not manage target bus
+   start/stop. Ensure the target bus is already started before registering the
+   forwarding middleware.
+2. **System events**: `event_bus.*` events are skipped by default. To forward them
+   (e.g. for debugging), set `forward_system_events=True`.
+3. **Payload validation**: Ensure the target bus has registered an `EventDeclaration`
+   with the **same name** as the source event and a compatible `payload_type`,
+   otherwise forwarding will throw a validation error on the target bus.
+4. **Error isolation**: Forwarding exceptions (target unreachable, validation failure,
+   etc.) are caught and logged, and do not interrupt the source bus's `on_publish` chain.
+5. **No ordering guarantee**: Forwarding is asynchronous and non-blocking; the processing
+   order of events on the target bus is not guaranteed to match the source bus.
+6. **Avoid recursive forwarding**: If the target bus also has a forwarding middleware
+   pointing back to the source bus, exclude events from the forwarding source in the
+   filter callback, otherwise an infinite loop will occur.

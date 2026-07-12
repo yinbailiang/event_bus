@@ -82,25 +82,19 @@ class Middleware(ABC):
     ) -> None: ...
 ```
 
-### Lifecycle Hooks
+### Hook Details
 
-`on_setup` is called after `bus.start()` completes, and **immediately when hot-adding
-via `add()` / `insert()` on a running bus**. `on_teardown` is called in **reverse
-registration order** when `stop()` finishes, and immediately when `remove()` /
-`clear()` is called on a running bus.
+#### `on_setup(bus)` / `on_teardown(bus)`
 
-Middlewares that raise exceptions in `on_setup` are automatically removed from
-the chain (at startup) or rejected (at hot-add).
+Bus lifecycle hooks. `on_setup` is called after `bus.start()` completes, and **immediately when hot-adding via `add()` / `insert()` on a running bus**. `on_teardown` is called in **reverse registration order** when `stop()` finishes, and immediately when `remove()` / `clear()` is called on a running bus. Use these for initializing connection pools, registering background tasks, etc.
 
-> **Warning**: Runtime `remove()` does not wait for in-flight hooks to complete.
-> After `on_teardown` is called, a middleware instance that has already entered
-> `before_publish` / `on_publish` may still execute. Middleware authors should
-> ensure their own state cleanup is safe against these residual calls.
+> **Note**: Middlewares that raise exceptions in `on_setup` are automatically removed from the chain (at startup) or rejected (at hot-add), preventing them from affecting normal bus operation.
+>
+> **Warning**: Runtime `remove()` does not wait for in-flight hooks to complete. After `on_teardown` is called, a middleware instance that has already entered `before_publish` / `on_publish` may still execute. Middleware authors should ensure their own state cleanup is safe against these residual calls.
 
-### `before_publish`
+#### `before_publish(event_registry, name, source, data, old_event, next)`
 
-Runs **before** any publish logic (including event declaration validation).
-**Must** call `await next(...)` for the event to proceed.
+Runs **before** any publish logic (including event declaration validation). **Must** call `await next(...)` for the event to proceed.
 
 | Parameter | Description |
 | - | - |
@@ -111,19 +105,25 @@ Runs **before** any publish logic (including event declaration validation).
 | `old_event` | Predecessor event in a chain (may be `None`). |
 | `next` | Call to invoke next middleware (or core publish). **Must be called** for event to proceed. |
 
-### `on_publish`
+#### `on_publish(event, next)`
 
-Runs **after** the Event is successfully enqueued. Full runtime event info available.
+Runs **after** the Event is successfully enqueued. Full runtime event info available via `event.name`, `event.data`, `event.id`, `event.sources`, etc.
 
 | Parameter | Description |
 | - | - |
 | `event` | Complete Event object (name, data, id, sources, timestamps). |
 | `next` | Call to invoke next middleware. |
 
-### `on_publish_error`
+#### `on_publish_error(error, name, source, data)`
 
-Called when the publish flow raises an exception (optional). All middlewares are notified
-in registration order. One middleware's error doesn't block others from being notified.
+Called when the publish flow raises an exception (optional). All middlewares are notified in registration order. One middleware's error doesn't block others from being notified.
+
+| Parameter | Description |
+| - | - |
+| `error` | The exception that occurred. |
+| `name` | Event type name. |
+| `source` | Publisher identifier. |
+| `data` | Raw payload data. |
 
 ---
 
@@ -220,6 +220,141 @@ See [templates/middlewares/](templates/middlewares/middlewares.md) for detailed 
 | `EventForwardMiddleware` | `before_publish` | Forward events to another EventBus instance. |
 | `RecursionGuardMiddleware` | `before_publish` | Prevent infinite event loops (configurable depth). |
 | `MetricsMiddleware` | `before_publish` | Lightweight Prometheus/OTel-style metrics. |
+
+---
+
+## Usage Examples
+
+### Logging Middleware
+
+Log every published event with timing:
+
+```python
+import time
+import logging
+from event_bus import Middleware, MiddlewareChain
+
+logger = logging.getLogger(__name__)
+
+class LoggingMiddleware(Middleware):
+    async def on_setup(self, bus):
+        logger.info("LoggingMiddleware initialized")
+
+    async def on_teardown(self, bus):
+        logger.info("LoggingMiddleware shutting down")
+
+    async def before_publish(self, event_registry, name, source, data, old_event, next):
+        t0 = time.monotonic()
+        logger.debug(f"[Publish] {name} from {source}")
+        try:
+            await next(event_registry, name, source, data, old_event)
+        finally:
+            elapsed = time.monotonic() - t0
+            logger.debug(f"[Publish] {name} completed in {elapsed:.3f}s")
+
+    async def on_publish(self, event, next):
+        logger.debug(f"[Enqueued] {event.name} (id={event.id})")
+        await next(event)
+
+    async def on_publish_error(self, error, name, source, data):
+        logger.error(f"[Error] {name} from {source}: {error}")
+
+# Register with the bus
+chain = MiddlewareChain()
+await chain.add(LoggingMiddleware())
+
+bus = EventBus(reg, h_reg, middleware_chain=chain)
+```
+
+### Validation Middleware
+
+Perform extra data validation before publishing:
+
+```python
+class ValidationMiddleware(Middleware):
+    async def on_setup(self, bus): pass
+    async def on_teardown(self, bus): pass
+
+    async def before_publish(self, event_registry, name, source, data, old_event, next):
+        if name == "order.create" and isinstance(data, dict):
+            if data.get("amount", 0) <= 0:
+                raise ValueError("Order amount must be positive")
+        await next(event_registry, name, source, data, old_event)
+
+    async def on_publish(self, event, next):
+        await next(event)
+```
+
+### Short-Circuit Middleware
+
+Block events under certain conditions by **not** calling `next`:
+
+```python
+class RateLimitMiddleware(Middleware):
+    def __init__(self, max_per_second: int = 100):
+        self._max = max_per_second
+        self._count = 0
+        self._window_start = time.monotonic()
+
+    async def on_setup(self, bus): pass
+    async def on_teardown(self, bus): pass
+
+    async def before_publish(self, event_registry, name, source, data, old_event, next):
+        now = time.monotonic()
+        if now - self._window_start > 1.0:
+            self._window_start = now
+            self._count = 0
+        self._count += 1
+        if self._count > self._max:
+            logger.warning(f"Rate limit exceeded, dropping {name}")
+            return  # Don't call next — event is dropped
+        await next(event_registry, name, source, data, old_event)
+
+    async def on_publish(self, event, next):
+        await next(event)
+```
+
+### Multi-Middleware Onion Order
+
+```python
+chain = MiddlewareChain()
+await chain.add(LoggingMiddleware())       # outermost
+await chain.add(ValidationMiddleware())    # middle
+await chain.add(RateLimitMiddleware())     # innermost
+
+# Execution order (on_publish chain nested inside before_publish chain):
+#   Logging.before enter → Validation.before enter → RateLimit.before enter
+#     → Core publish logic (validate → construct → enqueue)
+#     → Logging.on enter → Validation.on enter → RateLimit.on enter
+#         → no-op (on_publish chain endpoint)
+#       ← RateLimit.on exit ← Validation.on exit ← Logging.on exit
+#   ← RateLimit.before exit ← Validation.before exit ← Logging.before exit
+```
+
+### Runtime Hot Reload
+
+The middleware chain supports dynamic add/remove at runtime. Changes take effect immediately and can be triggered from within handlers or middleware via the bus proxy:
+
+```python
+class HotReloadHandler(EventHandler):
+    def __init__(self):
+        super().__init__(subscriptions=["admin.toggle"])
+
+    async def handle(self, payload, bus_proxy, raw_event):
+        chain = bus_proxy.middleware
+
+        # Hot-add — on_setup is called immediately
+        await chain.add(AuditMiddleware())
+
+        # Hot-remove — on_teardown is called immediately
+        # Note: in-flight chains may still invoke the middleware after this
+        await chain.remove(some_mw)
+
+        # Hot-clear all
+        await chain.clear()
+```
+
+> **Note**: Add/remove operations return immediately without waiting for in-flight hooks. After `on_teardown` is called on a removed middleware, in-flight `before_publish` / `on_publish` may still execute. Middleware authors should make `on_teardown` idempotent.
 
 ---
 

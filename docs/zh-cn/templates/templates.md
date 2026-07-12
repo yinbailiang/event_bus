@@ -2,6 +2,12 @@
 
 模板层基于 EventBus 核心构建，提供 4 个高级抽象，覆盖常见事件驱动模式。
 
+> 部分模板需要可选依赖。安装方式：
+>
+> ```bash
+> pip install infinity_bus[templates]
+> ```
+
 ---
 
 ## 快速索引
@@ -104,3 +110,93 @@ from event_bus.templates import (
 | 等待某个事件发生一次 | `expect` |
 | 按模块组织事件和处理器 | `register` |
 | 给发布流程加横切逻辑 | [middlewares/](middlewares/middlewares.md) |
+
+---
+
+## handler
+
+```python
+from event_bus.templates import handler
+
+@handler(UserCreated)
+async def send_welcome_email(payload: UserCreatedPayload) -> None:
+    print(f"欢迎, {payload.email}!")
+
+handler_registry.register(send_welcome_email())
+```
+
+详见 [simple_handler.md](simple_handler.md) 了解签名校验、同步/异步支持和自定义超时。
+
+## expect
+
+```python
+from event_bus.templates import expect
+
+async with expect(bus_proxy, "user.login") as future:
+    await bus_proxy.publish("auth.request", {...})
+    event = await future  # 阻塞直到收到 user.login
+```
+
+详见 [expect.md](expect.md) 了解过滤、错误处理和高级用法。
+
+## request
+
+```python
+from event_bus.templates import request
+
+response = await request(
+    bus_proxy,
+    req_event="order.create",
+    req_data={"item": "widget"},
+    resp_event="order.created",
+    timeout=10.0,
+)
+```
+
+详见 [request.md](request.md) 了解协议定义和错误处理。
+
+## pipe
+
+```python
+from event_bus.templates import open_pipe
+
+async with open_pipe(pipe_id="my_pipe") as pipe:
+    await pipe.send(MyData(...))
+    reply = await pipe.receive()
+```
+
+详见 [pipe.md](pipe.md) 了解分配器和多进程管道。
+
+## register
+
+```python
+from event_bus.templates import ModuleEventRegister, ModuleHandlerRegister
+
+events = ModuleEventRegister("orders")
+
+@events.event
+class OrderCreated(EventDeclaration):
+    name = "order.created"
+    payload_type = OrderPayload
+
+events.register_all_events(event_registry)
+```
+
+详见 [register.md](register.md) 了解事务性注册和错误处理。
+
+## 内置中间件
+
+详见 [middlewares/middlewares.md](middlewares/middlewares.md) 完整文档。
+
+```python
+from event_bus.templates.middlewares import (
+    JSONLLoggingMiddleware,
+    RateLimitMiddleware,
+    MetricsMiddleware,
+)
+
+chain = MiddlewareChain()
+await chain.add(RateLimitMiddleware(max_per_second=100))
+await chain.add(MetricsMiddleware())
+await chain.add(JSONLLoggingMiddleware("events.jsonl"))
+```
