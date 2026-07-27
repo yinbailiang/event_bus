@@ -272,13 +272,11 @@ class TestJSONLLoggingMiddleware:
         def fake_fallback(line: str) -> None:
             fallback_lines.append(line)
 
-        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as f:
-            file_path = f.name
-
-        try:
-            mw = JSONLLoggingMiddleware(file_path, fallback=fake_fallback)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mw = JSONLLoggingMiddleware(os.path.join(tmpdir, 'events.jsonl'), fallback=fake_fallback)
             chain = MiddlewareChain()
             await chain.add(mw)
+
 
             bus = EventBus(
                 base_event_registry,
@@ -296,8 +294,4 @@ class TestJSONLLoggingMiddleware:
             assert len(fallback_lines) >= 1
             record = json.loads(fallback_lines[0])
             assert 'ValueError' in record['error']
-        finally:
-            try:
-                os.unlink(file_path)
-            except OSError:
-                pass
+
