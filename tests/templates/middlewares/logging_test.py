@@ -272,23 +272,24 @@ class TestJSONLLoggingMiddleware:
         def fake_fallback(line: str) -> None:
             fallback_lines.append(line)
 
-        mw = JSONLLoggingMiddleware(':memory:', fallback=fake_fallback)
-        chain = MiddlewareChain()
-        await chain.add(mw)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mw = JSONLLoggingMiddleware(os.path.join(tmpdir, 'events.jsonl'), fallback=fake_fallback)
+            chain = MiddlewareChain()
+            await chain.add(mw)
 
-        bus = EventBus(
-            base_event_registry,
-            handler_registry,
-            max_queue_size=10,
-            middleware_chain=chain,
-        )
-        async with bus:
-            async def _noop(error: Exception, name: str, source: str, data: dict[str, Any] | BaseModel | None) -> None:
-                pass
-            await chain.build_on_publish_error(_noop)(
-                ValueError('boom'), 'test.event', 'src', {'key': 'v'},
+            bus = EventBus(
+                base_event_registry,
+                handler_registry,
+                max_queue_size=10,
+                middleware_chain=chain,
             )
+            async with bus:
+                async def _noop(error: Exception, name: str, source: str, data: dict[str, Any] | BaseModel | None) -> None:
+                    pass
+                await chain.build_on_publish_error(_noop)(
+                    ValueError('boom'), 'test.event', 'src', {'key': 'v'},
+                )
 
-        assert len(fallback_lines) >= 1
-        record = json.loads(fallback_lines[0])
-        assert 'ValueError' in record['error']
+            assert len(fallback_lines) >= 1
+            record = json.loads(fallback_lines[0])
+            assert 'ValueError' in record['error']

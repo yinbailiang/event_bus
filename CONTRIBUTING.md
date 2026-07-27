@@ -61,7 +61,7 @@ docs/             → 文档（中英双语，与 src 模块一一对应）
 1. 更新 `pyproject.toml` 和 `src/event_bus/__init__.py` 中的版本号
 2. 提交：`git commit -m "chore: bump version to X.Y.Z"`
 3. 推送：`git push`
-4. 打标签：`git tag -a vX.Y.Z -m "Release vX.Y.Z"` 并 `git push origin vX.Y.Z`
+4. 打标签：`git tag -a vX.Y.Z` 并 `git push origin vX.Y.Z`
 5. CI 自动构建 wheel → GitHub Release → PyPI
 
 详见 [.agents/SKILLS/publish.md](.agents/SKILLS/publish.md)。

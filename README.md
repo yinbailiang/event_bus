@@ -54,15 +54,16 @@
 | Graceful Shutdown | ✅ drain queue + await active tasks | ✅ wait_until_idle + queue close | ⚠️ `wait_for_complete` + `cancel` | N/A (sync) |
 | Timeout Protection | ✅ per-handler timeout | ✅ event_result.timeout | ❌ | N/A |
 | Error Isolation | ✅ TaskErrorEvent unified reporting | ✅ errors logged, bus uninterrupted | ❌ | N/A |
-| FIFO Processing | ❌ | ✅ global lock guarantee | ❌ | N/A |
+| Event Dispatch FIFO | ✅ asyncio.Queue guarantees enqueue order | ✅ global lock guarantee | ✅ listeners called in registration order | N/A |
+| Handler Execution FIFO | ❌ concurrent tasks | ✅ global lock guarantee | ✅ sequential emit | N/A |
 | Slow Handler Alert | ❌ | ✅ 15s timeout alert | ❌ | N/A |
 | Recursion Guard | ✅ middleware (configurable) | ✅ built-in (non-configurable) | ❌ | N/A |
 | Logging & Auditing | ✅ JSONL + SQLite (middleware) | ✅ built-in JSONL WAL logging | ❌ no built-in | ⚠️ debug tracing |
-| Test Coverage | ✅ 94% (245 tests) | ✅ 83% (138 tests) | ✅ 94% (43 tests) | ✅ 86% (167 tests) |
+| Test Coverage | ✅ 94% (281 tests) | ✅ 83% (138 tests) | ✅ 94% (43 tests) | ✅ 86% (167 tests) |
 | Python Version | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
-| Baseline Version | v1.5.2 `5440fdd` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
+| Baseline Version | v2.2.1 `f6fc6df` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
 
-> **Choose InfinityBus when**: you need to extend functionality via middleware rather than modifying core code; you can't tolerate `# type: ignore` in production code; you want full production-grade features (backpressure, graceful shutdown, regex subscriptions) with minimal dependencies.
+> **Choose InfinityBus when**: you need a middleware-native architecture — hot-reloadable onion pipeline with 8 built-in middlewares (logging, metrics, rate-limit, transform, block, recursion guard, forwarding); you run pyright strict across the entire codebase with literally zero `# type: ignore` in any production code; you want full production-grade features (backpressure, graceful shutdown, regex subscriptions, Pydantic payload validation) with a single core dependency.
 >
 > **Choose bubus when**: you need built-in event return values and event forwarding; you need Python 3.11 support; you prefer the class-driven API style of `bus.on(EventClass, fn)`.
 >
@@ -71,7 +72,7 @@
 > **Choose PyPubSub when**: you don't use asyncio; you need very broad Python version compatibility (3.7–3.14); you prefer traditional topic hierarchy string matching.
 >
 > Full commits:
-> · [InfinityBus `5440fdd`](https://github.com/yinbailiang/event_bus/commit/5440fdd)
+> · [InfinityBus `f6fc6df`](https://github.com/yinbailiang/event_bus/commit/f6fc6df)
 > · [bubus `7c09342`](https://github.com/browser-use/bubus/commit/7c09342)
 > · [pyee `5157de2`](https://github.com/jfhbrook/pyee/commit/5157de2) (no coverage in official CI; manually measured via `pytest-cov`)
 > · [PyPubSub `4ec2c47`](https://github.com/schollii/pypubsub/commit/4ec2c47)
