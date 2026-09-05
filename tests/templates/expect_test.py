@@ -6,12 +6,15 @@ import pytest
 from pydantic import BaseModel
 
 from event_bus import (
+
     EventBus,
     EventDeclaration,
     EventHandlerRegistry,
     EventRegistry,
     Event,
     Regex,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
 )
 from event_bus.templates import expect, OneShotEventHandler
 
@@ -58,7 +61,7 @@ def handler_registry() -> EventHandlerRegistry:
 
 @pytest.fixture
 async def running_bus(event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> AsyncGenerator[EventBus, None]:
-    bus = EventBus(event_registry, handler_registry, max_queue_size=10)
+    bus = EventBus(event_registry, handler_registry, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
     await bus.start()
     yield bus
     await bus.stop()

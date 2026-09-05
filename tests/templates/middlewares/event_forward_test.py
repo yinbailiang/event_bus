@@ -13,6 +13,7 @@ from conftest import (
 from pydantic import BaseModel
 
 from event_bus import (
+
     Event,
     EventBus,
     EventDeclaration,
@@ -21,6 +22,8 @@ from event_bus import (
     EventRegistry,
     MiddlewareChain,
     Regex,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
 )
 from event_bus.templates import (
     EventForwardMiddleware,
@@ -76,7 +79,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         # 2. 源总线装配转发中间件
         fw = EventForwardMiddleware(target=target_bus, source_name="forward-test")
@@ -86,7 +89,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -114,7 +117,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         fw = EventForwardMiddleware(target=target_bus, source_name="payload-test")
         chain = MiddlewareChain()
@@ -123,7 +126,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -152,7 +155,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         # 仅转发 mw.ping
         event_filter = make_event_name_filter("mw.ping", mode="white")
@@ -167,7 +170,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -197,7 +200,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping", "user.login"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         # 排除 mw.ping，其余全部转发
         event_filter = make_event_name_filter("mw.ping", mode="black")
@@ -212,7 +215,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -246,7 +249,7 @@ class TestEventForwardMiddleware:
         )
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         fw = EventForwardMiddleware(
             target=target_bus,
@@ -259,7 +262,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -301,7 +304,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["event_bus.custom_test"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         fw = EventForwardMiddleware(
             target=target_bus,
@@ -314,7 +317,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             source_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -339,7 +342,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         # 使用工厂函数提供目标总线
         def get_target() -> EventBus:
@@ -352,7 +355,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -379,7 +382,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         def count_filter(event: Event) -> bool:
             if event.data is not None:
@@ -398,7 +401,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -432,7 +435,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         async def async_filter(event: Event) -> bool:
             await asyncio.sleep(0.01)  # 模拟异步检查
@@ -452,7 +455,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -482,7 +485,7 @@ class TestEventForwardMiddleware:
         target_handlers = EventHandlerRegistry()
 
         # 目标总线不启动
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         fw = EventForwardMiddleware(target=target_bus, source_name="error-iso")
         chain = MiddlewareChain()
@@ -494,7 +497,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -521,7 +524,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         call_count = 0
 
@@ -543,7 +546,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -577,7 +580,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping", "user.login"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         fw = EventForwardMiddleware(target=target_bus, source_name="no-filter")
         chain = MiddlewareChain()
@@ -586,7 +589,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -615,7 +618,7 @@ class TestEventForwardMiddleware:
         spy = ForwardSpyHandler(["mw.ping"])
         target_handlers.register(spy)
 
-        target_bus = EventBus(target_registry, target_handlers, max_queue_size=10)
+        target_bus = EventBus(target_registry, target_handlers, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
 
         # 不指定 source_name，使用默认值
         fw = EventForwardMiddleware(target=target_bus)
@@ -625,7 +628,7 @@ class TestEventForwardMiddleware:
         source_bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
 
@@ -669,8 +672,8 @@ class TestMakeBidirectionalForward:
         # 先创建链和总线，再生成中间件对并追加到链中
         chain_a = MiddlewareChain()
         chain_b = MiddlewareChain()
-        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
-        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+        bus_a = EventBus(registry_a, handlers_a, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_b)
 
         a_to_b, b_to_a = make_bidirectional_forward(
             bus_a,
@@ -731,8 +734,8 @@ class TestMakeBidirectionalForward:
 
         chain_a = MiddlewareChain()
         chain_b = MiddlewareChain()
-        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
-        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+        bus_a = EventBus(registry_a, handlers_a, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_b)
 
         a_to_b, b_to_a = make_bidirectional_forward(
             bus_a,
@@ -778,8 +781,8 @@ class TestMakeBidirectionalForward:
 
         chain_a = MiddlewareChain()
         chain_b = MiddlewareChain()
-        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
-        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+        bus_a = EventBus(registry_a, handlers_a, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_b)
 
         a_to_b, b_to_a = make_bidirectional_forward(
             bus_a,
@@ -823,8 +826,8 @@ class TestMakeBidirectionalForward:
 
         chain_a = MiddlewareChain()
         chain_b = MiddlewareChain()
-        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
-        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+        bus_a = EventBus(registry_a, handlers_a, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_b)
 
         a_to_b, b_to_a = make_bidirectional_forward(
             bus_a,
@@ -869,7 +872,7 @@ class TestMakeBidirectionalForward:
 
         # bus_b 先创建并持有链，再生成中间件对
         chain_b = MiddlewareChain()
-        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+        bus_b = EventBus(registry_b, handlers_b, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_b)
 
         # bus_a 尚未创建，使用工厂回调
         _bus_a: Optional[EventBus] = None
@@ -887,7 +890,7 @@ class TestMakeBidirectionalForward:
 
         chain_a = MiddlewareChain()
         await chain_a.add(a_to_b)
-        _bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
+        _bus_a = EventBus(registry_a, handlers_a, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_a)
         await chain_b.add(b_to_a)
 
         async with _bus_a:
@@ -917,8 +920,8 @@ class TestMakeBidirectionalForward:
 
         chain_a = MiddlewareChain()
         chain_b = MiddlewareChain()
-        bus_a = EventBus(registry_a, handlers_a, max_queue_size=10, middleware_chain=chain_a)
-        bus_b = EventBus(registry_b, handlers_b, max_queue_size=10, middleware_chain=chain_b)
+        bus_a = EventBus(registry_a, handlers_a, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_a)
+        bus_b = EventBus(registry_b, handlers_b, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)), middleware_chain=chain_b)
 
         a_to_b, b_to_a = make_bidirectional_forward(bus_a, bus_b)
         await chain_a.add(a_to_b)

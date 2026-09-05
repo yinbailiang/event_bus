@@ -5,10 +5,13 @@ import asyncio
 import pytest
 
 from event_bus import (
+
     EventBus,
     EventHandlerRegistry,
     EventRegistry,
     MiddlewareChain,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
 )
 from event_bus.templates.middlewares import (
     EventTransformMiddleware,
@@ -44,7 +47,7 @@ class TestRateLimitMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -74,7 +77,7 @@ class TestRateLimitMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -108,7 +111,7 @@ class TestRateLimitMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=20,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=20)),
             middleware_chain=chain,
         )
         async with bus:
@@ -145,7 +148,7 @@ class TestRateLimitMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -194,7 +197,7 @@ class TestRateLimitBeforeTransform:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:

@@ -15,7 +15,10 @@ from event_bus import (
     Regex,
     EventHandler,
     EventHandlerRegistry,
+    EventQueue,
     EventRegistry,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
     Matcher,
     MiddlewareChain,
     TaskErrorEvent,
@@ -312,11 +315,12 @@ def event_bus_factory(
         registry: Optional[EventRegistry] = None,
         h_registry: Optional[EventHandlerRegistry] = None,
         middleware_chain: Optional[MiddlewareChain] = None,
+        queue: Optional[EventQueue] = None,
     ) -> EventBus:
         return EventBus(
             registry or base_event_registry,
             h_registry or handler_registry,
-            max_queue_size=max_queue_size,
+            queue=queue or InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=max_queue_size)),
             max_handler_semaphore=max_handler_semaphore,
             middleware_chain=middleware_chain,
         )

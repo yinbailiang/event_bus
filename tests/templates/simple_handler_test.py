@@ -11,11 +11,14 @@ import pytest
 from pydantic import BaseModel, Field
 
 from event_bus import (
+
     EventBus,
     EventDeclaration,
     EventHandler,
     EventHandlerRegistry,
     EventRegistry,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
 )
 from event_bus.templates import handler
 
@@ -63,7 +66,7 @@ def handler_registry() -> EventHandlerRegistry:
 async def running_bus(
     event_registry: EventRegistry, handler_registry: EventHandlerRegistry
 ) -> AsyncGenerator[EventBus, None]:
-    bus = EventBus(event_registry, handler_registry, max_queue_size=10)
+    bus = EventBus(event_registry, handler_registry, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)))
     await bus.start()
     yield bus
     await bus.stop()

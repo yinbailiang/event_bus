@@ -7,12 +7,15 @@ import pytest
 from pydantic import BaseModel
 
 from event_bus import (
+
     Event,
     EventBus,
     EventHandlerRegistry,
     EventRegistry,
     Middleware,
     MiddlewareChain,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
 )
 from event_bus.middleware import BeforePublishNext, OnPublishNext
 
@@ -780,7 +783,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -800,7 +803,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         await bus.start()
@@ -825,7 +828,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -853,7 +856,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -881,7 +884,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -913,7 +916,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -947,7 +950,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -976,7 +979,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1008,7 +1011,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1033,7 +1036,7 @@ class TestMiddlewareIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
         )
         async with bus:
             await bus.proxy("src").publish("mw.ping", {"key": "k", "count": 1})
@@ -1063,7 +1066,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1086,7 +1089,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1120,7 +1123,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1146,7 +1149,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1174,7 +1177,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1202,7 +1205,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1240,7 +1243,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1266,7 +1269,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1287,7 +1290,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -1306,7 +1309,7 @@ class TestMiddlewareHotReload:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:

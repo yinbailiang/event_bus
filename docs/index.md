@@ -21,5 +21,6 @@ Welcome! Select your language version below.
 | [Event & Declaration](en-us/event.md) | [事件与声明](zh-cn/event.md) | Event, EventDeclaration, EventRegistry / 事件实例、声明、注册表 |
 | [Handler](en-us/handler.md) | [Handler](zh-cn/handler.md) | EventHandler, subscriptions, Regex / 处理器、订阅、正则匹配 |
 | [Matcher](en-us/matcher.md) | [Matcher](zh-cn/matcher.md) | Pre-computed dispatch table / 预计算分派表 |
+| [Queue](en-us/queue.md) | [队列](zh-cn/queue.md) | EventQueue abstraction & injectable queue / 队列抽象与可注入队列 |
 | [Middleware](en-us/middleware.md) | [Middleware](zh-cn/middleware.md) | Onion-model middleware pipeline / 洋葱模型中间件管道 |
 | [Templates](en-us/templates/templates.md) | [Templates](zh-cn/templates/templates.md) | expect, request, pipe, register, built-in middlewares / 高级模板与内置中间件 |

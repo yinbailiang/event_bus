@@ -239,7 +239,8 @@ asyncio.run(main())
 | **EventRegistry** | 集中管理已注册的事件声明，发布时校验 |
 | **EventHandler** | 处理器基类，实现 `handle` 方法定义业务逻辑 |
 | **EventHandlerRegistry** | 管理处理器实例，按事件名匹配处理器列表 |
-| **EventBus** | 事件分发中枢：任务队列、并发控制、错误上报、生命周期 |
+| **EventQueue** | 可替换的派发队列抽象：`EventQueue` ABC + `InMemoryEventQueue` 默认实现（配置归队列自身） |
+| **EventBus** | 事件分发中枢：并发控制、错误上报、生命周期（队列通过 `queue=` 注入） |
 | **Middleware** | 中间件基类，洋葱管道：`before_publish` / `on_publish` 双钩子 |
 | **MiddlewareChain** | 责任链管理器，按序包裹发布流程 |
 | **templates** | 高级模板：`handler` 简化 API、`expect` 监听、`request` RPC、`pipe` 管道、`register` 批量注册 |

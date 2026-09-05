@@ -17,6 +17,7 @@ concurrency control, timeout protection, and graceful shutdown.
 | [event.md](event.md) | `Event` runtime instance, `EventDeclaration`, `EventRegistry` |
 | [handler.md](handler.md) | `EventHandler` base class, `EventHandlerRegistry` |
 | [matcher.md](matcher.md) | `Matcher` dispatch table, version-aware caching |
+| [queue.md](queue.md) | `EventQueue` abstraction, `InMemoryEventQueue` default, injectable queue config |
 | [middleware.md](middleware.md) | `Middleware` base class, `MiddlewareChain`, onion model |
 | [templates/](templates/templates.md) | Advanced templates: `expect`, `request`, `pipe`, `register` & built-in middlewares |
 
@@ -31,6 +32,7 @@ graph TD
     MW[Middleware] -->|register to| MC[MiddlewareChain]
     ER --> EB[EventBus]
     HR --> EB
+    Q[EventQueue] --> EB
     MC --> EB
     EB -->|creates| P[Proxy]
     P -->|publish| EB

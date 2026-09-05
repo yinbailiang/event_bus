@@ -7,6 +7,7 @@ import pytest
 from pydantic import BaseModel
 
 from event_bus import (
+
     Regex,
     Event,
     EventBus,
@@ -14,6 +15,8 @@ from event_bus import (
     EventHandlerRegistry,
     EventRegistry,
     MiddlewareChain,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
 )
 from event_bus.templates import (
     RecursionGuardMiddleware,
@@ -76,7 +79,7 @@ class TestRecursionGuardMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -106,7 +109,7 @@ class TestRecursionGuardMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -136,7 +139,7 @@ class TestRecursionGuardMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -166,7 +169,7 @@ class TestRecursionGuardMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -210,7 +213,7 @@ class TestRecursionGuardMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=50,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=50)),
             middleware_chain=chain,
         )
         async with bus:
@@ -239,7 +242,7 @@ class TestRecursionGuardMiddleware:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=100,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=100)),
             middleware_chain=chain,
         )
         async with bus:

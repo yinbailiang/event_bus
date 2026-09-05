@@ -4,7 +4,7 @@ from typing import AsyncGenerator, List, Optional, Tuple
 import pytest
 from pydantic import BaseModel
 
-from event_bus import EventBus, EventDeclaration, EventRegistry, EventHandlerRegistry
+from event_bus import EventBus, EventDeclaration, EventRegistry, EventHandlerRegistry, InMemoryEventQueue, InMemoryEventQueueConfig
 from event_bus.templates.pipe import (
     InProcessPipe,
     InProcessPipeAllocator,
@@ -73,7 +73,7 @@ async def event_bus() -> AsyncGenerator[EventBus, None]:
     reg.register(TestPipeLinkedFailResponse)
 
     hreg = EventHandlerRegistry()
-    bus = EventBus(reg, hreg, max_queue_size=100)
+    bus = EventBus(reg, hreg, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=100)))
     await bus.start()
     yield bus
     await bus.stop()

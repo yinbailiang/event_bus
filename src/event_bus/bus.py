@@ -10,6 +10,7 @@ from .event import Event, EventDeclaration, EventRegistry
 from .handler import EventHandler, EventHandlerRegistry
 from .matcher import Matcher
 from .middleware import MiddlewareChain
+from .queue import EventQueue, InMemoryEventQueue
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ class EventBus:
         self,
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
-        max_queue_size: int = 1024,
+        queue: Optional[EventQueue] = None,
         max_handler_semaphore: int = 256,
         shutdown: ShutdownConfig = ShutdownConfig(),
         middleware_chain: Optional[MiddlewareChain] = None,
@@ -110,7 +111,7 @@ class EventBus:
         self._state_lock: asyncio.Lock = asyncio.Lock()
         self._enable_publish: asyncio.Event = asyncio.Event()
         self._running: asyncio.Event = asyncio.Event()
-        self._queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=max_queue_size)
+        self._queue: EventQueue = queue or InMemoryEventQueue()
         self._dispatch_task: Optional[asyncio.Task[None]] = None
 
         self._handler_semaphore = asyncio.Semaphore(max_handler_semaphore)

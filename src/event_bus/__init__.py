@@ -30,6 +30,11 @@ from .middleware import (
     OnPublishErrorNext,
     OnPublishNext,
 )
+from .queue import (
+    EventQueue,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
+)
 
 __all__: list[str] = [
     '__version__',
@@ -45,6 +50,9 @@ __all__: list[str] = [
     'BeforePublishNext',
     'OnPublishNext',
     'OnPublishErrorNext',
+    'EventQueue',
+    'InMemoryEventQueue',
+    'InMemoryEventQueueConfig',
     'EventBus',
     'BusShuttingDown',
     'ShutdownEvent',

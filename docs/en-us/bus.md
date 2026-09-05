@@ -16,7 +16,7 @@ class EventBus:
         self,
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
-        max_queue_size: int = 1024,
+        queue: Optional[EventQueue] = None,
         max_handler_semaphore: int = 256,
         shutdown: ShutdownConfig = ShutdownConfig(),
         middleware_chain: Optional[MiddlewareChain] = None
@@ -48,13 +48,15 @@ class EventBus:
 | - | - | - | - |
 | `event_registry` | `EventRegistry` | (required) | Event registry instance. |
 | `handler_registry` | `EventHandlerRegistry` | (required) | Handler registry instance. |
-| `max_queue_size` | `int` | `1024` | Max event queue capacity. `put()` blocks when full. |
+| `queue` | `Optional[EventQueue]` | `None` | Internal dispatch queue; the bus depends only on the `EventQueue` abstraction. Defaults to `InMemoryEventQueue()` (capacity from its own default config, 1024). See [Event Queue doc](queue.md). |
 | `max_handler_semaphore` | `int` | `256` | Max concurrent handlers (semaphore). |
 | `shutdown` | `ShutdownConfig` | `ShutdownConfig()` | Shutdown behavior config. |
 | `middleware_chain` | `Optional[MiddlewareChain]` | `None` | Middleware chain for publish hooks. |
 
 Constructing automatically registers `ShutdownEvent` and `TaskErrorEvent` (if not present),
-and creates an internal [Matcher](matcher.md) for event-to-handler routing.
+and creates an internal [Matcher](matcher.md) for event-to-handler routing. Queue capacity and
+other settings live on the queue itself — the bus never knows them; inject
+`InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=N))` to control capacity.
 
 ### Lifecycle
 

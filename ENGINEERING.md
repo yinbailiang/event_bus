@@ -155,6 +155,7 @@ src/event_bus/
 ├── __init__.py           公开 API 入口
 ├── event.py              事件系统（Event / Declaration / Registry）
 ├── handler.py            处理器系统（EventHandler / Registry）
+├── queue.py              队列抽象（EventQueue / InMemoryEventQueue / Config）
 ├── bus.py                事件总线（EventBus / Proxy / 停机）
 ├── middleware.py          中间件系统（Middleware / Chain / 洋葱模型）
 └── templates/

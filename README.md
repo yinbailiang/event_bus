@@ -239,7 +239,8 @@ asyncio.run(main())
 | **EventRegistry** | Central management of registered event declarations; validates on publish |
 | **EventHandler** | Handler base class; implement `handle` method for business logic |
 | **EventHandlerRegistry** | Manages handler instances; matches handler lists by event name |
-| **EventBus** | Event dispatch hub: task queue, concurrency control, error reporting, lifecycle |
+| **EventQueue** | Replaceable dispatch queue abstraction: `EventQueue` ABC + `InMemoryEventQueue` default (config owned by the queue) |
+| **EventBus** | Event dispatch hub: concurrency control, error reporting, lifecycle (queue injected via `queue=`) |
 | **Middleware** | Middleware base class, onion pipeline: `before_publish` / `on_publish` dual hooks |
 | **MiddlewareChain** | Chain of responsibility manager; wraps the publish flow in order |
 | **templates** | Advanced templates: `handler` simplified API, `expect` listener, `request` RPC, `pipe` channel, `register` batch registration |

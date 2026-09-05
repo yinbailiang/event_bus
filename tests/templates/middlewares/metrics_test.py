@@ -2,10 +2,13 @@
 import pytest
 
 from event_bus import (
+
     EventBus,
     EventHandlerRegistry,
     EventRegistry,
     MiddlewareChain,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
 )
 from event_bus.templates.middlewares import MetricsMiddleware, MetricsSnapshot
 
@@ -47,7 +50,7 @@ class TestMetricsBasic:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain_with_metrics,
         )
         async with bus:
@@ -72,7 +75,7 @@ class TestMetricsBasic:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain_with_metrics,
         )
         async with bus:
@@ -100,7 +103,7 @@ class TestMetricsBasic:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain_with_metrics,
         )
         async with bus:
@@ -124,7 +127,7 @@ class TestMetricsBasic:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain_with_metrics,
         )
         async with bus:
@@ -155,7 +158,7 @@ class TestMetricsErrors:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain_with_metrics,
         )
         async with bus:
@@ -177,7 +180,7 @@ class TestMetricsErrors:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain_with_metrics,
         )
         async with bus:
@@ -210,7 +213,7 @@ class TestMetricsSnapshot:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain_with_metrics,
         )
         async with bus:
@@ -238,7 +241,7 @@ class TestMetricsSnapshot:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain_with_metrics,
         )
         async with bus:
@@ -277,7 +280,7 @@ class TestMetricsCustomBuckets:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -366,7 +369,7 @@ class TestPrometheusIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -401,7 +404,7 @@ class TestPrometheusIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -441,7 +444,7 @@ class TestPrometheusIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -523,7 +526,7 @@ class TestOpenTelemetryIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:
@@ -562,7 +565,7 @@ class TestOpenTelemetryIntegration:
         bus = EventBus(
             base_event_registry,
             handler_registry,
-            max_queue_size=10,
+            queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
         async with bus:

@@ -8,6 +8,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from event_bus import (
+
     Event,
     BusShuttingDown,
     EventBus,
@@ -17,6 +18,8 @@ from event_bus import (
     ShutdownConfig,
     ShutdownEvent,
     TaskErrorEvent,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
 )
 
 from conftest import (
@@ -293,7 +296,7 @@ async def test_shutdown_cancels_pending_tasks(
     bus = EventBus(
         base_event_registry,
         handler_registry,
-        max_queue_size=10,
+        queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
         max_handler_semaphore=2,
         shutdown=ShutdownConfig(tasks_timeout=0.3),
     )
