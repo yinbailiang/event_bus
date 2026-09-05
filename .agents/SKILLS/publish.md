@@ -39,24 +39,36 @@
    uv run pytest tests/ --cov=event_bus --cov-report=term-missing -v
    ```
 
-4. **提交版本更新**
+4. **同步工程基准快照**（每次发版维护一次，防止 ENGINEERING / COMMIT_LOG / README 漂移）
+
+   以本次全量验证输出为准，更新以下文件的基准数据：
+
+   | 文件 | 更新内容 | 权威来源 |
+   | - | - | - |
+   | `ENGINEERING.md` | 测试数 / 覆盖率、100% 模块清单、模块树（含新增 `.py`） | `pytest` 摘要 |
+   | `COMMIT_LOG.md` | 顶部版本标签表新增行 + 本版本提交条目 | `git log --oneline <上一tag>..HEAD` |
+   | `README.md` / `README_zh.md` | 对照表 Baseline Version = `v<版本> <commit>`、测试数行 | `git rev-parse HEAD` |
+
+   若发现基准已漂移（例如模块树缺文件、覆盖数与实际不符、COMMIT_LOG 落后），本次发版应一并修正。
+
+5. **提交版本更新**
 
    ```bash
-   git add pyproject.toml
+   git add -A   # 版本号 + 基准快照（如需可拆为独立 docs 提交）
    git commit -m "chore: bump version to <新版本号>"
    git push
    ```
 
-5. **打 Tag 并推送** — Tag 必须以 `v` 开头，否则不会触发 publish workflow：
+6. **打 Tag 并推送** — Tag 必须以 `v` 开头，否则不会触发 publish workflow：
 
    ```bash
    git tag -a v<新版本号>
    git push origin v<新版本号>
    ```
 
-6. **监控 CI/CD** — 前往 [Actions](https://github.com/yinbailiang/event_bus/actions) 查看 workflow 执行状态。
+7. **监控 CI/CD** — 前往 [Actions](https://github.com/yinbailiang/event_bus/actions) 查看 workflow 执行状态。
 
-7. **验证发布**
+8. **验证发布**
    - PyPI: <https://pypi.org/project/infinity_bus/>
    - Releases: <https://github.com/yinbailiang/event_bus/releases>
 
@@ -67,6 +79,7 @@
 ## 注意事项
 
 - **禁止手动创建 GitHub Release**，CI/CD 自动创建并附加 `.whl` / `.tar.gz`。
+- 慢测（`@pytest.mark.slow`）已由 CI 全量覆盖：`test.yml` / `publish.yml` 均以 `-m ""` 运行（含慢测），本地 `pytest` 默认跳过属预期。
 - CI 失败时先修复问题，再删除错误 tag 重新打：
 
   ```bash
