@@ -1,11 +1,13 @@
 # Commit Log — `infinity_bus`
 
-> 共 **95** 个提交 · 18 个版本标签 · 2026-06-07 ~ 2026-07-12
+> 共 **112** 个提交 · 20 个版本标签 · 2026-06-07 ~ 2026-09-06
 
 ## 版本标签
 
 | Tag | Commit |
 | --- | ------ |
+| `v3.0.0` | `612e712` |
+| `v2.2.1` | `72fc567` |
 | `v2.2.0` | `e27164d` |
 | `v2.1.0` | `6c0005b` |
 | `v2.0.0` | `b1383d8` |
@@ -29,9 +31,61 @@
 
 ## 全部提交
 
+### 2026-09-06
+
+- **`d7a67f0`** `chore: bump version to 3.1.0`
+  - Version bumped 3.0.0 → 3.1.0 (new templates: cross-process queues + idempotency)
+
+- **`da5f345`** `docs(templates): queues & idempotency docs (zh/en) mirroring code structure`
+  - Docs (EN+ZH): queues/codec/rabbit + idempotency template pages mirroring the code structure
+
+- **`3032fb8`** `test(templates): codec/idempotency/rabbit tests + RabbitMQ CI integration job`
+  - New tests: EventCodec, IdempotencyRecorder/Handler, RabbitMQ fanout (mock + inproc)
+  - CI: RabbitMQ integration job runs the slow cross-process queue tests (test.yml / publish.yml)
+
+- **`285312d`** `feat(templates): cross-process queues + idempotency (EventCodec, RabbitMQ fanout, recorder)`
+  - EventCodec (wire codec) honoring the "perfect Event" queue contract — payload rebuilt from the registry at the boundary
+  - RabbitFanoutQueue: RabbitMQ fanout EventQueue with restart / offline-join strategies + per-message ack
+  - IdempotencyRecorder / IdempotentHandler: injectable uuid dedup (in-memory + sqlite), top-level template
+  - queue.py: documented the "perfect Event queue" contract (no API break); pyproject adds aio-pika to [templates]
+
+### 2026-09-05
+
+- **`6ab3f8d`** docs(agents): add release baseline snapshot and slow-test notes to publish skill
+- **`6e03733`** test: type-check tests with pyright basic (strict src only)
+- **`84d5dc3`** refactor(tests): apply ruff lint+format and gate tests in pre-commit
+- **`612e712`** docs: sync comparison table to v3.0.0
+- **`903fd94`** chore: bump version to 3.0.0
+
+- **`23caf98`** `feat(queue): extract EventQueue abstraction with injectable bus queue (breaking)`
+  - New src/event_bus/queue.py: EventQueue (ABC) + InMemoryEventQueueConfig (pydantic) + InMemoryEventQueue
+  - EventBus.__init__ drops max_queue_size; takes queue: Optional[EventQueue] = None (BREAKING)
+  - Bus only depends on the EventQueue abstraction (put/get/task_done/qsize/join); capacity config lives in the queue
+  - Default InMemoryEventQueue() uses maxsize=1024, equivalent to the previous default behavior
+
+### 2026-07-29
+
+- **`0c699fc`** update: remove nix support
+
+### 2026-07-28
+
+- **`cbcf6f1`** merge: resolve conflict in logging_test.py
+- **`dff2cca`** fix(logging_test.py): Fix the test file leakage issue
+- **`60b6420`** feat(flake): add nix support
+
+### 2026-07-27
+
+- **`ac026a6`** docs: sync comparison table to v2.2.1, split FIFO row; fix test :memory: file leak
+
+### 2026-07-26
+
+- **`f6fc6df`** chore: add .gitattributes to enforce LF line endings
+
 ### 2026-07-12
 
-- **`e6f9f58`** `fix(middleware): race condition in add/insert rollback, type hints; docs overhaul`
+- **`72fc567`** chore: bump version to 2.2.1
+
+- **`c5e8d03`** `fix(middleware): race condition in add/insert rollback, type hints; docs overhaul`
   - Fixed `add()`/`insert()` race: middleware is now added to chain **before** `on_setup()`, and removed on failure for clean rollback
   - Corrected `BeforePublishNext`/`OnPublishNext`/`OnPublishErrorNext` return type from `Any` to `Awaitable[None]`
   - Changed `raise e` to bare `raise` in `_execute_handler` to preserve original traceback
@@ -54,7 +108,7 @@
 
 ### 2026-07-07
 
-- **`6c0005b`** `chore: bump version to 2.1.0`
+- **`6c0005b`** chore: bump version to 2.1.0
 
 ### 2026-07-06
 
@@ -71,26 +125,26 @@
 
 ### 2026-06-20
 
-- **`7ffc90b`** `chore: bump version to 1.5.6`
+- **`7ffc90b`** chore: bump version to 1.5.6
 
 ### 2026-06-14
 
-- **`6dd677f`** `docs: fix some reference`
-- **`8abe9fa`** `chore: bump version to 1.5.5`
-- **`98cd678`** `fix(middlewares): jsonl write race`
-- **`88d1f45`** `docs: updete dependency count line`
-- **`2a4a243`** `chore: bump version to 1.5.4`
-- **`bd05954`** `fix(middlewares): jsonl logger output error`
-- **`38974e5`** `chore: bump version to 1.5.3`
-- **`62b568a`** `fix(templates): export pipe errors` + `docs: sync changes`
+- **`6dd677f`** docs: fix some reference
+- **`8abe9fa`** chore: bump version to 1.5.5
+- **`98cd678`** fix(middlewares): jsonl write race
+- **`88d1f45`** docs: updete dependency count line
+- **`2a4a243`** chore: bump version to 1.5.4
+- **`bd05954`** fix(middlewares): jsonl logger output error
+- **`38974e5`** chore: bump version to 1.5.3
+- **`62b568a`** fix(templates): export pipe errors docs: sync changes
 
 ### 2026-06-13
 
-- **`37f4132`** `docs(agents): add write-docs skill, and cross-references`
-- **`137e1f9`** `docs: update comparison table to v1.5.2`
-- **`a873b43`** `docs(ENGINEERING.md): fix linter waring`
-- **`f37c75d`** `docs: add contributing guide`
-- **`4de6258`** `chore: bump version to 1.5.2` + `docs: add commit message convention to ENGINEERING.md`
+- **`37f4132`** docs(agents): add write-docs skill, and cross-references
+- **`137e1f9`** docs: update comparison table to v1.5.2
+- **`a873b43`** docs(ENGINEERING.md): fix linter waring
+- **`f37c75d`** docs: add contributing guide
+- **`4de6258`** chore: bump version to 1.5.2 docs: add commit message convention to ENGINEERING.md
 - **`9e164bf`** 新增handler快速定义装饰模板
 
 ### 2026-06-12
@@ -135,7 +189,7 @@
 - **`59c6a3f`** 修复开发工具集
 - **`0b7f50f`** v1.3.6
 - **`c9b4fee`** CI改进加入pre-commit
-- **`24c8b3f`** 依赖模块化 · 教程改进 · CI测试仅拉取test子包
+- **`24c8b3f`** 依赖模块化 教程改进 CI测试仅拉取test子包
 - **`eb1232f`** README改进
 - **`7f60719`** 工程化文档和README改进
 - **`599fbd3`** 添加文档索引，升级readme
@@ -147,13 +201,23 @@
 - **`8cc3297`** icons
 - **`c78e3dc`** (版本号修改)
 - **`18f5433`** (CI 配置修改)
-- **`43c910a`** `fix: exclude .gitignore from release assets, restore workflow_dispatch`
+- **`43c910a`** fix: exclude .gitignore from release assets, restore workflow_dispatch
 - **`37b1eb9`** (版本号修改)
 - **`c419f83`** (README 修改)
 - **`eb1a363`** (CI 配置修改)
 - **`ee11176`** (CI 配置修改)
 - **`9c6c4db`** (pyproject.toml 修改)
+
 - **`59653aa`** `fix: release step only on tag push`
+  - 去掉 2 个 `# type: ignore` → strict PyLance 零例外
+  - 停机参数 ClassVar → ShutdownConfig(BaseModel) → 实例级 + JSON 加载
+  - regex_cache dict → OrderedDict LRU(256) → 防无限膨胀
+  - TaskErrorPayload 加了 handler_id → 精确错误追踪
+  - get_handlers 返回 (id, handler) 元组 → API 干净无重复
+  - 删了 register_handler → 去耦合
+  - get_active_task_count/get_queue_size → property → 风格统一
+  - `__version__` → "1.2.0"
+
 - **`de0a671`** v1.3.0
 - **`d5ee475`** 改名
 - **`3d4fb00`** 改名
@@ -176,7 +240,8 @@
 - **`fa15923`** 注册器文档
 - **`4c1b2f1`** 测试修复
 - **`3d3bce9`** 测试修复+小修小补
-- **`e772e5e`** core.py 重构:
+
+- **`e772e5e`** `core.py 重构:`
   - 去掉 2 个 `# type: ignore` → strict PyLance 零例外
   - 停机参数 ClassVar → ShutdownConfig(BaseModel) → 实例级 + JSON 加载
   - regex_cache dict → OrderedDict LRU(256) → 防无限膨胀

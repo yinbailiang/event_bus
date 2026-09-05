@@ -59,9 +59,9 @@
 | 慢 handler 告警 | ❌ | ✅ 15s 超时告警 | ❌ | N/A |
 | 防递归 | ✅ 中间件（可配置） | ✅ 内置（不可配置） | ❌ | N/A |
 | 日志与审计 | ✅ JSONL + SQLite（中间件） | ✅ 内置 JSONL WAL 日志 | ❌ 无内置 | ⚠️ 调试追踪 |
-| 测试覆盖 | ✅ 94%（296 tests） | ✅ 83%（138 tests） | ✅ 94%（43 tests） | ✅ 86%（167 tests） |
+| 测试覆盖 | ✅ 94%（325 tests） | ✅ 83%（138 tests） | ✅ 94%（43 tests） | ✅ 86%（167 tests） |
 | Python 版本 | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
-| 基准版本 | v3.0.0 `903fd94` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
+| 基准版本 | v3.1.0 `d7a67f0` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
 
 > **选择 InfinityBus 的理由**：你需要中间件原生架构——可热重载的洋葱管道，内置 8 个中间件（日志、指标、限流、转换、屏蔽、防递归、转发）；你要求整个代码库通过 pyright strict 且生产代码**零 `# type: ignore`**；你希望用单一核心依赖获得完整的生产级特性（背压、优雅停机、正则订阅、Pydantic 负载校验）。
 >
@@ -72,7 +72,7 @@
 > **选择 PyPubSub 的理由**：你不使用 asyncio；你需要极宽的 Python 版本兼容（3.7–3.14）；你偏好传统的主题层级字符串匹配。
 >
 > 完整 commit：
-> · [InfinityBus `f6fc6df`](https://github.com/yinbailiang/event_bus/commit/f6fc6df)
+> · [InfinityBus `d7a67f0`](https://github.com/yinbailiang/event_bus/commit/d7a67f0)
 > · [bubus `7c09342`](https://github.com/browser-use/bubus/commit/7c09342)
 > · [pyee `5157de2`](https://github.com/jfhbrook/pyee/commit/5157de2)（官方 CI 无覆盖率，此处为手动 `pytest-cov` 测量）
 > · [PyPubSub `4ec2c47`](https://github.com/schollii/pypubsub/commit/4ec2c47)

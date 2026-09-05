@@ -61,9 +61,9 @@ ignore-nested-functions = true
 
 | 指标 | 数值 |
 | - | - |
-| 公开 API docstring 覆盖 | **85%+** |
+| 公开 API docstring 覆盖 | **89.5%** |
 | 最低阈值 | 60% |
-| 文档文件 | 16 篇 `.md` |
+| 文档文件 | 53 篇 `.md` |
 
 ---
 
@@ -72,11 +72,11 @@ ignore-nested-functions = true
 ### 覆盖率
 
 ```text
-160 passed · 1 deselected · 0 failed · 11.7s
-总覆盖率: 92%（1119 statements / 94 missed）
+325 passed · 5 deselected(slow) · 0 failed · 10.0s
+总覆盖率: 94%（1828 statements / 108 missed）
 ```
 
-7 个模块达到 **100%** 覆盖，最低模块 > 82%。
+14 个模块达到 **100%** 覆盖，最低模块 > 82%。
 
 ### 架构
 
@@ -86,18 +86,31 @@ tests/
 ├── bus_test.py             EventBus 集成测试
 ├── event_test.py           Event / Declaration / Registry
 ├── handler_test.py         EventHandler / Registry
+├── matcher_test.py         Matcher
 ├── middleware_test.py      Middleware / MiddlewareChain
+├── queue_test.py           EventQueue / InMemoryEventQueue
 └── templates/
     ├── expect_test.py
-    ├── request_test.py
+    ├── idempotency_test.py
     ├── pipe_test.py
     ├── register_test.py
-    └── middlewares/
-        ├── event_block_test.py
-        ├── event_transform_test.py
-        ├── logging_test.py
-        ├── rate_limit_test.py
-        └── recursion_guard_test.py
+    ├── request_test.py
+    ├── simple_handler_test.py
+    ├── handlers/
+    │   └── mailbox_test.py
+    ├── middlewares/
+    │   ├── event_block_test.py
+    │   ├── event_forward_test.py
+    │   ├── event_transform_test.py
+    │   ├── logging_test.py
+    │   ├── metrics_test.py
+    │   ├── rate_limit_test.py
+    │   └── recursion_guard_test.py
+    └── queues/
+        ├── codec_test.py
+        └── rabbit/
+            ├── rabbitmq_mock_test.py
+            └── rabbitmq_queue_test.py   慢测（跨进程集成，CI 以 `-m ""` 全量覆盖）
 ```
 
 测试结构完全镜像源码结构。`pytest-asyncio` + `asyncio_mode = "auto"`，异步测试零样板代码。
@@ -145,9 +158,9 @@ uv run pre-commit run --all-files   # 手动全量运行
 
 | 指标 | 数值 |
 | - | - |
-| 最大单文件 | 300+ 行 (`bus.py`) |
-| 模块平均 | ~130 行/文件 |
-| 生产文件数 | 16 个 `.py` |
+| 最大单文件 | ~406 行 (`templates/middlewares/metrics.py`) |
+| 模块平均 | ~164 行/文件 |
+| 生产文件数 | 27 个 `.py` |
 
 每个文件一个职责，打开瞬间看完。新增功能不改旧代码。
 
@@ -158,20 +171,35 @@ src/event_bus/
 ├── __init__.py           公开 API 入口
 ├── event.py              事件系统（Event / Declaration / Registry）
 ├── handler.py            处理器系统（EventHandler / Registry）
+├── matcher.py            订阅匹配（Matcher）
 ├── queue.py              队列抽象（EventQueue / InMemoryEventQueue / Config）
 ├── bus.py                事件总线（EventBus / Proxy / 停机）
-├── middleware.py          中间件系统（Middleware / Chain / 洋葱模型）
+├── middleware.py         中间件系统（Middleware / Chain / 洋葱模型）
 └── templates/
-    ├── expect.py          一次性事件监听
-    ├── request.py         请求-响应 RPC
-    ├── pipe.py            双向管道
-    ├── register.py        模块级批量注册
-    └── middlewares/
-        ├── event_block.py       事件屏蔽
-        ├── event_transform.py   事件转换
-        ├── logging.py           JSONL + SQLite 日志
-        ├── rate_limit.py        速率限制
-        └── recursion_guard.py   递归防护
+    ├── __init__.py       模板统一出口
+    ├── expect.py         一次性事件监听
+    ├── idempotency.py    幂等消费（IdempotencyRecorder / IdempotentHandler）
+    ├── pipe.py           双向管道
+    ├── register.py       模块级批量注册
+    ├── request.py        请求-响应 RPC
+    ├── simple_handler.py 处理器快速定义装饰模板
+    ├── handlers/
+    │   └── mailbox.py    邮箱模板
+    ├── middlewares/
+    │   ├── __init__.py
+    │   ├── event_block.py       事件屏蔽
+    │   ├── event_forward.py     事件转发
+    │   ├── event_transform.py   事件转换
+    │   ├── logging.py           JSONL + SQLite 日志
+    │   ├── metrics.py           指标上报
+    │   ├── rate_limit.py        速率限制
+    │   └── recursion_guard.py   递归防护
+    └── queues/
+        ├── __init__.py
+        ├── codec.py             跨进程编解码（EventCodec）
+        └── rabbit/
+            ├── __init__.py
+            └── queue.py         RabbitMQ fanout 事件队列
 ```
 
 ---
