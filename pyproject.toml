@@ -101,10 +101,12 @@ quote-style = "single"
 line-ending = "lf"
 
 [tool.pyright]
-typeCheckingMode = "strict"
+typeCheckingMode = "basic"
+strict = ["src"]
 reportMissingTypeStubs = false
 reportMissingImports = "error"
-exclude = ["tests", "**/node_modules", "**/__pycache__", "**/.*", ".venv"]
+include = ["src", "tests"]
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", ".venv"]
 venvPath = "."
 venv = ".venv"
 

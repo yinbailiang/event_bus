@@ -27,7 +27,7 @@ repos:
     hooks:
       - id: pyright
         args: ["--level", "error"]
-        files: ^src/
+        files: ^(src|tests)/
 
   - repo: https://github.com/econchick/interrogate
     rev: 1.7.0

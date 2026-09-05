@@ -1357,7 +1357,7 @@ def _mock_bus() -> EventBus:
     bus._state_lock = asyncio.Lock()  # pyright: ignore[reportPrivateUsage]
     bus._enable_publish = asyncio.Event()  # pyright: ignore[reportPrivateUsage]
     bus._running = asyncio.Event()  # pyright: ignore[reportPrivateUsage]
-    bus._queue = asyncio.Queue(maxsize=10)  # pyright: ignore[reportPrivateUsage]
+    bus._queue = InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10))  # pyright: ignore[reportPrivateUsage]
     # 不启动 dispatch loop
     return bus
 

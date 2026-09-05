@@ -6,23 +6,26 @@ InfinityBus 是一个工程纪律驱动的项目。以下是所有质量保障�
 
 ## 类型安全
 
-### Pyright Strict
+### Pyright Strict（生产代码） + Basic（测试）
 
-项目启用 [Pyright](https://github.com/microsoft/pyright) **strict** 模式，这是 Python 生态中最严格的类型检查级别。
+生产代码 `src/` 启用 [Pyright](https://github.com/microsoft/pyright) **strict** 模式——Python 生态中最严格的类型检查级别；
+`tests/` 一并纳入类型检查但运行 **basic** 模式（通过 `strict = ["src"]` 仅对生产代码开严格）。
 
 ```toml
 # pyproject.toml
 [tool.pyright]
-typeCheckingMode = "strict"
+typeCheckingMode = "basic"
+strict = ["src"]
 reportMissingTypeStubs = false
 reportMissingImports = "error"
+include = ["src", "tests"]
 ```
 
 **生产代码零遮蔽。** 整个 `src/` 目录没有任何 `# type: ignore` 或 `# pyright: ignore` 注释。
 
 | 指标 | 数值 |
 | - | - |
-| 类型检查模式 | `strict` |
+| 类型检查模式 | `src` = `strict` · `tests` = `basic` |
 | 生产代码 `# type: ignore` | **0** |
 
 ### Ruff Lint

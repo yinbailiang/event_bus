@@ -1,7 +1,7 @@
 """EventQueue 抽象与 InMemoryEventQueue 实现的单元/集成测试。"""
 
 import asyncio
-from typing import Callable
+from typing import Any, Callable, cast
 
 import pytest
 from conftest import CountingHandler, wait_for_condition
@@ -24,7 +24,7 @@ from event_bus import (
 def test_event_queue_is_abstract() -> None:
     """EventQueue 为抽象基类，不能直接实例化。"""
     with pytest.raises(TypeError):
-        EventQueue()
+        cast(Any, EventQueue)()
 
 
 def test_event_queue_requires_all_methods() -> None:
@@ -35,7 +35,7 @@ def test_event_queue_requires_all_methods() -> None:
             pass
 
     with pytest.raises(TypeError):
-        PartialQueue()
+        cast(Any, PartialQueue)()
 
 
 # ============================================================================

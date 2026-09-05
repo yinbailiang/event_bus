@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict, List
+from typing import List, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -85,6 +85,11 @@ def mock_bus_proxy(event_registry: EventRegistry, handler_registry: EventHandler
     return proxy
 
 
+def _publish_mock(proxy: EventBus.Proxy) -> AsyncMock:
+    """取回 mock_bus_proxy 上替换 publish 的 AsyncMock，供类型化断言。"""
+    return cast(AsyncMock, proxy.publish)
+
+
 # ---------------------------------------------------------------------------
 # 辅助函数：模拟服务端响应触发
 # ---------------------------------------------------------------------------
@@ -125,8 +130,9 @@ async def test_request_success(
 
     # 等待发布被调用
     await asyncio.sleep(0.01)
-    assert mock_bus_proxy.publish.called
-    call_args: Dict[Any, Any] = mock_bus_proxy.publish.call_args
+    publish_mock = _publish_mock(mock_bus_proxy)
+    assert publish_mock.called
+    call_args = publish_mock.call_args
     published_data = call_args[0][1]
     req_id_in_publish: str = published_data['request_id']
     assert published_data['session_id'] == session_id
@@ -164,7 +170,8 @@ async def test_request_timeout(mock_bus_proxy: EventBus.Proxy) -> None:
 @pytest.mark.asyncio
 async def test_request_bus_shutting_down(mock_bus_proxy: EventBus.Proxy) -> None:
     """总线关闭时发布请求应抛出 BusShuttingDown"""
-    mock_bus_proxy.publish.side_effect = BusShuttingDown('bus is down')
+    publish_mock = _publish_mock(mock_bus_proxy)
+    publish_mock.side_effect = BusShuttingDown('bus is down')
 
     with pytest.raises(BusShuttingDown):
         await request(
@@ -212,7 +219,7 @@ async def test_request_fails_immediately_if_response_event_not_compliant(
             resp_event='test.bad_response',  # BadResponsePayload 不继承 ResponseProtocol
         )
     # 确保从未尝试发布事件
-    mock_bus_proxy.publish.assert_not_called()
+    _publish_mock(mock_bus_proxy).assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -233,7 +240,7 @@ async def test_handler_rejects_malformed_response_payload_at_runtime(
 
     await asyncio.sleep(0.1)
     # 提取发布时的 session_id 和 request_id
-    call_args = mock_bus_proxy.publish.call_args
+    call_args = _publish_mock(mock_bus_proxy).call_args
     published_payload = call_args[0][1]
     session_id = published_payload['session_id']
     request_id = published_payload['request_id']
@@ -268,7 +275,7 @@ async def test_request_session_mismatch_ignored(
     )
 
     await asyncio.sleep(0.01)
-    call_args = mock_bus_proxy.publish.call_args
+    call_args = _publish_mock(mock_bus_proxy).call_args
     published_data = call_args[0][1]
     real_session = published_data['session_id']
     real_req_id = published_data['request_id']
@@ -333,7 +340,7 @@ async def test_request_no_timeout(
     )
 
     await asyncio.sleep(0.01)
-    call_args = mock_bus_proxy.publish.call_args
+    call_args = _publish_mock(mock_bus_proxy).call_args
     published_data = call_args[0][1]
     session_id = published_data['session_id']
     request_id = published_data['request_id']
@@ -391,7 +398,7 @@ async def test_response_failure_raise_if_failed(
     )
 
     await asyncio.sleep(0.01)
-    call_args = mock_bus_proxy.publish.call_args
+    call_args = _publish_mock(mock_bus_proxy).call_args
     published_data = call_args[0][1]
     session_id = published_data['session_id']
     request_id = published_data['request_id']

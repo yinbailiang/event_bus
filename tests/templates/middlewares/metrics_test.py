@@ -1,5 +1,7 @@
 """指标中间件测试。"""
 
+from typing import Generator
+
 import pytest
 from conftest import SimplePingHandler
 
@@ -301,7 +303,7 @@ class TestPrometheusIntegration:
     """桥接 prometheus_client 官方 SDK。"""
 
     @pytest.fixture(autouse=True)
-    def _clean_global_registry(self) -> None:
+    def _clean_global_registry(self) -> Generator[None, None, None]:
         """每个测试后清理全局 REGISTRY，避免指标名冲突。"""
         yield
         import prometheus_client
