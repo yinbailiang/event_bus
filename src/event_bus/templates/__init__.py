@@ -5,6 +5,12 @@
 """
 
 from .expect import OneShotEventHandler, expect, temporary_handler
+from .idempotency import (
+    IdempotencyRecorder,
+    IdempotentHandler,
+    InMemoryIdempotencyRecorder,
+    SqliteIdempotencyRecorder,
+)
 from .middlewares import (
     BlockPredicate,
     EventBlockMiddleware,
@@ -44,6 +50,7 @@ from .pipe import (
     get_default_allocator,
     open_pipe,
 )
+from .queues import EventCodec, PayloadType, RabbitFanoutQueue
 from .register import ModuleEventRegister, ModuleHandlerRegister
 from .request import RequestProtocol, ResponseProtocol, request
 from .simple_handler import handler
@@ -100,4 +107,13 @@ __all__ = [
     'request',
     'RequestProtocol',
     'ResponseProtocol',
+    # idempotency（幂等 recorder 注入策略）
+    'IdempotencyRecorder',
+    'IdempotentHandler',
+    'InMemoryIdempotencyRecorder',
+    'SqliteIdempotencyRecorder',
+    # queues（跨进程 EventQueue）
+    'EventCodec',
+    'PayloadType',
+    'RabbitFanoutQueue',
 ]
