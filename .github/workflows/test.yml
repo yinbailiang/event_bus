@@ -47,3 +47,47 @@ jobs:
 
       - name: Run tests with coverage (including slow)
         run: uv run pytest --cov=src --cov-report=term-missing --cov-fail-under=90 -v -m ""
+
+  # RabbitMQ 集成测试：GitHub Actions 服务启动真实 broker，
+  # 跑跨进程 EventQueue（queues/rabbit）的 slow 集成测试（无 broker 时自动 skip）。
+  integration-rabbitmq:
+    needs: pre-commit
+    runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:3.13
+        env:
+          RABBITMQ_DEFAULT_USER: ci
+          RABBITMQ_DEFAULT_PASS: ci
+        ports:
+          - 5672:5672
+    env:
+      RABBITMQ_URL: amqp://ci:ci@127.0.0.1:5672/
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra test
+
+      - name: Wait for RabbitMQ
+        run: |
+          uv run python - <<'EOF'
+          import socket, time
+          for _ in range(30):
+              if socket.socket().connect_ex(("127.0.0.1", 5672)) == 0:
+                  print("rabbit ready")
+                  break
+              time.sleep(1)
+          else:
+              raise SystemExit("RabbitMQ not ready")
+          EOF
+
+      - name: Run RabbitMQ integration tests
+        run: uv run pytest tests/templates/queues/rabbit/ -m slow -v
