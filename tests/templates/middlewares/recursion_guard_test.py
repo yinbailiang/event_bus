@@ -4,26 +4,23 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 import pytest
+from conftest import SimplePingHandler
 from pydantic import BaseModel
 
 from event_bus import (
-
-    Regex,
     Event,
     EventBus,
     EventHandler,
     EventHandlerRegistry,
     EventRegistry,
-    MiddlewareChain,
     InMemoryEventQueue,
     InMemoryEventQueueConfig,
+    MiddlewareChain,
+    Regex,
 )
 from event_bus.templates import (
     RecursionGuardMiddleware,
 )
-
-from conftest import SimplePingHandler
-
 
 # ============================================================================
 # 辅助类
@@ -37,9 +34,9 @@ class ChainPublishingHandler(EventHandler):
         self,
         publish_event: str,
         publish_data: Optional[Dict[str, Any]] = None,
-        subscriptions: Optional[List[str| Regex]] = None,
+        subscriptions: Optional[List[str | Regex]] = None,
     ):
-        super().__init__(subscriptions=subscriptions or ["mw.ping"])
+        super().__init__(subscriptions=subscriptions or ['mw.ping'])
         self._pub_event = publish_event
         self._pub_data = publish_data or {}
         self.publish_count = 0
@@ -73,7 +70,7 @@ class TestRecursionGuardMiddleware:
         chain = MiddlewareChain()
         await chain.add(guard)
 
-        handler = ChainPublishingHandler("mw.ping", {"key": "nested", "count": 1})
+        handler = ChainPublishingHandler('mw.ping', {'key': 'nested', 'count': 1})
         handler_registry.register(handler)
 
         bus = EventBus(
@@ -84,9 +81,7 @@ class TestRecursionGuardMiddleware:
         )
         async with bus:
             for _ in range(3):
-                await bus.proxy("test").publish(
-                    "mw.ping", {"key": "start", "count": 0}
-                )
+                await bus.proxy('test').publish('mw.ping', {'key': 'start', 'count': 0})
                 await asyncio.sleep(0.05)
 
         # 链长 3 在阈值内，应全部通过
@@ -103,7 +98,7 @@ class TestRecursionGuardMiddleware:
         chain = MiddlewareChain()
         await chain.add(guard)
 
-        handler = ChainPublishingHandler("mw.ping", {"key": "loop", "count": 1})
+        handler = ChainPublishingHandler('mw.ping', {'key': 'loop', 'count': 1})
         handler_registry.register(handler)
 
         bus = EventBus(
@@ -114,7 +109,7 @@ class TestRecursionGuardMiddleware:
         )
         async with bus:
             # 发布 → handler 二次发布 → handler 三次发布 → 应被拦截
-            await bus.proxy("test").publish("mw.ping", {"key": "start", "count": 0})
+            await bus.proxy('test').publish('mw.ping', {'key': 'start', 'count': 0})
             await asyncio.sleep(0.1)
 
         # 第 3 次 handler 执行后，再发布时链中 source 出现第 3 次 → 被拦截
@@ -128,7 +123,8 @@ class TestRecursionGuardMiddleware:
     ) -> None:
         """根事件（无 old_event）始终允许"""
         guard = RecursionGuardMiddleware(
-            max_depth=0, max_chain_length=None  # 禁用链路长检查，仅测 per-source
+            max_depth=0,
+            max_chain_length=None,  # 禁用链路长检查，仅测 per-source
         )
         chain = MiddlewareChain()
         await chain.add(guard)
@@ -143,7 +139,7 @@ class TestRecursionGuardMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("test").publish("mw.ping", {"key": "root", "count": 1})
+            await bus.proxy('test').publish('mw.ping', {'key': 'root', 'count': 1})
             await handler.wait_received(timeout=2.0)
 
         assert len(handler.received) == 1
@@ -158,12 +154,12 @@ class TestRecursionGuardMiddleware:
         guard = RecursionGuardMiddleware(
             max_depth=0,
             max_chain_length=None,  # 禁用链长检查
-            ignore_sources={"ChainPublishingHandler"},
+            ignore_sources={'ChainPublishingHandler'},
         )
         chain = MiddlewareChain()
         await chain.add(guard)
 
-        handler = ChainPublishingHandler("mw.ping", {"key": "ignored", "count": 1})
+        handler = ChainPublishingHandler('mw.ping', {'key': 'ignored', 'count': 1})
         handler_registry.register(handler)
 
         bus = EventBus(
@@ -174,9 +170,7 @@ class TestRecursionGuardMiddleware:
         )
         async with bus:
             for _ in range(3):
-                await bus.proxy("test").publish(
-                    "mw.ping", {"key": "start", "count": 0}
-                )
+                await bus.proxy('test').publish('mw.ping', {'key': 'start', 'count': 0})
                 await asyncio.sleep(0.05)
 
         # 被忽略的 source 不计数，全部通过
@@ -195,17 +189,17 @@ class TestRecursionGuardMiddleware:
 
         class HandlerA(EventHandler):
             def __init__(self):
-                super().__init__(["mw.ping"])
+                super().__init__(['mw.ping'])
 
             async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
-                await bus_proxy.publish("mw.ping", {"key": "from_a", "count": 1})
+                await bus_proxy.publish('mw.ping', {'key': 'from_a', 'count': 1})
 
         class HandlerB(EventHandler):
             def __init__(self):
-                super().__init__(["mw.ping"])
+                super().__init__(['mw.ping'])
 
             async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
-                await bus_proxy.publish("mw.ping", {"key": "from_b", "count": 2})
+                await bus_proxy.publish('mw.ping', {'key': 'from_b', 'count': 2})
 
         handler_registry.register(HandlerA())
         handler_registry.register(HandlerB())
@@ -217,7 +211,7 @@ class TestRecursionGuardMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("test").publish("mw.ping", {"key": "start", "count": 0})
+            await bus.proxy('test').publish('mw.ping', {'key': 'start', 'count': 0})
             await asyncio.sleep(0.2)
 
         # 不同 handler 交替发布，各自不超限
@@ -230,13 +224,13 @@ class TestRecursionGuardMiddleware:
     ) -> None:
         """绝对链长上限防止互递归无限增长"""
         guard = RecursionGuardMiddleware(
-            max_depth=100,           # per-source 设很高，不触发
-            max_chain_length=5,      # 链长 5 就拦截
+            max_depth=100,  # per-source 设很高，不触发
+            max_chain_length=5,  # 链长 5 就拦截
         )
         chain = MiddlewareChain()
         await chain.add(guard)
 
-        handler = ChainPublishingHandler("mw.ping", {"key": "loop", "count": 1})
+        handler = ChainPublishingHandler('mw.ping', {'key': 'loop', 'count': 1})
         handler_registry.register(handler)
 
         bus = EventBus(
@@ -246,7 +240,7 @@ class TestRecursionGuardMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("test").publish("mw.ping", {"key": "start", "count": 0})
+            await bus.proxy('test').publish('mw.ping', {'key': 'start', 'count': 0})
             await asyncio.sleep(0.2)
 
         # 链长上限 5，handler 最多执行 5 次（第 6 次发布被拦截）

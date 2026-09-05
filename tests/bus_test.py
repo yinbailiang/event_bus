@@ -5,23 +5,6 @@ import time
 from typing import Any, Awaitable, Callable, List, Optional
 
 import pytest
-from pydantic import BaseModel, ValidationError
-
-from event_bus import (
-
-    Event,
-    BusShuttingDown,
-    EventBus,
-    EventHandler,
-    EventHandlerRegistry,
-    EventRegistry,
-    ShutdownConfig,
-    ShutdownEvent,
-    TaskErrorEvent,
-    InMemoryEventQueue,
-    InMemoryEventQueueConfig,
-)
-
 from conftest import (
     BlockingHandler,
     ConcurrentTrackingHandler,
@@ -32,7 +15,21 @@ from conftest import (
     publish_many,
     wait_for_condition,
 )
+from pydantic import BaseModel, ValidationError
 
+from event_bus import (
+    BusShuttingDown,
+    Event,
+    EventBus,
+    EventHandler,
+    EventHandlerRegistry,
+    EventRegistry,
+    InMemoryEventQueue,
+    InMemoryEventQueueConfig,
+    ShutdownConfig,
+    ShutdownEvent,
+    TaskErrorEvent,
+)
 
 # ============================================================================
 # 发布校验
@@ -43,7 +40,7 @@ from conftest import (
 async def test_unknown_event_publish(event_bus: EventBus):
     """验证发布未注册事件时抛出 ValueError"""
     with pytest.raises(ValueError):
-        await event_bus.proxy("test_pub").publish("unknown.event", None)
+        await event_bus.proxy('test_pub').publish('unknown.event', None)
 
 
 @pytest.mark.asyncio
@@ -52,26 +49,22 @@ async def test_payload_check(event_bus: EventBus):
 
     # 声明需要负载但未提供
     with pytest.raises(ValueError):
-        await event_bus.proxy("test_pub").publish("test.event", None)
+        await event_bus.proxy('test_pub').publish('test.event', None)
 
     # 声明需要负载但提供了错误类型
     with pytest.raises(ValidationError):
-        await event_bus.proxy("test_pub").publish(
-            "test.event", {"value": "not an int"}
-        )
+        await event_bus.proxy('test_pub').publish('test.event', {'value': 'not an int'})
 
     class ErrorPayload(BaseModel):
         pass
 
     # 声明需要负载且提供了错误 BaseModel 子类
     with pytest.raises(TypeError):
-        await event_bus.proxy("test_pub").publish("test.event", ErrorPayload())
+        await event_bus.proxy('test_pub').publish('test.event', ErrorPayload())
 
     # 声明不需要负载但提供了负载
     with pytest.raises(ValueError):
-        await event_bus.proxy("test_pub").publish(
-            "test.slow", {"unexpected": "data"}
-        )
+        await event_bus.proxy('test_pub').publish('test.slow', {'unexpected': 'data'})
 
 
 # ============================================================================
@@ -108,8 +101,8 @@ async def test_publish_before_start(
 ):
     """总线未启动时发布事件应抛出 RuntimeError"""
     bus = event_bus_factory()
-    with pytest.raises(RuntimeError, match="EventBus is not running"):
-        await bus.proxy("test").publish("test.event", {"value": 1})
+    with pytest.raises(RuntimeError, match='EventBus is not running'):
+        await bus.proxy('test').publish('test.event', {'value': 1})
 
 
 # ============================================================================
@@ -130,14 +123,11 @@ async def test_high_concurrency_throughput(
 
     N = 65536
     async with event_bus:
-        tasks = [
-            event_bus.proxy("pub").publish("test.event", {"value": i})
-            for i in range(N)
-        ]
+        tasks = [event_bus.proxy('pub').publish('test.event', {'value': i}) for i in range(N)]
         await asyncio.gather(*tasks)
 
         await wait_for_condition(lambda: handler.count == N, timeout=2.0)
-        assert handler.count == N, f"吞吐量丢失: 期望 {N}, 实际 {handler.count}"
+        assert handler.count == N, f'吞吐量丢失: 期望 {N}, 实际 {handler.count}'
 
 
 @pytest.mark.asyncio
@@ -147,21 +137,16 @@ async def test_backpressure_no_deadlock(
 ) -> None:
     """并发限流：超过 Semaphore 限制时，新任务应等待"""
     bus = event_bus_factory(max_handler_semaphore=2)
-    handler = ConcurrentTrackingHandler(subscriptions=["test.block"])
+    handler = ConcurrentTrackingHandler(subscriptions=['test.block'])
     handler_registry.register(handler)
 
     N = 10
     async with bus:
-        tasks = [
-            asyncio.create_task(bus.proxy("bp_pub").publish("test.block", None))
-            for _ in range(N)
-        ]
+        tasks = [asyncio.create_task(bus.proxy('bp_pub').publish('test.block', None)) for _ in range(N)]
 
         await handler.wait_started()
         await asyncio.sleep(0.05)
-        assert handler.max_seen == 2, (
-            f"Semaphore 限流失效: max_seen={handler.max_seen}"
-        )
+        assert handler.max_seen == 2, f'Semaphore 限流失效: max_seen={handler.max_seen}'
 
         handler.release_all()
         await asyncio.gather(*tasks)
@@ -175,9 +160,7 @@ async def test_backpressure_no_deadlock(
 
 
 @pytest.mark.asyncio
-async def test_error_isolation_and_propagation(
-    event_bus: EventBus, handler_registry: EventHandlerRegistry
-) -> None:
+async def test_error_isolation_and_propagation(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """单个 Handler 错误不影响其他 Handler，且错误被正确上报"""
     counter = CountingHandler()
     spy = ErrorSpyHandler()
@@ -186,32 +169,30 @@ async def test_error_isolation_and_propagation(
 
     tasks: List[Awaitable[Any]] = await publish_many(
         event_bus,
-        "test.event",
-        [{"value": 1}, {"value": -1}, {"value": 2}],
+        'test.event',
+        [{'value': 1}, {'value': -1}, {'value': 2}],
     )
     await asyncio.gather(*tasks)
     await wait_for_condition(lambda: len(spy.captured) >= 1)
 
-    assert counter.count == 2, "有效事件应被正常计数"
+    assert counter.count == 2, '有效事件应被正常计数'
     assert len(spy.captured) == 1
-    assert spy.captured[0]["type"] == "ValueError"
+    assert spy.captured[0]['type'] == 'ValueError'
 
 
 @pytest.mark.asyncio
-async def test_handler_timeout_handling(
-    event_bus: EventBus, handler_registry: EventHandlerRegistry
-) -> None:
+async def test_handler_timeout_handling(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """Handler 超时后触发错误事件，且不影响总线运行"""
-    slow = SlowHandler(delay=0.5, subscriptions=["test.slow"])
+    slow = SlowHandler(delay=0.5, subscriptions=['test.slow'])
     spy = ErrorSpyHandler()
     handler_registry.register(slow)
     handler_registry.register(spy)
 
-    await event_bus.proxy("timeout_pub").publish("test.slow", None)
+    await event_bus.proxy('timeout_pub').publish('test.slow', None)
 
     await wait_for_condition(lambda: len(spy.captured) >= 1, timeout=1.0)
-    assert slow.completed == 0, "超时任务不应完成计数"
-    assert spy.captured[0]["type"] == "TimeoutError"
+    assert slow.completed == 0, '超时任务不应完成计数'
+    assert spy.captured[0]['type'] == 'TimeoutError'
 
 
 # ============================================================================
@@ -220,48 +201,47 @@ async def test_handler_timeout_handling(
 
 
 @pytest.mark.asyncio
-async def test_pattern_matching_routing(
-    event_bus: EventBus, handler_registry: EventHandlerRegistry
-) -> None:
+async def test_pattern_matching_routing(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """正则表达式订阅的路由正确性"""
-    spy = PatternSpyHandler(pattern=r"user\..*")
+    spy = PatternSpyHandler(pattern=r'user\..*')
     handler_registry.register(spy)
 
-    await event_bus.proxy("route_pub").publish("user.login", None)
-    await event_bus.proxy("route_pub").publish("user.logout", None)
-    await event_bus.proxy("route_pub").publish("admin.login", None)
+    await event_bus.proxy('route_pub').publish('user.login', None)
+    await event_bus.proxy('route_pub').publish('user.logout', None)
+    await event_bus.proxy('route_pub').publish('admin.login', None)
 
     await wait_for_condition(lambda: len(spy.triggered) >= 2)
-    assert set(spy.triggered) == {"user.login", "user.logout"}
+    assert set(spy.triggered) == {'user.login', 'user.logout'}
 
 
 @pytest.mark.asyncio
 async def test_multi_handler_same_event(
-    event_bus: EventBus, handler_registry: EventHandlerRegistry,
+    event_bus: EventBus,
+    handler_registry: EventHandlerRegistry,
 ) -> None:
     """同一事件可被多个 Handler 处理"""
     results: List[str] = []
 
     class HandlerA(EventHandler):
         def __init__(self):
-            super().__init__(["test.event"])
+            super().__init__(['test.event'])
 
         async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
-            results.append("A")
+            results.append('A')
 
     class HandlerB(EventHandler):
         def __init__(self):
-            super().__init__(["test.event"])
+            super().__init__(['test.event'])
 
         async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
-            results.append("B")
+            results.append('B')
 
     handler_registry.register(HandlerA())
     handler_registry.register(HandlerB())
 
-    await event_bus.proxy("test").publish("test.event", {"value": 1})
+    await event_bus.proxy('test').publish('test.event', {'value': 1})
     await wait_for_condition(lambda: len(results) == 2)
-    assert set(results) == {"A", "B"}
+    assert set(results) == {'A', 'B'}
 
 
 # ============================================================================
@@ -270,14 +250,12 @@ async def test_multi_handler_same_event(
 
 
 @pytest.mark.asyncio
-async def test_graceful_shutdown_and_cleanup(
-    event_bus: EventBus, handler_registry: EventHandlerRegistry
-) -> None:
+async def test_graceful_shutdown_and_cleanup(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """总线优雅停止后资源清理完全"""
     handler = CountingHandler()
     handler_registry.register(handler)
 
-    await event_bus.proxy("shut_pub").publish("test.event", {"value": 1})
+    await event_bus.proxy('shut_pub').publish('test.event', {'value': 1})
     await wait_for_condition(lambda: handler.count == 1)
 
     await event_bus.stop()
@@ -300,11 +278,11 @@ async def test_shutdown_cancels_pending_tasks(
         max_handler_semaphore=2,
         shutdown=ShutdownConfig(tasks_timeout=0.3),
     )
-    handler = BlockingHandler(subscriptions=["test.block"])
+    handler = BlockingHandler(subscriptions=['test.block'])
     handler_registry.register(handler)
 
     async with bus:
-        await bus.proxy("test").publish("test.block", None)
+        await bus.proxy('test').publish('test.block', None)
         await handler.wait_started()
 
     assert not bus.is_running
@@ -312,32 +290,26 @@ async def test_shutdown_cancels_pending_tasks(
 
 
 @pytest.mark.asyncio
-async def test_shutting_down_exception(
-    event_bus: EventBus, handler_registry: EventHandlerRegistry
-) -> None:
+async def test_shutting_down_exception(event_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
     """总线停止过程中新发布事件应抛出 BusShuttingDown"""
-    slow = SlowHandler(delay=2.0, subscriptions=["test.slow"])
+    slow = SlowHandler(delay=2.0, subscriptions=['test.slow'])
     handler_registry.register(slow)
 
-    asyncio.create_task(event_bus.proxy("slow_pub").publish("test.slow", None))
+    asyncio.create_task(event_bus.proxy('slow_pub').publish('test.slow', None))
     await slow.wait_started()
 
     stop_task = asyncio.create_task(event_bus.stop())
 
     with pytest.raises(BusShuttingDown):
         for _ in range(20):
-            await event_bus.proxy("probe").publish(
-                "test.event", {"value": 1}
-            )
+            await event_bus.proxy('probe').publish('test.event', {'value': 1})
             await asyncio.sleep(0.05)
 
     await stop_task
     assert not event_bus.is_running
 
-    with pytest.raises(RuntimeError, match="EventBus is not running"):
-        await event_bus.proxy("after_stop").publish(
-            "test.event", {"value": 2}
-        )
+    with pytest.raises(RuntimeError, match='EventBus is not running'):
+        await event_bus.proxy('after_stop').publish('test.event', {'value': 2})
 
 
 # ============================================================================
@@ -348,7 +320,7 @@ async def test_shutting_down_exception(
 @pytest.mark.asyncio
 async def test_proxy_handlers_registry(event_bus: EventBus):
     """Proxy.handlers_registry 返回处理器注册表"""
-    proxy = event_bus.proxy("test")
+    proxy = event_bus.proxy('test')
     assert proxy.handlers_registry is not None
 
 
@@ -375,7 +347,7 @@ class _BusWithBrokenStop(EventBus):
 
     async def stop(self) -> None:
         await super().stop()
-        raise RuntimeError("stop boom")
+        raise RuntimeError('stop boom')
 
 
 @pytest.mark.asyncio
@@ -387,7 +359,7 @@ async def test_context_manager_stop_error_propagates(
     bus = _BusWithBrokenStop(base_event_registry, handler_registry)
     await bus.start()
 
-    with pytest.raises(RuntimeError, match="stop boom"):
+    with pytest.raises(RuntimeError, match='stop boom'):
         async with bus:
             pass
 
@@ -401,9 +373,9 @@ async def test_context_manager_stop_error_with_context_exception(
     bus = _BusWithBrokenStop(base_event_registry, handler_registry)
     await bus.start()
 
-    with pytest.raises(ValueError, match="context error"):
+    with pytest.raises(ValueError, match='context error'):
         async with bus:
-            raise ValueError("context error")
+            raise ValueError('context error')
 
 
 # ============================================================================
@@ -418,9 +390,7 @@ async def test_long_running_stability(
     handler_registry: EventHandlerRegistry,
 ) -> None:
     """长时间运行压力测试：验证无资源泄漏和队列溢出"""
-    bus: EventBus = event_bus_factory(
-        max_queue_size=10, max_handler_semaphore=25
-    )
+    bus: EventBus = event_bus_factory(max_queue_size=10, max_handler_semaphore=25)
     handler = CountingHandler()
     handler_registry.register(handler)
 
@@ -431,19 +401,14 @@ async def test_long_running_stability(
     async with bus:
         start = time.time()
         while time.time() - start < duration:
-            batch = [
-                bus.proxy("stress_pub").publish(
-                    "test.event", {"value": i}
-                )
-                for i in range(rate)
-            ]
+            batch = [bus.proxy('stress_pub').publish('test.event', {'value': i}) for i in range(rate)]
             await asyncio.gather(*batch)
             await asyncio.sleep(1.0)
 
             active = bus.active_task_count
             qsize = bus.queue_size
-            assert active <= 25, f"任务泄漏: active={active}"
-            assert qsize <= 10, f"队列溢出: qsize={qsize}"
+            assert active <= 25, f'任务泄漏: active={active}'
+            assert qsize <= 10, f'队列溢出: qsize={qsize}'
 
     assert handler.count >= expected * 0.95
     assert bus.active_task_count == 0

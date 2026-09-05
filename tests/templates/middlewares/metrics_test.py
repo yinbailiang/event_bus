@@ -1,18 +1,17 @@
 """指标中间件测试。"""
+
 import pytest
+from conftest import SimplePingHandler
 
 from event_bus import (
-
     EventBus,
     EventHandlerRegistry,
     EventRegistry,
-    MiddlewareChain,
     InMemoryEventQueue,
     InMemoryEventQueueConfig,
+    MiddlewareChain,
 )
 from event_bus.templates.middlewares import MetricsMiddleware, MetricsSnapshot
-
-from conftest import SimplePingHandler
 
 
 @pytest.fixture
@@ -54,11 +53,11 @@ class TestMetricsBasic:
             middleware_chain=chain_with_metrics,
         )
         async with bus:
-            await bus.proxy("test").publish("mw.ping", {"key": "a", "count": 1})
+            await bus.proxy('test').publish('mw.ping', {'key': 'a', 'count': 1})
             await handler.wait_received(timeout=2.0)
 
         snap = metrics.snapshot()
-        assert snap.publish_total.get("mw.ping", 0) >= 1
+        assert snap.publish_total.get('mw.ping', 0) >= 1
 
     @pytest.mark.asyncio
     async def test_publish_duration_recorded(
@@ -79,11 +78,11 @@ class TestMetricsBasic:
             middleware_chain=chain_with_metrics,
         )
         async with bus:
-            await bus.proxy("test").publish("mw.ping", {"key": "b", "count": 2})
+            await bus.proxy('test').publish('mw.ping', {'key': 'b', 'count': 2})
             await handler.wait_received(timeout=2.0)
 
         snap = metrics.snapshot()
-        hist = snap.publish_duration_sec.get("mw.ping")
+        hist = snap.publish_duration_sec.get('mw.ping')
         assert hist is not None
         assert hist.count >= 1
         assert hist.sum > 0
@@ -107,13 +106,13 @@ class TestMetricsBasic:
             middleware_chain=chain_with_metrics,
         )
         async with bus:
-            await bus.proxy("a").publish("mw.ping", {"key": "x", "count": 1})
-            await bus.proxy("a").publish("user.login", None)
+            await bus.proxy('a').publish('mw.ping', {'key': 'x', 'count': 1})
+            await bus.proxy('a').publish('user.login', None)
             await handler.wait_received(timeout=2.0)
 
         snap = metrics.snapshot()
-        assert snap.publish_total.get("mw.ping", 0) >= 1
-        assert snap.publish_total.get("user.login", 0) >= 1
+        assert snap.publish_total.get('mw.ping', 0) >= 1
+        assert snap.publish_total.get('user.login', 0) >= 1
 
     @pytest.mark.asyncio
     async def test_queue_and_active_tasks_gauge(
@@ -163,7 +162,7 @@ class TestMetricsErrors:
         )
         async with bus:
             with pytest.raises(ValueError):
-                await bus.proxy("test").publish("unknown.event")
+                await bus.proxy('test').publish('unknown.event')
 
         snap = metrics.snapshot()
         assert snap.publish_errors_total >= 1
@@ -185,11 +184,11 @@ class TestMetricsErrors:
         )
         async with bus:
             with pytest.raises(ValueError):
-                await bus.proxy("test").publish("unknown.event")
+                await bus.proxy('test').publish('unknown.event')
 
         snap = metrics.snapshot()
         # publish_total 包含失败尝试（Prometheus _total 惯例）
-        assert snap.publish_total.get("unknown.event", 0) >= 1
+        assert snap.publish_total.get('unknown.event', 0) >= 1
         assert snap.publish_errors_total >= 1
 
 
@@ -245,14 +244,14 @@ class TestMetricsSnapshot:
             middleware_chain=chain_with_metrics,
         )
         async with bus:
-            await bus.proxy("test").publish("mw.ping", {"key": "s", "count": 3})
+            await bus.proxy('test').publish('mw.ping', {'key': 's', 'count': 3})
             await handler.wait_received(timeout=2.0)
 
         snap1 = metrics.snapshot()
-        snap1.publish_total["mw.ping"] = 999  # 修改副本
+        snap1.publish_total['mw.ping'] = 999  # 修改副本
 
         snap2 = metrics.snapshot()
-        assert snap2.publish_total.get("mw.ping", 0) == 1  # 内部未受影响
+        assert snap2.publish_total.get('mw.ping', 0) == 1  # 内部未受影响
 
 
 # ============================================================================
@@ -284,13 +283,13 @@ class TestMetricsCustomBuckets:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("test").publish("mw.ping", {"key": "c", "count": 4})
+            await bus.proxy('test').publish('mw.ping', {'key': 'c', 'count': 4})
             await handler.wait_received(timeout=2.0)
 
         snap = custom.snapshot()
-        hist = snap.publish_duration_sec.get("mw.ping")
+        hist = snap.publish_duration_sec.get('mw.ping')
         assert hist is not None
-        assert set(hist.buckets.keys()) == {"0.01", "0.1", "1.0"}
+        assert set(hist.buckets.keys()) == {'0.01', '0.1', '1.0'}
 
 
 # ============================================================================
@@ -306,6 +305,7 @@ class TestPrometheusIntegration:
         """每个测试后清理全局 REGISTRY，避免指标名冲突。"""
         yield
         import prometheus_client
+
         collectors = list(prometheus_client.REGISTRY._collector_to_names)
         for c in collectors:
             try:
@@ -373,15 +373,11 @@ class TestPrometheusIntegration:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("test").publish("mw.ping", {"key": "p", "count": 1})
+            await bus.proxy('test').publish('mw.ping', {'key': 'p', 'count': 1})
             await handler.wait_received(timeout=2.0)
 
         # 从 registry 收集指标
-        samples_by_name: dict[str, float] = {
-            s.name: s.value
-            for m in registry.collect()
-            for s in m.samples
-        }
+        samples_by_name: dict[str, float] = {s.name: s.value for m in registry.collect() for s in m.samples}
         assert samples_by_name.get('event_bus_publish_total', 0) >= 1
         assert samples_by_name.get('event_bus_publish_duration_seconds_count', 0) >= 1
 
@@ -409,7 +405,7 @@ class TestPrometheusIntegration:
         )
         async with bus:
             with pytest.raises(ValueError):
-                await bus.proxy("test").publish("unknown.event")
+                await bus.proxy('test').publish('unknown.event')
 
         samples_by_name = {s.name: s.value for m in registry.collect() for s in m.samples}
         assert samples_by_name.get('event_bus_publish_errors_total', 0) >= 1
@@ -530,7 +526,7 @@ class TestOpenTelemetryIntegration:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("test").publish("mw.ping", {"key": "o", "count": 1})
+            await bus.proxy('test').publish('mw.ping', {'key': 'o', 'count': 1})
             await handler.wait_received(timeout=2.0)
 
         # Counter.add(1, {'event_name': 'mw.ping'}) 至少被调用
@@ -570,7 +566,7 @@ class TestOpenTelemetryIntegration:
         )
         async with bus:
             with pytest.raises(ValueError):
-                await bus.proxy("test").publish("unknown.event")
+                await bus.proxy('test').publish('unknown.event')
 
         # errors counter 被调用
         mock_errors.add.assert_called_once_with(1)

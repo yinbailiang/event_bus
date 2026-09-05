@@ -3,24 +3,21 @@
 import asyncio
 
 import pytest
+from conftest import SimplePingHandler
 
 from event_bus import (
-
     EventBus,
     EventHandlerRegistry,
     EventRegistry,
-    MiddlewareChain,
     InMemoryEventQueue,
     InMemoryEventQueueConfig,
+    MiddlewareChain,
 )
 from event_bus.templates.middlewares import (
     EventTransformMiddleware,
     RateLimitMiddleware,
     make_field_inject_transform,
 )
-
-from conftest import SimplePingHandler
-
 
 # ============================================================================
 # RateLimitMiddleware
@@ -52,9 +49,7 @@ class TestRateLimitMiddleware:
         )
         async with bus:
             for i in range(5):
-                await bus.proxy("src").publish(
-                    "mw.ping", {"key": f"k{i}", "count": i}
-                )
+                await bus.proxy('src').publish('mw.ping', {'key': f'k{i}', 'count': i})
                 await asyncio.sleep(0.01)
 
         # 所有事件都应被处理
@@ -82,13 +77,11 @@ class TestRateLimitMiddleware:
         )
         async with bus:
             for i in range(10):
-                await bus.proxy("src").publish(
-                    "mw.ping", {"key": f"k{i}", "count": i}
-                )
+                await bus.proxy('src').publish('mw.ping', {'key': f'k{i}', 'count': i})
                 await asyncio.sleep(0.01)
 
         # 仅前 3 个被处理（其余被丢弃）
-        assert mw.current_rate.get("__global__", 0) <= 3
+        assert mw.current_rate.get('__global__', 0) <= 3
         # 由于丢弃发生于 before_publish，handler 只会收到 ≤3 条
         assert len(handler.received) <= 3
 
@@ -99,9 +92,7 @@ class TestRateLimitMiddleware:
         handler_registry: EventHandlerRegistry,
     ) -> None:
         """按事件名独立限流"""
-        mw = RateLimitMiddleware(
-            max_requests=2, window_seconds=10.0, per_event=True
-        )
+        mw = RateLimitMiddleware(max_requests=2, window_seconds=10.0, per_event=True)
         chain = MiddlewareChain()
         await chain.add(mw)
 
@@ -117,18 +108,16 @@ class TestRateLimitMiddleware:
         async with bus:
             # 发布 mw.ping 事件（最多 2 个通过）
             for i in range(5):
-                await bus.proxy("src").publish(
-                    "mw.ping", {"key": f"ping{i}", "count": i}
-                )
+                await bus.proxy('src').publish('mw.ping', {'key': f'ping{i}', 'count': i})
                 await asyncio.sleep(0.01)
 
             # 发布 user.login（无负载事件，另一个窗口）
             for i in range(5):
-                await bus.proxy("src").publish("user.login", None)
+                await bus.proxy('src').publish('user.login', None)
                 await asyncio.sleep(0.01)
 
         # mw.ping 窗口限制为 2
-        ping_count = mw.current_rate.get("mw.ping", 0)
+        ping_count = mw.current_rate.get('mw.ping', 0)
         assert ping_count <= 2
 
     @pytest.mark.asyncio
@@ -184,7 +173,7 @@ class TestRateLimitBeforeTransform:
     ) -> None:
         """先限流再转换"""
         rate_mw = RateLimitMiddleware(max_requests=3, window_seconds=10.0)
-        transform = make_field_inject_transform(source="test")
+        transform = make_field_inject_transform(source='test')
         trans_mw = EventTransformMiddleware(transform)
 
         chain = MiddlewareChain()
@@ -202,9 +191,7 @@ class TestRateLimitBeforeTransform:
         )
         async with bus:
             for i in range(10):
-                await bus.proxy("src").publish(
-                    "mw.ping", {"key": f"k{i}", "count": i}
-                )
+                await bus.proxy('src').publish('mw.ping', {'key': f'k{i}', 'count': i})
                 await asyncio.sleep(0.01)
 
         # 限制后仅 ≤3 条通过

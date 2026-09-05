@@ -1,4 +1,5 @@
 from typing import Any, Optional
+
 from pydantic import BaseModel
 
 from event_bus import (
@@ -10,7 +11,6 @@ from event_bus import (
     Matcher,
     Regex,
 )
-
 
 # ============================================================================
 # 测试用事件声明
@@ -27,6 +27,7 @@ class _EventBeta(EventDeclaration):
 
 class _EventGamma(EventDeclaration):
     name = 'test.gamma'
+
 
 # ============================================================================
 # 测试用 Handler

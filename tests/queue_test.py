@@ -4,6 +4,7 @@ import asyncio
 from typing import Callable
 
 import pytest
+from conftest import CountingHandler, wait_for_condition
 
 from event_bus import (
     Event,
@@ -15,9 +16,6 @@ from event_bus import (
     InMemoryEventQueueConfig,
 )
 
-from conftest import CountingHandler, wait_for_condition
-
-
 # ============================================================================
 # EventQueue 抽象
 # ============================================================================
@@ -26,7 +24,7 @@ from conftest import CountingHandler, wait_for_condition
 def test_event_queue_is_abstract() -> None:
     """EventQueue 为抽象基类，不能直接实例化。"""
     with pytest.raises(TypeError):
-        EventQueue()  # pyright: ignore[reportAbstractUsage]
+        EventQueue()
 
 
 def test_event_queue_requires_all_methods() -> None:
@@ -37,7 +35,7 @@ def test_event_queue_requires_all_methods() -> None:
             pass
 
     with pytest.raises(TypeError):
-        PartialQueue()  # pyright: ignore[reportAbstractUsage]
+        PartialQueue()
 
 
 # ============================================================================

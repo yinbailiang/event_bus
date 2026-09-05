@@ -11,7 +11,6 @@ import pytest
 from pydantic import BaseModel, Field
 
 from event_bus import (
-
     EventBus,
     EventDeclaration,
     EventHandler,
@@ -297,9 +296,7 @@ class TestHandlerIntegration:
         handler_registry.unregister(hid)
 
     @pytest.mark.asyncio
-    async def test_sync_handler_in_bus(
-        self, running_bus: EventBus, handler_registry: EventHandlerRegistry
-    ) -> None:
+    async def test_sync_handler_in_bus(self, running_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
         """同步处理器在实际总线中正确执行"""
         received: list[int] = []
 

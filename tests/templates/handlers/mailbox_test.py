@@ -9,15 +9,14 @@ from typing import AsyncGenerator
 import pytest
 
 from event_bus import (
-
     Event,
     EventBus,
     EventDeclaration,
     EventHandlerRegistry,
     EventRegistry,
-    Regex,
     InMemoryEventQueue,
     InMemoryEventQueueConfig,
+    Regex,
 )
 from event_bus.templates.handlers.mailbox import MailboxConfig, MailboxHandler
 
@@ -197,9 +196,7 @@ class TestLifecycle:
 class TestQueueing:
     """事件入队顺序、批量处理"""
 
-    async def test_events_fifo_order(
-        self, running_bus: EventBus, handler_registry: EventHandlerRegistry
-    ) -> None:
+    async def test_events_fifo_order(self, running_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
         """事件按入队顺序被 process() 取出"""
         handler = _CollectHandler(subscriptions=['mailbox.ping'])
         handler_registry.register(handler)
@@ -251,9 +248,7 @@ class TestShutdown:
         await asyncio.sleep(0.05)
         assert not handler.is_running
 
-    async def test_shutdown_before_any_event_does_not_crash(
-        self, handler_registry: EventHandlerRegistry
-    ) -> None:
+    async def test_shutdown_before_any_event_does_not_crash(self, handler_registry: EventHandlerRegistry) -> None:
         """任务未启动时收到 ShutdownEvent，不会崩溃也不会创建任务"""
         handler = _CollectHandler(subscriptions=['mailbox.ping'])
         handler_registry.register(handler)
@@ -383,9 +378,7 @@ class TestExceptionHandling:
 class TestIntegration:
     """与 EventBus 的完整集成"""
 
-    async def test_ping_pong_via_mailbox(
-        self, running_bus: EventBus, handler_registry: EventHandlerRegistry
-    ) -> None:
+    async def test_ping_pong_via_mailbox(self, running_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
         """MailboxHandler 收到 ping 后通过 proxy 发布 pong"""
         echo = _EchoHandler()
         collect = _CollectHandler(subscriptions=[MailboxPongEvent.name])
@@ -398,9 +391,7 @@ class TestIntegration:
         assert len(collect.received) == 1
         assert collect.received[0][0].name == 'mailbox.pong'
 
-    async def test_event_chain_tracking(
-        self, running_bus: EventBus, handler_registry: EventHandlerRegistry
-    ) -> None:
+    async def test_event_chain_tracking(self, running_bus: EventBus, handler_registry: EventHandlerRegistry) -> None:
         """proxy 携带正确的事件链信息"""
         handler = _CollectHandler(subscriptions=[MailboxPingEvent.name])
         handler_registry.register(handler)
@@ -516,7 +507,5 @@ class TestEdgeCases:
 
     async def test_shutdown_not_duplicated_in_subscriptions(self) -> None:
         """手动添加 ShutdownEvent 时不会重复"""
-        handler = _CollectHandler(
-            subscriptions=['mailbox.ping', 'event_bus.__shutdown__']
-        )
+        handler = _CollectHandler(subscriptions=['mailbox.ping', 'event_bus.__shutdown__'])
         assert handler.subscriptions.count('event_bus.__shutdown__') == 1

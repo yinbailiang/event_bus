@@ -5,20 +5,20 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import BaseModel, Field
 
-from event_bus.templates.request import (
-    request,
-    RequestProtocol,
-    ResponseProtocol,
-)
 from event_bus import (
+    BusShuttingDown,
+    Event,
     EventBus,
     EventDeclaration,
     EventHandler,
-    EventRegistry,
     EventHandlerRegistry,
+    EventRegistry,
     Matcher,
-    BusShuttingDown,
-    Event
+)
+from event_bus.templates.request import (
+    RequestProtocol,
+    ResponseProtocol,
+    request,
 )
 
 
@@ -26,20 +26,20 @@ from event_bus import (
 # 测试用的请求/响应 Payload 与事件声明
 # ---------------------------------------------------------------------------
 class SimpleRequestPayload(RequestProtocol):
-    data: str = Field(description="请求数据")
+    data: str = Field(description='请求数据')
 
 
 class SimpleResponsePayload(ResponseProtocol):
-    result: str = Field(description="响应数据")
+    result: str = Field(description='响应数据')
 
 
 class TestRequestEvent(EventDeclaration):
-    name = "test.request"
+    name = 'test.request'
     payload_type = SimpleRequestPayload
 
 
 class TestResponseEvent(EventDeclaration):
-    name = "test.response"
+    name = 'test.response'
     payload_type = SimpleResponsePayload
 
 
@@ -51,7 +51,7 @@ class BadResponsePayload(BaseModel):
 
 
 class BadResponseEvent(EventDeclaration):
-    name = "test.bad_response"
+    name = 'test.bad_response'
     payload_type = BadResponsePayload
 
 
@@ -79,7 +79,7 @@ def mock_bus_proxy(event_registry: EventRegistry, handler_registry: EventHandler
     bus._events = event_registry
     bus._handlers = handler_registry
 
-    proxy = EventBus.Proxy(bus, source="test_client")
+    proxy = EventBus.Proxy(bus, source='test_client')
     # 拦截 publish 方法以便断言
     proxy.publish = AsyncMock()
     return proxy
@@ -88,7 +88,9 @@ def mock_bus_proxy(event_registry: EventRegistry, handler_registry: EventHandler
 # ---------------------------------------------------------------------------
 # 辅助函数：模拟服务端响应触发
 # ---------------------------------------------------------------------------
-async def trigger_response(event_registry: EventRegistry, handler_registry: EventHandlerRegistry, resp_event: str, payload: BaseModel) -> None:
+async def trigger_response(
+    event_registry: EventRegistry, handler_registry: EventHandlerRegistry, resp_event: str, payload: BaseModel
+) -> None:
     """手动触发已注册的响应处理器，模拟事件总线分发"""
     matcher = Matcher(event_registry, handler_registry)
     handlers: List[tuple[str, EventHandler]] = matcher.match(resp_event)
@@ -103,17 +105,19 @@ async def trigger_response(event_registry: EventRegistry, handler_registry: Even
 # 测试用例
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_request_success(mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> None:
+async def test_request_success(
+    mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry
+) -> None:
     """正常请求响应流程"""
-    session_id = "test-session-123"
+    session_id = 'test-session-123'
 
     # 启动请求任务
     req_task: asyncio.Task[ResponseProtocol] = asyncio.create_task(
         request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "hello"},
-            resp_event="test.response",
+            req_event='test.request',
+            req_data={'data': 'hello'},
+            resp_event='test.response',
             session_id=session_id,
             timeout=5.0,
         )
@@ -124,24 +128,24 @@ async def test_request_success(mock_bus_proxy: EventBus.Proxy, event_registry: E
     assert mock_bus_proxy.publish.called
     call_args: Dict[Any, Any] = mock_bus_proxy.publish.call_args
     published_data = call_args[0][1]
-    req_id_in_publish: str = published_data["request_id"]
-    assert published_data["session_id"] == session_id
-    assert published_data["data"] == "hello"
+    req_id_in_publish: str = published_data['request_id']
+    assert published_data['session_id'] == session_id
+    assert published_data['data'] == 'hello'
 
     # 模拟服务端响应
     response_payload = SimpleResponsePayload(
         session_id=session_id,
         request_id=req_id_in_publish,
         success=True,
-        result="world",
+        result='world',
     )
-    await trigger_response(event_registry, handler_registry, "test.response", response_payload)
+    await trigger_response(event_registry, handler_registry, 'test.response', response_payload)
 
     # 获取结果
     result: ResponseProtocol = await req_task
     assert isinstance(result, SimpleResponsePayload)
     assert result.success is True
-    assert result.result == "world"
+    assert result.result == 'world'
 
 
 @pytest.mark.asyncio
@@ -150,35 +154,38 @@ async def test_request_timeout(mock_bus_proxy: EventBus.Proxy) -> None:
     with pytest.raises(asyncio.TimeoutError):
         await request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "test"},
-            resp_event="test.response",
+            req_event='test.request',
+            req_data={'data': 'test'},
+            resp_event='test.response',
             timeout=0.1,
         )
+
 
 @pytest.mark.asyncio
 async def test_request_bus_shutting_down(mock_bus_proxy: EventBus.Proxy) -> None:
     """总线关闭时发布请求应抛出 BusShuttingDown"""
-    mock_bus_proxy.publish.side_effect = BusShuttingDown("bus is down")
+    mock_bus_proxy.publish.side_effect = BusShuttingDown('bus is down')
 
     with pytest.raises(BusShuttingDown):
         await request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "test"},
-            resp_event="test.response",
+            req_event='test.request',
+            req_data={'data': 'test'},
+            resp_event='test.response',
         )
 
 
 @pytest.mark.asyncio
-async def test_request_cancelled(mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> None:
+async def test_request_cancelled(
+    mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry
+) -> None:
     """外部取消请求任务应正确传播 CancelledError 并清理资源"""
     req_task: asyncio.Task[ResponseProtocol] = asyncio.create_task(
         request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "test"},
-            resp_event="test.response",
+            req_event='test.request',
+            req_data={'data': 'test'},
+            resp_event='test.response',
         )
     )
 
@@ -200,12 +207,13 @@ async def test_request_fails_immediately_if_response_event_not_compliant(
     with pytest.raises(TypeError):
         await request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "test"},
-            resp_event="test.bad_response",   # BadResponsePayload 不继承 ResponseProtocol
+            req_event='test.request',
+            req_data={'data': 'test'},
+            resp_event='test.bad_response',  # BadResponsePayload 不继承 ResponseProtocol
         )
     # 确保从未尝试发布事件
     mock_bus_proxy.publish.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_handler_rejects_malformed_response_payload_at_runtime(
@@ -217,9 +225,9 @@ async def test_handler_rejects_malformed_response_payload_at_runtime(
     req_task = asyncio.create_task(
         request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "test"},
-            resp_event="test.response",   # 声明合法（TestResponsePayload 继承 ResponseProtocol）
+            req_event='test.request',
+            req_data={'data': 'test'},
+            resp_event='test.response',  # 声明合法（TestResponsePayload 继承 ResponseProtocol）
         )
     )
 
@@ -227,8 +235,8 @@ async def test_handler_rejects_malformed_response_payload_at_runtime(
     # 提取发布时的 session_id 和 request_id
     call_args = mock_bus_proxy.publish.call_args
     published_payload = call_args[0][1]
-    session_id = published_payload["session_id"]
-    request_id = published_payload["request_id"]
+    session_id = published_payload['session_id']
+    request_id = published_payload['request_id']
 
     # 构造一个不继承 ResponseProtocol 的 payload（类型错误）
     bad_payload = BadResponsePayload(
@@ -237,21 +245,24 @@ async def test_handler_rejects_malformed_response_payload_at_runtime(
         some_field=42,
     )
     # 手动触发响应，绕过总线类型检查
-    await trigger_response(event_registry, handler_registry, "test.response", bad_payload)
+    await trigger_response(event_registry, handler_registry, 'test.response', bad_payload)
 
     # 请求任务应抛出 TypeError
     with pytest.raises(TypeError):
         await req_task
 
+
 @pytest.mark.asyncio
-async def test_request_session_mismatch_ignored(mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> None:
+async def test_request_session_mismatch_ignored(
+    mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry
+) -> None:
     """响应中的 session_id 或 request_id 不匹配时应被忽略，请求继续等待（直至超时）"""
     req_task: asyncio.Task[ResponseProtocol] = asyncio.create_task(
         request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "test"},
-            resp_event="test.response",
+            req_event='test.request',
+            req_data={'data': 'test'},
+            resp_event='test.response',
             timeout=0.2,
         )
     )
@@ -259,26 +270,26 @@ async def test_request_session_mismatch_ignored(mock_bus_proxy: EventBus.Proxy, 
     await asyncio.sleep(0.01)
     call_args = mock_bus_proxy.publish.call_args
     published_data = call_args[0][1]
-    real_session = published_data["session_id"]
-    real_req_id = published_data["request_id"]
+    real_session = published_data['session_id']
+    real_req_id = published_data['request_id']
 
     # 发送一个 session_id 不匹配的响应
     bad_resp1 = SimpleResponsePayload(
-        session_id="wrong-session",
+        session_id='wrong-session',
         request_id=real_req_id,
         success=True,
-        result="ignored",
+        result='ignored',
     )
-    await trigger_response(event_registry, handler_registry, "test.response", bad_resp1)
+    await trigger_response(event_registry, handler_registry, 'test.response', bad_resp1)
 
     # 发送一个 request_id 不匹配的响应
     bad_resp2 = SimpleResponsePayload(
         session_id=real_session,
-        request_id="wrong-request-id",
+        request_id='wrong-request-id',
         success=True,
-        result="ignored",
+        result='ignored',
     )
-    await trigger_response(event_registry, handler_registry, "test.response", bad_resp2)
+    await trigger_response(event_registry, handler_registry, 'test.response', bad_resp2)
 
     # 请求应超时，因为正确的响应未到达
     with pytest.raises(asyncio.TimeoutError):
@@ -291,16 +302,16 @@ async def test_request_unregistered_event(mock_bus_proxy: EventBus.Proxy) -> Non
     with pytest.raises(ValueError):
         await request(
             bus_proxy=mock_bus_proxy,
-            req_event="nonexistent.request",
-            req_data={"data": "test"},
-            resp_event="test.response",
+            req_event='nonexistent.request',
+            req_data={'data': 'test'},
+            resp_event='test.response',
         )
     with pytest.raises(ValueError):
         await request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "test"},
-            resp_event="nonexistent.response",
+            req_event='test.request',
+            req_data={'data': 'test'},
+            resp_event='nonexistent.response',
         )
 
 
@@ -314,9 +325,9 @@ async def test_request_no_timeout(
     req_task: asyncio.Task[ResponseProtocol] = asyncio.create_task(
         request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "no_timeout_test"},
-            resp_event="test.response",
+            req_event='test.request',
+            req_data={'data': 'no_timeout_test'},
+            resp_event='test.response',
             timeout=None,
         )
     )
@@ -324,73 +335,74 @@ async def test_request_no_timeout(
     await asyncio.sleep(0.01)
     call_args = mock_bus_proxy.publish.call_args
     published_data = call_args[0][1]
-    session_id = published_data["session_id"]
-    request_id = published_data["request_id"]
+    session_id = published_data['session_id']
+    request_id = published_data['request_id']
 
     response_payload = SimpleResponsePayload(
         session_id=session_id,
         request_id=request_id,
         success=True,
-        result="no_timeout_ok",
+        result='no_timeout_ok',
     )
-    await trigger_response(event_registry, handler_registry, "test.response", response_payload)
+    await trigger_response(event_registry, handler_registry, 'test.response', response_payload)
 
     result: ResponseProtocol = await req_task
     assert isinstance(result, SimpleResponsePayload)
-    assert result.result == "no_timeout_ok"
+    assert result.result == 'no_timeout_ok'
 
 
 @pytest.mark.asyncio
-async def test_request_payload_not_request_protocol(mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry) -> None:
+async def test_request_payload_not_request_protocol(
+    mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry
+) -> None:
     """请求事件负载不继承 RequestProtocol 应抛出 TypeError"""
+
     # 注册一个不继承 RequestProtocol 的事件
     class BadRequestPayload(BaseModel):
         foo: str
 
     class BadRequestEvent(EventDeclaration):
-        name = "bad.request"
+        name = 'bad.request'
         payload_type = BadRequestPayload
 
     event_registry.register(BadRequestEvent)
 
-    with pytest.raises(TypeError, match="必须继承 RequestProtocol"):
+    with pytest.raises(TypeError, match='必须继承 RequestProtocol'):
         await request(
             bus_proxy=mock_bus_proxy,
-            req_event="bad.request",
-            req_data={"foo": "bar"},
-            resp_event="test.response",
+            req_event='bad.request',
+            req_data={'foo': 'bar'},
+            resp_event='test.response',
         )
 
 
 @pytest.mark.asyncio
-async def test_response_failure_raise_if_failed(mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> None:
+async def test_response_failure_raise_if_failed(
+    mock_bus_proxy: EventBus.Proxy, event_registry: EventRegistry, handler_registry: EventHandlerRegistry
+) -> None:
     """响应中 success=False 时，调用 raise_if_failed 应抛出 RuntimeError"""
     req_task: asyncio.Task[ResponseProtocol] = asyncio.create_task(
         request(
             bus_proxy=mock_bus_proxy,
-            req_event="test.request",
-            req_data={"data": "test"},
-            resp_event="test.response",
+            req_event='test.request',
+            req_data={'data': 'test'},
+            resp_event='test.response',
         )
     )
 
     await asyncio.sleep(0.01)
     call_args = mock_bus_proxy.publish.call_args
     published_data = call_args[0][1]
-    session_id = published_data["session_id"]
-    request_id = published_data["request_id"]
+    session_id = published_data['session_id']
+    request_id = published_data['request_id']
 
     # 发送失败响应
     fail_resp = SimpleResponsePayload(
-        session_id=session_id,
-        request_id=request_id,
-        success=False,
-        error_msg="something went wrong",
-        result="Error!"
+        session_id=session_id, request_id=request_id, success=False, error_msg='something went wrong', result='Error!'
     )
-    await trigger_response(event_registry, handler_registry, "test.response", fail_resp)
+    await trigger_response(event_registry, handler_registry, 'test.response', fail_resp)
 
     result: ResponseProtocol = await req_task
     assert result.success is False
-    with pytest.raises(RuntimeError, match="something went wrong"):
+    with pytest.raises(RuntimeError, match='something went wrong'):
         result.raise_if_failed()

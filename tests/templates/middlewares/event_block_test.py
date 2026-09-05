@@ -4,16 +4,18 @@ import asyncio
 from typing import Any
 
 import pytest
+from conftest import (
+    SimplePingHandler,
+)
 from pydantic import BaseModel
 
 from event_bus import (
-
     EventBus,
     EventHandlerRegistry,
     EventRegistry,
-    MiddlewareChain,
     InMemoryEventQueue,
     InMemoryEventQueueConfig,
+    MiddlewareChain,
 )
 from event_bus.templates.middlewares import (
     EventBlockMiddleware,
@@ -22,11 +24,6 @@ from event_bus.templates.middlewares import (
     make_blocklist_predicate,
     make_rename_transform,
 )
-
-from conftest import (
-    SimplePingHandler,
-)
-
 
 # ============================================================================
 # EventBlockMiddleware
@@ -43,8 +40,8 @@ class TestEventBlockMiddleware:
         handler_registry: EventHandlerRegistry,
     ) -> None:
         """黑名单中的事件被屏蔽"""
-        pred = make_blocklist_predicate("mw.ping")
-        mw = EventBlockMiddleware(pred, block_reason="test block")
+        pred = make_blocklist_predicate('mw.ping')
+        mw = EventBlockMiddleware(pred, block_reason='test block')
         chain = MiddlewareChain()
         await chain.add(mw)
 
@@ -58,7 +55,7 @@ class TestEventBlockMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("src").publish("mw.ping", {"key": "k", "count": 1})
+            await bus.proxy('src').publish('mw.ping', {'key': 'k', 'count': 1})
             await asyncio.sleep(0.1)
 
         # 被屏蔽，handler 不应收到
@@ -72,7 +69,7 @@ class TestEventBlockMiddleware:
         handler_registry: EventHandlerRegistry,
     ) -> None:
         """非黑名单事件正常通过"""
-        pred = make_blocklist_predicate("some.other.event")
+        pred = make_blocklist_predicate('some.other.event')
         mw = EventBlockMiddleware(pred)
         chain = MiddlewareChain()
         await chain.add(mw)
@@ -87,7 +84,7 @@ class TestEventBlockMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("src").publish("mw.ping", {"key": "k", "count": 1})
+            await bus.proxy('src').publish('mw.ping', {'key': 'k', 'count': 1})
             await handler.wait_received(timeout=2.0)
 
         assert len(handler.received) >= 1
@@ -100,8 +97,8 @@ class TestEventBlockMiddleware:
         handler_registry: EventHandlerRegistry,
     ) -> None:
         """白名单模式：仅允许指定事件"""
-        pred = make_allowlist_predicate("user.login")
-        mw = EventBlockMiddleware(pred, block_reason="not in allowlist")
+        pred = make_allowlist_predicate('user.login')
+        mw = EventBlockMiddleware(pred, block_reason='not in allowlist')
         chain = MiddlewareChain()
         await chain.add(mw)
 
@@ -116,9 +113,9 @@ class TestEventBlockMiddleware:
         )
         async with bus:
             # mw.ping 不在白名单中 → 被屏蔽
-            await bus.proxy("src").publish("mw.ping", {"key": "k", "count": 1})
+            await bus.proxy('src').publish('mw.ping', {'key': 'k', 'count': 1})
             # user.login 在白名单中 → 通过
-            await bus.proxy("src").publish("user.login", None)
+            await bus.proxy('src').publish('user.login', None)
             await asyncio.sleep(0.1)
 
             # mw.ping 被屏蔽（关闭时 __shutdown__ 也可能被屏蔽，所以 ≥1）
@@ -139,7 +136,7 @@ class TestEventBlockMiddleware:
             data: dict[str, Any] | BaseModel | None,
         ) -> bool:
             if isinstance(data, dict):
-                return data.get("count", 0) < 0
+                return data.get('count', 0) < 0
             return False
 
         mw = EventBlockMiddleware(block_sensitive)
@@ -157,14 +154,14 @@ class TestEventBlockMiddleware:
         )
         async with bus:
             # count < 0 → 屏蔽
-            await bus.proxy("src").publish("mw.ping", {"key": "bad", "count": -1})
+            await bus.proxy('src').publish('mw.ping', {'key': 'bad', 'count': -1})
             # count >= 0 → 通过
-            await bus.proxy("src").publish("mw.ping", {"key": "good", "count": 1})
+            await bus.proxy('src').publish('mw.ping', {'key': 'good', 'count': 1})
             await handler.wait_received(timeout=2.0)
 
         assert mw.blocked_count >= 1
         assert len(handler.received) == 1
-        assert handler.received[0].key == "good"
+        assert handler.received[0].key == 'good'
 
 
 # ============================================================================
@@ -183,11 +180,11 @@ class TestTransformThenBlock:
     ) -> None:
         """先转换事件名，再基于新名称屏蔽"""
         # 1. 将 mw.ping → blocked.event
-        transform = make_rename_transform({"mw.ping": "blocked.event"})
+        transform = make_rename_transform({'mw.ping': 'blocked.event'})
         trans_mw = EventTransformMiddleware(transform)
 
         # 2. 屏蔽 blocked.event
-        pred = make_blocklist_predicate("blocked.event")
+        pred = make_blocklist_predicate('blocked.event')
         block_mw = EventBlockMiddleware(pred)
 
         chain = MiddlewareChain()
@@ -204,7 +201,7 @@ class TestTransformThenBlock:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("src").publish("mw.ping", {"key": "k", "count": 1})
+            await bus.proxy('src').publish('mw.ping', {'key': 'k', 'count': 1})
             await asyncio.sleep(0.1)
 
         # 转换后的事件被屏蔽，handler 不应收到

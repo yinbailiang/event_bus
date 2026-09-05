@@ -12,7 +12,6 @@ from event_bus import (
     Event,
     EventBus,
     EventDeclaration,
-    Regex,
     EventHandler,
     EventHandlerRegistry,
     EventQueue,
@@ -21,12 +20,13 @@ from event_bus import (
     InMemoryEventQueueConfig,
     Matcher,
     MiddlewareChain,
+    Regex,
     TaskErrorEvent,
     TaskErrorPayload,
 )
 
 # 抑制日志噪音
-logging.getLogger("event_bus").setLevel(logging.WARNING)
+logging.getLogger('event_bus').setLevel(logging.WARNING)
 
 # ============================================================================
 # 测试用 Payload
@@ -35,7 +35,7 @@ logging.getLogger("event_bus").setLevel(logging.WARNING)
 
 class BusTestPayload(BaseModel):
     value: int
-    msg: str = Field(default="test")
+    msg: str = Field(default='test')
 
 
 class MiddlewareTestPayload(BaseModel):
@@ -49,32 +49,32 @@ class MiddlewareTestPayload(BaseModel):
 
 
 class TestEventDecl(EventDeclaration):
-    name = "test.event"
+    name = 'test.event'
     payload_type = BusTestPayload
 
 
 class SlowEventDecl(EventDeclaration):
-    name = "test.slow"
+    name = 'test.slow'
 
 
 class BlockEventDecl(EventDeclaration):
-    name = "test.block"
+    name = 'test.block'
 
 
 class UserLoginEventDecl(EventDeclaration):
-    name = "user.login"
+    name = 'user.login'
 
 
 class UserLogoutEventDecl(EventDeclaration):
-    name = "user.logout"
+    name = 'user.logout'
 
 
 class AdminLoginEventDecl(EventDeclaration):
-    name = "admin.login"
+    name = 'admin.login'
 
 
 class MiddlewarePingEventDecl(EventDeclaration):
-    name = "mw.ping"
+    name = 'mw.ping'
     payload_type = MiddlewareTestPayload
 
 
@@ -104,9 +104,7 @@ class BaseTestHandler(EventHandler):
         self._completed = asyncio.Event()
         self._error: Optional[Exception] = None
 
-    async def handle(
-        self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event
-    ) -> None:
+    async def handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event) -> None:
         self._started.set()
         try:
             await self._do_handle(payload, bus_proxy, raw_event)
@@ -116,9 +114,7 @@ class BaseTestHandler(EventHandler):
         finally:
             self._completed.set()
 
-    async def _do_handle(
-        self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event
-    ) -> None:
+    async def _do_handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event) -> None:
         raise NotImplementedError
 
     async def wait_started(self, timeout: float = 1.0) -> None:
@@ -136,17 +132,15 @@ class CountingHandler(BaseTestHandler):
     """统计 test.event 成功处理次数（value >= 0）"""
 
     def __init__(self):
-        super().__init__(["test.event"])
+        super().__init__(['test.event'])
         self.count = 0
 
-    async def _do_handle(
-        self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event
-    ):
+    async def _do_handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event):
         if isinstance(payload, BusTestPayload):
             if payload.value >= 0:
                 self.count += 1
             else:
-                raise ValueError(f"Invalid value: {payload.value}")
+                raise ValueError(f'Invalid value: {payload.value}')
 
 
 class SlowHandler(BaseTestHandler):
@@ -158,15 +152,11 @@ class SlowHandler(BaseTestHandler):
         subscriptions: Optional[List[str | Regex]] = None,
         handle_timeout: float = 0.1,
     ):
-        super().__init__(
-            subscriptions or ["test.slow"], handle_timeout=handle_timeout
-        )
+        super().__init__(subscriptions or ['test.slow'], handle_timeout=handle_timeout)
         self.delay = delay
         self.completed = 0
 
-    async def _do_handle(
-        self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event
-    ):
+    async def _do_handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event):
         await asyncio.sleep(self.delay)
         self.completed += 1
 
@@ -175,12 +165,10 @@ class BlockingHandler(BaseTestHandler):
     """可控制阻塞的 Handler，用于测试背压/关闭"""
 
     def __init__(self, subscriptions: Optional[List[str | Regex]] = None):
-        super().__init__(subscriptions or ["test.block"], handle_timeout=10.0)
+        super().__init__(subscriptions or ['test.block'], handle_timeout=10.0)
         self._block = asyncio.Event()
 
-    async def _do_handle(
-        self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event
-    ):
+    async def _do_handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event):
         await self._block.wait()
 
     def release(self):
@@ -191,15 +179,13 @@ class ConcurrentTrackingHandler(BaseTestHandler):
     """跟踪并发数，用于测试 Semaphore 限流"""
 
     def __init__(self, subscriptions: Optional[List[str | Regex]] = None):
-        super().__init__(subscriptions or ["test.block"], handle_timeout=10.0)
+        super().__init__(subscriptions or ['test.block'], handle_timeout=10.0)
         self.active_count = 0
         self.max_seen = 0
         self._lock = asyncio.Lock()
         self._done = asyncio.Event()
 
-    async def _do_handle(
-        self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event
-    ):
+    async def _do_handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event):
         async with self._lock:
             self.active_count += 1
             self.max_seen = max(self.max_seen, self.active_count)
@@ -217,18 +203,16 @@ class ErrorSpyHandler(BaseTestHandler):
     """捕获 __task_error__ 事件"""
 
     def __init__(self):
-        super().__init__(["event_bus.__task_error__"])
+        super().__init__(['event_bus.__task_error__'])
         self.captured: List[Dict[str, str]] = []
 
-    async def _do_handle(
-        self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event
-    ):
+    async def _do_handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event):
         if isinstance(payload, TaskErrorPayload):
             self.captured.append(
                 {
-                    "handler": payload.handler_name,
-                    "type": payload.error_type,
-                    "msg": payload.error_message,
+                    'handler': payload.handler_name,
+                    'type': payload.error_type,
+                    'msg': payload.error_message,
                 }
             )
 
@@ -236,13 +220,11 @@ class ErrorSpyHandler(BaseTestHandler):
 class PatternSpyHandler(BaseTestHandler):
     """记录匹配正则的事件名"""
 
-    def __init__(self, pattern: str = r"user\..*"):
+    def __init__(self, pattern: str = r'user\..*'):
         super().__init__([Regex(pattern)])
         self.triggered: List[str] = []
 
-    async def _do_handle(
-        self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event
-    ):
+    async def _do_handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event):
         self.triggered.append(raw_event.name)
 
 
@@ -250,13 +232,11 @@ class SimplePingHandler(EventHandler):
     """简单 ping 处理器 —— 用于中间件测试"""
 
     def __init__(self):
-        super().__init__(["mw.ping"])
+        super().__init__(['mw.ping'])
         self.received: List[MiddlewareTestPayload] = []
         self._event = asyncio.Event()
 
-    async def handle(
-        self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event
-    ) -> None:
+    async def handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event) -> None:
         if isinstance(payload, MiddlewareTestPayload):
             self.received.append(payload)
             self._event.set()
@@ -342,23 +322,21 @@ async def event_bus(event_bus_factory: Callable[..., EventBus]):
 # ============================================================================
 
 
-async def wait_for_condition(
-    condition: Callable[[], bool], timeout: float = 2.0, interval: float = 0.01
-) -> None:
+async def wait_for_condition(condition: Callable[[], bool], timeout: float = 2.0, interval: float = 0.01) -> None:
     """轮询等待条件成立"""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if condition():
             return
         await asyncio.sleep(interval)
-    raise TimeoutError(f"Condition not met within {timeout}s")
+    raise TimeoutError(f'Condition not met within {timeout}s')
 
 
 async def publish_many(
     bus: EventBus,
     event_name: str,
     payloads: List[Any],
-    client_name: str = "pub",
+    client_name: str = 'pub',
 ) -> List[Awaitable[Any]]:
     """批量发布事件"""
     proxy = bus.proxy(client_name)

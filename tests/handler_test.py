@@ -1,9 +1,9 @@
-import pytest
 from typing import Any, Optional
+
+import pytest
 from pydantic import BaseModel
 
-from event_bus import Event, EventHandler, EventHandlerRegistry, EventBus, Regex
-
+from event_bus import Event, EventBus, EventHandler, EventHandlerRegistry, Regex
 
 # ============================================================================
 # EventHandlerRegistry CRUD
@@ -16,7 +16,7 @@ async def test_handler_register_crud(handler_registry: EventHandlerRegistry):
 
     class SampleHandler(EventHandler):
         def __init__(self):
-            super().__init__(["sample.event"])
+            super().__init__(['sample.event'])
 
         async def handle(
             self,
@@ -39,14 +39,14 @@ async def test_handler_register_crud(handler_registry: EventHandlerRegistry):
     assert hid not in handler_registry
     assert handler_registry.handlers_count == 0
 
-    assert handler_registry.unregister("invalid_id") is False
+    assert handler_registry.unregister('invalid_id') is False
 
 
 @pytest.mark.asyncio
 async def test_handler_subscriptions_copy():
     """subscriptions 应为独立副本，外部修改不影响 Handler"""
 
-    subs: list[str | Regex] = ["a.event"]
+    subs: list[str | Regex] = ['a.event']
 
     class MyHandler(EventHandler):
         def __init__(self):
@@ -56,8 +56,8 @@ async def test_handler_subscriptions_copy():
             pass
 
     handler = MyHandler()
-    subs.append("b.event")
-    assert handler.subscriptions == ["a.event"]
+    subs.append('b.event')
+    assert handler.subscriptions == ['a.event']
 
 
 # ============================================================================
@@ -67,29 +67,29 @@ async def test_handler_subscriptions_copy():
 
 def test_regex_str_and_repr():
     """Regex.__str__ 返回原始模式，__repr__ 返回可求值形式"""
-    r = Regex(r"user\..*")
-    assert str(r) == r"user\..*"
-    assert repr(r) == f"Regex({r.pattern!r})"
+    r = Regex(r'user\..*')
+    assert str(r) == r'user\..*'
+    assert repr(r) == f'Regex({r.pattern!r})'
 
 
 def test_regex_eq():
     """Regex 可与 Regex 或 str 进行相等比较"""
-    a = Regex(r"a\..*")
-    b = Regex(r"a\..*")
-    c = Regex(r"b\..*")
+    a = Regex(r'a\..*')
+    b = Regex(r'a\..*')
+    c = Regex(r'b\..*')
 
     assert a == b
     assert a != c
-    assert a == r"a\..*"
-    assert a != r"b\..*"
+    assert a == r'a\..*'
+    assert a != r'b\..*'
     assert a != 42  # 非 Regex/str 返回 NotImplemented
 
 
 def test_regex_hash():
     """相同模式的 Regex 哈希值相同，可放入 set"""
-    a = Regex(r"a\..*")
-    b = Regex(r"a\..*")
-    c = Regex(r"b\..*")
+    a = Regex(r'a\..*')
+    b = Regex(r'a\..*')
+    c = Regex(r'b\..*')
 
     assert hash(a) == hash(b)
     assert hash(a) != hash(c)
@@ -100,16 +100,16 @@ def test_regex_hash():
 
 def test_regex_pattern_property():
     """pattern 属性返回原始正则字符串"""
-    r = Regex(r"user\.\w+")
-    assert r.pattern == r"user\.\w+"
+    r = Regex(r'user\.\w+')
+    assert r.pattern == r'user\.\w+'
 
 
 def test_regex_fullmatch():
     """fullmatch 正确匹配完整字符串"""
-    r = Regex(r"user\.\w+")
-    assert r.fullmatch("user.login") is not None
-    assert r.fullmatch("user.login.extra") is None
-    assert r.fullmatch("admin.login") is None
+    r = Regex(r'user\.\w+')
+    assert r.fullmatch('user.login') is not None
+    assert r.fullmatch('user.login.extra') is None
+    assert r.fullmatch('admin.login') is None
 
 
 # ============================================================================
@@ -124,7 +124,7 @@ async def test_handler_call_delegates_to_handle(handler_registry: EventHandlerRe
 
     class CallTestHandler(EventHandler):
         def __init__(self):
-            super().__init__(["test.call"])
+            super().__init__(['test.call'])
 
         async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
             nonlocal received_payload
@@ -140,9 +140,10 @@ async def test_handler_call_delegates_to_handle(handler_registry: EventHandlerRe
         value: int
 
     payload = DummyPayload(value=42)
-    event = Event(name="test.call", data=payload)
+    event = Event(name='test.call', data=payload)
     # 需要一个 mock proxy
     from unittest.mock import MagicMock
+
     mock_proxy = MagicMock()
     await handler(mock_proxy, event)
 
@@ -161,7 +162,7 @@ def test_registry_len(handler_registry: EventHandlerRegistry):
 
     class LenHandler(EventHandler):
         def __init__(self):
-            super().__init__(["len.event"])
+            super().__init__(['len.event'])
 
         async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
             pass
@@ -175,23 +176,25 @@ def test_registry_len(handler_registry: EventHandlerRegistry):
 
 def test_registry_contains(handler_registry: EventHandlerRegistry):
     """__contains__ 检查 handler ID 是否已注册"""
+
     class ContainsHandler(EventHandler):
         def __init__(self):
-            super().__init__(["contains.event"])
+            super().__init__(['contains.event'])
 
         async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
             pass
 
     hid = handler_registry.register(ContainsHandler())
     assert hid in handler_registry
-    assert "nonexistent" not in handler_registry
+    assert 'nonexistent' not in handler_registry
 
 
 def test_registry_iter(handler_registry: EventHandlerRegistry):
     """__iter__ 迭代所有 (handler_id, handler) 对"""
+
     class IterHandler(EventHandler):
         def __init__(self):
-            super().__init__(["iter.event"])
+            super().__init__(['iter.event'])
 
         async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
             pass
@@ -209,9 +212,10 @@ def test_registry_iter(handler_registry: EventHandlerRegistry):
 
 def test_registry_clear(handler_registry: EventHandlerRegistry):
     """clear() 清除所有已注册处理器"""
+
     class ClearHandler(EventHandler):
         def __init__(self):
-            super().__init__(["clear.event"])
+            super().__init__(['clear.event'])
 
         async def handle(self, payload: Optional[BaseModel], bus_proxy: 'EventBus.Proxy', raw_event: Event) -> None:
             pass

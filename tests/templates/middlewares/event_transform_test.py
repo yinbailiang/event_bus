@@ -3,18 +3,21 @@
 from typing import Any, List, Optional
 
 import pytest
+from conftest import (
+    MiddlewareTestPayload,
+    SimplePingHandler,
+)
 from pydantic import BaseModel
 
 from event_bus import (
-
     Event,
     EventBus,
     EventDeclaration,
     EventHandlerRegistry,
     EventRegistry,
-    MiddlewareChain,
     InMemoryEventQueue,
     InMemoryEventQueueConfig,
+    MiddlewareChain,
 )
 from event_bus.templates.middlewares import (
     EventTransformMiddleware,
@@ -22,12 +25,6 @@ from event_bus.templates.middlewares import (
     make_field_redact_transform,
     make_rename_transform,
 )
-
-from conftest import (
-    MiddlewareTestPayload,
-    SimplePingHandler,
-)
-
 
 # ============================================================================
 # EventTransformMiddleware
@@ -44,13 +41,14 @@ class TestEventTransformMiddleware:
         handler_registry: EventHandlerRegistry,
     ) -> None:
         """事件重命名：旧名 → 新名（目标事件需接受相同负载类型）"""
+
         # 注册一个目标事件，接受 MiddlewareTestPayload
         class RenameTargetEvent(EventDeclaration):
-            name = "rename.target"
+            name = 'rename.target'
             payload_type = MiddlewareTestPayload
 
         base_event_registry.register(RenameTargetEvent)
-        transform = make_rename_transform({"mw.ping": "rename.target"})
+        transform = make_rename_transform({'mw.ping': 'rename.target'})
         mw = EventTransformMiddleware(transform)
         chain = MiddlewareChain()
         await chain.add(mw)
@@ -61,7 +59,7 @@ class TestEventTransformMiddleware:
         class TargetWatcher(SimplePingHandler):
             def __init__(self) -> None:
                 super().__init__()
-                self.subscriptions = ["rename.target"]
+                self.subscriptions = ['rename.target']
 
             async def handle(
                 self,
@@ -84,12 +82,12 @@ class TestEventTransformMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("src").publish("mw.ping", {"key": "k", "count": 1})
+            await bus.proxy('src').publish('mw.ping', {'key': 'k', 'count': 1})
             await watcher.wait_received(timeout=2.0)
 
         # 重命名后的事件被 TargetWatcher 收到
         assert len(received) >= 1
-        assert received[0] == "rename.target"
+        assert received[0] == 'rename.target'
 
     @pytest.mark.asyncio
     async def test_field_inject(
@@ -98,7 +96,7 @@ class TestEventTransformMiddleware:
         handler_registry: EventHandlerRegistry,
     ) -> None:
         """自动注入字段"""
-        transform = make_field_inject_transform(trace_id="abc-123", env="test")
+        transform = make_field_inject_transform(trace_id='abc-123', env='test')
         mw = EventTransformMiddleware(transform)
         chain = MiddlewareChain()
         await chain.add(mw)
@@ -113,12 +111,12 @@ class TestEventTransformMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("src").publish("mw.ping", {"key": "original"})
+            await bus.proxy('src').publish('mw.ping', {'key': 'original'})
             await handler.wait_received(timeout=2.0)
 
         assert len(handler.received) >= 1
         payload = handler.received[0]
-        assert payload.key == "original"
+        assert payload.key == 'original'
         # 注入的字段在 data 中
         # 注意：MiddlewareTestPayload 只有 key, count，注入的额外字段会被忽略
         # 所以这里只验证 handler 确实收到了事件
@@ -130,7 +128,7 @@ class TestEventTransformMiddleware:
         handler_registry: EventHandlerRegistry,
     ) -> None:
         """敏感字段脱敏"""
-        transform = make_field_redact_transform("key")
+        transform = make_field_redact_transform('key')
         mw = EventTransformMiddleware(transform)
         chain = MiddlewareChain()
         await chain.add(mw)
@@ -145,15 +143,13 @@ class TestEventTransformMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("src").publish(
-                "mw.ping", {"key": "secret123", "count": 99}
-            )
+            await bus.proxy('src').publish('mw.ping', {'key': 'secret123', 'count': 99})
             await handler.wait_received(timeout=2.0)
 
         assert len(handler.received) >= 1
         payload = handler.received[0]
         # key 被替换为 ***
-        assert payload.key == "***"
+        assert payload.key == '***'
         assert payload.count == 99
 
     @pytest.mark.asyncio
@@ -166,7 +162,7 @@ class TestEventTransformMiddleware:
 
         # 注册转换目标事件
         class PrefixedPingEvent(EventDeclaration):
-            name = "prefix.mw.ping"
+            name = 'prefix.mw.ping'
             payload_type = MiddlewareTestPayload
 
         base_event_registry.register(PrefixedPingEvent)
@@ -176,9 +172,9 @@ class TestEventTransformMiddleware:
             data: dict[str, Any] | BaseModel | None,
         ) -> tuple[str, dict[str, Any] | BaseModel | None]:
             # 不对系统事件添加前缀
-            if name.startswith("event_bus."):
+            if name.startswith('event_bus.'):
                 return name, data
-            return f"prefix.{name}", data
+            return f'prefix.{name}', data
 
         mw = EventTransformMiddleware(add_prefix)
         chain = MiddlewareChain()
@@ -186,7 +182,7 @@ class TestEventTransformMiddleware:
 
         handler = SimplePingHandler()
         # 修改订阅以匹配转换后的事件名
-        handler.subscriptions = ["prefix.mw.ping"]
+        handler.subscriptions = ['prefix.mw.ping']
         handler_registry.register(handler)
 
         bus = EventBus(
@@ -196,7 +192,7 @@ class TestEventTransformMiddleware:
             middleware_chain=chain,
         )
         async with bus:
-            await bus.proxy("src").publish("mw.ping", {"key": "k", "count": 1})
+            await bus.proxy('src').publish('mw.ping', {'key': 'k', 'count': 1})
             await handler.wait_received(timeout=2.0)
 
         assert len(handler.received) >= 1

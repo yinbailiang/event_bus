@@ -1,7 +1,8 @@
 """ModuleEventRegister 和 ModuleHandlerRegister 的单元测试"""
 
-import pytest
 from typing import Any, Dict, Optional, cast
+
+import pytest
 from pydantic import BaseModel
 
 from event_bus import (
@@ -22,17 +23,17 @@ class _TestPayload(BaseModel):
 
 
 class _EventA(EventDeclaration):
-    name = "test.module.a"
+    name = 'test.module.a'
     payload_type = _TestPayload
 
 
 class _EventB(EventDeclaration):
-    name = "test.module.b"
+    name = 'test.module.b'
     payload_type = None
 
 
 class _EventC(EventDeclaration):
-    name = "test.module.c"
+    name = 'test.module.c'
     payload_type = _TestPayload
 
 
@@ -51,20 +52,20 @@ _EXTRA_EVENT_DECLS = (_TestEvent, _TestAnotherEvent)
 # 测试用 Handler
 # ============================================================================
 class _SimpleHandler(EventHandler):
-    def __init__(self, extra: str = "default"):
-        super().__init__(subscriptions=["test.event"])
+    def __init__(self, extra: str = 'default'):
+        super().__init__(subscriptions=['test.event'])
         self.extra = extra
 
-    async def handle(self, payload, bus_proxy, raw_event) -> None: # type: ignore
+    async def handle(self, payload, bus_proxy, raw_event) -> None:  # type: ignore
         pass
 
 
 class _AnotherHandler(EventHandler):
     def __init__(self, db: Optional[Any] = None):
-        super().__init__(subscriptions=["test.another"])
+        super().__init__(subscriptions=['test.another'])
         self.db = db
 
-    async def handle(self, payload, bus_proxy, raw_event) -> None: # type: ignore
+    async def handle(self, payload, bus_proxy, raw_event) -> None:  # type: ignore
         pass
 
 
@@ -83,12 +84,12 @@ def empty_handler_registry() -> EventHandlerRegistry:
 
 @pytest.fixture
 def module_events() -> ModuleEventRegister:
-    return ModuleEventRegister("test_module")
+    return ModuleEventRegister('test_module')
 
 
 @pytest.fixture
 def module_handlers() -> ModuleHandlerRegister:
-    return ModuleHandlerRegister("test_module")
+    return ModuleHandlerRegister('test_module')
 
 
 # ============================================================================
@@ -99,8 +100,8 @@ class TestModuleEventRegister:
 
     # ---- 初始化 ----
     def test_init_creates_empty_set(self) -> None:
-        reg = ModuleEventRegister("my_mod")
-        assert reg.name == "my_mod"
+        reg = ModuleEventRegister('my_mod')
+        assert reg.name == 'my_mod'
         assert reg.events == set()
 
     # ---- add_event ----
@@ -115,19 +116,15 @@ class TestModuleEventRegister:
         assert len(module_events.events) == 1
 
     # ---- event 装饰器 ----
-    def test_event_decorator_registers_class(
-        self, module_events: ModuleEventRegister
-    ) -> None:
+    def test_event_decorator_registers_class(self, module_events: ModuleEventRegister) -> None:
         @module_events.event
         class _DecoratedEvent(EventDeclaration):
-            name = "test.decorated"
+            name = 'test.decorated'
             payload_type = None
 
         assert _DecoratedEvent in module_events.events
 
-    def test_event_decorator_returns_class_unchanged(
-        self, module_events: ModuleEventRegister
-    ) -> None:
+    def test_event_decorator_returns_class_unchanged(self, module_events: ModuleEventRegister) -> None:
         """装饰器应原样返回类（不改变类型）"""
         result = module_events.event(_EventA)
         assert result is _EventA
@@ -143,8 +140,8 @@ class TestModuleEventRegister:
 
         module_events.register_all_events(empty_event_registry)
 
-        assert empty_event_registry.get("test.module.a") is _EventA
-        assert empty_event_registry.get("test.module.b") is _EventB
+        assert empty_event_registry.get('test.module.a') is _EventA
+        assert empty_event_registry.get('test.module.b') is _EventB
 
     def test_register_all_events_duplicate_name_raises(
         self,
@@ -156,7 +153,7 @@ class TestModuleEventRegister:
         empty_event_registry.register(_EventA)
         module_events.add_event(_EventA)
 
-        with pytest.raises(ValueError, match="重复的事件声明"):
+        with pytest.raises(ValueError, match='重复的事件声明'):
             module_events.register_all_events(empty_event_registry)
 
     def test_register_all_events_empty_noop(
@@ -169,15 +166,13 @@ class TestModuleEventRegister:
         assert empty_event_registry.list_names() == []
 
     # ---- get_all_event_names ----
-    def test_get_all_event_names_returns_names(
-        self, module_events: ModuleEventRegister
-    ) -> None:
+    def test_get_all_event_names_returns_names(self, module_events: ModuleEventRegister) -> None:
         module_events.add_event(_EventA)
         module_events.add_event(_EventB)
         module_events.add_event(_EventC)
 
         names = module_events.get_all_event_names()
-        assert set(names) == {"test.module.a", "test.module.b", "test.module.c"}
+        assert set(names) == {'test.module.a', 'test.module.b', 'test.module.c'}
 
     def test_get_all_event_names_empty(self, module_events: ModuleEventRegister) -> None:
         assert module_events.get_all_event_names() == []
@@ -186,13 +181,13 @@ class TestModuleEventRegister:
     def test_repr(self, module_events: ModuleEventRegister) -> None:
         module_events.add_event(_EventA)
         r = repr(module_events)
-        assert "test_module" in r
-        assert "1" in r
+        assert 'test_module' in r
+        assert '1' in r
 
     def test_repr_empty(self, module_events: ModuleEventRegister) -> None:
         r = repr(module_events)
-        assert "test_module" in r
-        assert "0" in r
+        assert 'test_module' in r
+        assert '0' in r
 
 
 # ============================================================================
@@ -203,61 +198,55 @@ class TestModuleHandlerRegister:
 
     # ---- 初始化 ----
     def test_init_creates_empty_set(self) -> None:
-        reg = ModuleHandlerRegister("my_mod")
-        assert reg.name == "my_mod"
+        reg = ModuleHandlerRegister('my_mod')
+        assert reg.name == 'my_mod'
         assert reg.handlers == set()
 
     # ---- add_handler ----
-    def test_add_handler_adds_to_set(
-        self, module_handlers: ModuleHandlerRegister
-    ) -> None:
-        module_handlers.add_handler(_SimpleHandler, depends=lambda: {"extra": "hi"})
+    def test_add_handler_adds_to_set(self, module_handlers: ModuleHandlerRegister) -> None:
+        module_handlers.add_handler(_SimpleHandler, depends=lambda: {'extra': 'hi'})
         assert len(module_handlers.handlers) == 1
 
-    def test_add_handler_same_entry_idempotent(
-        self, module_handlers: ModuleHandlerRegister
-    ) -> None:
+    def test_add_handler_same_entry_idempotent(self, module_handlers: ModuleHandlerRegister) -> None:
         """同一个 (handler_type, depends) 重复添加不应产生重复"""
-        dep = lambda: {"extra": "hi"}
+
+        def dep() -> Dict[str, Any]:
+            return {'extra': 'hi'}
+
         module_handlers.add_handler(_SimpleHandler, depends=dep)
         module_handlers.add_handler(_SimpleHandler, depends=dep)
         assert len(module_handlers.handlers) == 1
 
-    def test_add_handler_different_depends_not_deduped(
-        self, module_handlers: ModuleHandlerRegister
-    ) -> None:
+    def test_add_handler_different_depends_not_deduped(self, module_handlers: ModuleHandlerRegister) -> None:
         """不同 depends 的同类型 handler 应视为不同注册项"""
-        module_handlers.add_handler(_SimpleHandler, depends=lambda: {"extra": "a"})
-        module_handlers.add_handler(_SimpleHandler, depends=lambda: {"extra": "b"})
+        module_handlers.add_handler(_SimpleHandler, depends=lambda: {'extra': 'a'})
+        module_handlers.add_handler(_SimpleHandler, depends=lambda: {'extra': 'b'})
         assert len(module_handlers.handlers) == 2
 
     # ---- handler 装饰器 ----
-    def test_handler_decorator_registers_class(
-        self, module_handlers: ModuleHandlerRegister
-    ) -> None:
+    def test_handler_decorator_registers_class(self, module_handlers: ModuleHandlerRegister) -> None:
         @module_handlers.handler()
-        class _DecoratedHandler(EventHandler): # type: ignore
+        class _DecoratedHandler(EventHandler):  # type: ignore
             def __init__(self):
-                super().__init__(subscriptions=["test.x"])
+                super().__init__(subscriptions=['test.x'])
 
-            async def handle(self, payload, bus_proxy, raw_event): # type: ignore
+            async def handle(self, payload, bus_proxy, raw_event):  # type: ignore
                 pass
 
         assert len(module_handlers.handlers) == 1
 
-    def test_handler_decorator_returns_class_unchanged(
-        self, module_handlers: ModuleHandlerRegister
-    ) -> None:
+    def test_handler_decorator_returns_class_unchanged(self, module_handlers: ModuleHandlerRegister) -> None:
         """装饰器应原样返回类"""
         decorator = module_handlers.handler()
         result = decorator(_SimpleHandler)
         assert result is _SimpleHandler
 
-    def test_handler_decorator_with_custom_depends(
-        self, module_handlers: ModuleHandlerRegister
-    ) -> None:
+    def test_handler_decorator_with_custom_depends(self, module_handlers: ModuleHandlerRegister) -> None:
         """装饰器接受 depends 参数并存储"""
-        factory = lambda: {"extra": "injected"}
+
+        def factory() -> Dict[str, Any]:
+            return {'extra': 'injected'}
+
         decorator = module_handlers.handler(depends=factory)
         decorator(_SimpleHandler)
 
@@ -275,14 +264,14 @@ class TestModuleHandlerRegister:
     ) -> None:
         for evt in _EXTRA_EVENT_DECLS:
             empty_event_registry.register(evt)
-        module_handlers.add_handler(_SimpleHandler, depends=lambda: {"extra": "test"})
+        module_handlers.add_handler(_SimpleHandler, depends=lambda: {'extra': 'test'})
         module_handlers.register_all_handlers(empty_handler_registry)
 
         assert empty_handler_registry.handlers_count == 1
-        handlers = Matcher(empty_event_registry, empty_handler_registry).match("test.event")
+        handlers = Matcher(empty_event_registry, empty_handler_registry).match('test.event')
         assert len(handlers) == 1
         assert isinstance(handlers[0][1], _SimpleHandler)
-        assert handlers[0][1].extra == "test"
+        assert handlers[0][1].extra == 'test'
 
     def test_register_all_handlers_passes_dependencies(
         self,
@@ -294,12 +283,10 @@ class TestModuleHandlerRegister:
         for evt in _EXTRA_EVENT_DECLS:
             empty_event_registry.register(evt)
         fake_db = object()
-        module_handlers.add_handler(
-            _AnotherHandler, depends=lambda: {"db": fake_db}
-        )
+        module_handlers.add_handler(_AnotherHandler, depends=lambda: {'db': fake_db})
         module_handlers.register_all_handlers(empty_handler_registry)
 
-        handlers = Matcher(empty_event_registry, empty_handler_registry).match("test.another")
+        handlers = Matcher(empty_event_registry, empty_handler_registry).match('test.another')
         assert cast(_AnotherHandler, handlers[0][1]).db is fake_db
 
     def test_register_all_handlers_multiple_handlers(
@@ -311,14 +298,14 @@ class TestModuleHandlerRegister:
         """注册多个处理器，全部应出现在注册表中"""
         for evt in _EXTRA_EVENT_DECLS:
             empty_event_registry.register(evt)
-        module_handlers.add_handler(_SimpleHandler, depends=lambda: {"extra": "a"})
-        module_handlers.add_handler(_AnotherHandler, depends=lambda: {"db": None})
+        module_handlers.add_handler(_SimpleHandler, depends=lambda: {'extra': 'a'})
+        module_handlers.add_handler(_AnotherHandler, depends=lambda: {'db': None})
 
         module_handlers.register_all_handlers(empty_handler_registry)
 
         assert empty_handler_registry.handlers_count == 2
-        assert len(Matcher(empty_event_registry, empty_handler_registry).match("test.event")) == 1
-        assert len(Matcher(empty_event_registry, empty_handler_registry).match("test.another")) == 1
+        assert len(Matcher(empty_event_registry, empty_handler_registry).match('test.event')) == 1
+        assert len(Matcher(empty_event_registry, empty_handler_registry).match('test.another')) == 1
 
     def test_register_all_handlers_empty_noop(
         self,
@@ -337,12 +324,12 @@ class TestModuleHandlerRegister:
         """默认 depends (lambda: {}) 时处理器应使用默认参数构造"""
         for evt in _EXTRA_EVENT_DECLS:
             empty_event_registry.register(evt)
-        reg = ModuleHandlerRegister("test")
+        reg = ModuleHandlerRegister('test')
         reg.add_handler(_SimpleHandler, depends=lambda: {})
         reg.register_all_handlers(empty_handler_registry)
 
-        handlers = Matcher(empty_event_registry, empty_handler_registry).match("test.event")
-        assert cast(_SimpleHandler, handlers[0][1]).extra == "default"
+        handlers = Matcher(empty_event_registry, empty_handler_registry).match('test.event')
+        assert cast(_SimpleHandler, handlers[0][1]).extra == 'default'
 
     def test_register_all_handlers_depends_factory_called_per_registration(
         self,
@@ -357,9 +344,9 @@ class TestModuleHandlerRegister:
         def counting_factory() -> Dict[str, Any]:
             nonlocal call_count
             call_count += 1
-            return {"extra": str(call_count)}
+            return {'extra': str(call_count)}
 
-        reg = ModuleHandlerRegister("test")
+        reg = ModuleHandlerRegister('test')
         reg.add_handler(_SimpleHandler, depends=counting_factory)
 
         # 两次调用 register_all_handlers（第二次注册到新 registry）
@@ -369,8 +356,8 @@ class TestModuleHandlerRegister:
 
         assert call_count == 2
         # 第二次调用时 extra 应为 "2"
-        handlers = Matcher(empty_event_registry, reg2).match("test.event")
-        assert cast(_SimpleHandler, handlers[0][1]).extra == "2"
+        handlers = Matcher(empty_event_registry, reg2).match('test.event')
+        assert cast(_SimpleHandler, handlers[0][1]).extra == '2'
 
     def test_register_all_handlers_one_failure_does_not_block_others(
         self,
@@ -382,13 +369,13 @@ class TestModuleHandlerRegister:
             empty_event_registry.register(evt)
 
         def _failing_factory() -> Dict[str, Any]:
-            raise RuntimeError("依赖工厂故意失败")
+            raise RuntimeError('依赖工厂故意失败')
 
-        reg = ModuleHandlerRegister("test")
+        reg = ModuleHandlerRegister('test')
         # 第一个会失败，第二个和第三个应正常注册
         reg.add_handler(_SimpleHandler, depends=_failing_factory)
-        reg.add_handler(_SimpleHandler, depends=lambda: {"extra": "ok-1"})
-        reg.add_handler(_AnotherHandler, depends=lambda: {"db": "ok-db"})
+        reg.add_handler(_SimpleHandler, depends=lambda: {'extra': 'ok-1'})
+        reg.add_handler(_AnotherHandler, depends=lambda: {'db': 'ok-db'})
 
         # 不应抛出异常
         reg.register_all_handlers(empty_handler_registry)
@@ -398,16 +385,16 @@ class TestModuleHandlerRegister:
 
         # 验证成功的处理器可以正常匹配
         matcher = Matcher(empty_event_registry, empty_handler_registry)
-        event_handlers = matcher.match("test.event")
-        another_handlers = matcher.match("test.another")
+        event_handlers = matcher.match('test.event')
+        another_handlers = matcher.match('test.another')
 
         assert len(event_handlers) == 1
         assert isinstance(event_handlers[0][1], _SimpleHandler)
-        assert event_handlers[0][1].extra == "ok-1"
+        assert event_handlers[0][1].extra == 'ok-1'
 
         assert len(another_handlers) == 1
         assert isinstance(another_handlers[0][1], _AnotherHandler)
-        assert another_handlers[0][1].db == "ok-db"
+        assert another_handlers[0][1].db == 'ok-db'
 
     def test_register_all_handlers_all_fail_still_no_exception(
         self,
@@ -416,9 +403,9 @@ class TestModuleHandlerRegister:
         """所有处理器注册均失败时也不应抛出异常，注册表保持为空"""
 
         def _failing_factory() -> Dict[str, Any]:
-            raise RuntimeError("全部失败")
+            raise RuntimeError('全部失败')
 
-        reg = ModuleHandlerRegister("test")
+        reg = ModuleHandlerRegister('test')
         reg.add_handler(_SimpleHandler, depends=_failing_factory)
         reg.add_handler(_AnotherHandler, depends=_failing_factory)
 
@@ -437,9 +424,9 @@ class TestModuleHandlerRegister:
         for evt in _EXTRA_EVENT_DECLS:
             empty_event_registry.register(evt)
 
-        reg = ModuleHandlerRegister("test")
-        reg.add_handler(_SimpleHandler, depends=lambda: {"extra": "a"})
-        reg.add_handler(_AnotherHandler, depends=lambda: {"db": "x"})
+        reg = ModuleHandlerRegister('test')
+        reg.add_handler(_SimpleHandler, depends=lambda: {'extra': 'a'})
+        reg.add_handler(_AnotherHandler, depends=lambda: {'db': 'x'})
 
         reg.register_all_handlers(empty_handler_registry, atomic=True)
 
@@ -455,14 +442,14 @@ class TestModuleHandlerRegister:
             empty_event_registry.register(evt)
 
         def _failing_factory() -> Dict[str, Any]:
-            raise RuntimeError("依赖工厂故意失败")
+            raise RuntimeError('依赖工厂故意失败')
 
-        reg = ModuleHandlerRegister("test")
+        reg = ModuleHandlerRegister('test')
         # 第 1 个成功，第 2 个失败 → 第 1 个应被回滚
-        reg.add_handler(_SimpleHandler, depends=lambda: {"extra": "ok"})
+        reg.add_handler(_SimpleHandler, depends=lambda: {'extra': 'ok'})
         reg.add_handler(_SimpleHandler, depends=_failing_factory)
 
-        with pytest.raises(RuntimeError, match="依赖工厂故意失败"):
+        with pytest.raises(RuntimeError, match='依赖工厂故意失败'):
             reg.register_all_handlers(empty_handler_registry, atomic=True)
 
         # 回滚后注册表应为空
@@ -478,13 +465,13 @@ class TestModuleHandlerRegister:
             empty_event_registry.register(evt)
 
         def _failing_factory() -> Dict[str, Any]:
-            raise RuntimeError("第一个就失败")
+            raise RuntimeError('第一个就失败')
 
-        reg = ModuleHandlerRegister("test")
+        reg = ModuleHandlerRegister('test')
         reg.add_handler(_SimpleHandler, depends=_failing_factory)
-        reg.add_handler(_AnotherHandler, depends=lambda: {"db": "never-reached"})
+        reg.add_handler(_AnotherHandler, depends=lambda: {'db': 'never-reached'})
 
-        with pytest.raises(RuntimeError, match="第一个就失败"):
+        with pytest.raises(RuntimeError, match='第一个就失败'):
             reg.register_all_handlers(empty_handler_registry, atomic=True)
 
         assert empty_handler_registry.handlers_count == 0
@@ -493,10 +480,10 @@ class TestModuleHandlerRegister:
     def test_repr(self, module_handlers: ModuleHandlerRegister) -> None:
         module_handlers.add_handler(_SimpleHandler, depends=lambda: {})
         r = repr(module_handlers)
-        assert "test_module" in r
-        assert "1" in r
+        assert 'test_module' in r
+        assert '1' in r
 
     def test_repr_empty(self, module_handlers: ModuleHandlerRegister) -> None:
         r = repr(module_handlers)
-        assert "test_module" in r
-        assert "0" in r
+        assert 'test_module' in r
+        assert '0' in r
