@@ -16,7 +16,7 @@ concurrency control, timeout protection, and graceful shutdown.
 | [bus.md](bus.md) | `EventBus` core, `Proxy`, `ShutdownConfig`, built-in events & exceptions |
 | [event.md](event.md) | `Event` runtime instance, `EventDeclaration`, `EventRegistry` |
 | [handler.md](handler.md) | `EventHandler` base class, `EventHandlerRegistry` |
-| [matcher.md](matcher.md) | `Matcher` dispatch table, version-aware caching |
+| [router.md](router.md) | `Router` + `Subscriptions`: activated-only route table, precomputed dispatch, version-aware |
 | [queue.md](queue.md) | `EventQueue` abstraction, `InMemoryEventQueue` default, injectable queue config |
 | [middleware.md](middleware.md) | `Middleware` base class, `MiddlewareChain`, onion model |
 | [templates/](templates/templates.md) | Advanced templates: `expect`, `request`, `pipe`, `register` & built-in middlewares |
@@ -30,13 +30,15 @@ graph TD
     ED[EventDeclaration] -->|register to| ER[EventRegistry]
     EH[EventHandler] -->|register to| HR[EventHandlerRegistry]
     MW[Middleware] -->|register to| MC[MiddlewareChain]
-    ER --> EB[EventBus]
-    HR --> EB
+    ER -->|precompute dispatch| R[Router]
+    HR --> EB[EventBus]
+    EH -->|on_activate: subscribe bundle| R[Router]
+    EB -->|owns & dispatches via| R[Router]
+    R -->|match returns handler_id| EB
     Q[EventQueue] --> EB
     MC --> EB
     EB -->|creates| P[Proxy]
     P -->|publish| EB
-    EB -->|dispatch via| M[Matcher]
 ```
 
 ### Publish Flow
@@ -55,7 +57,7 @@ before_publish chain (Middleware 1 → 2 → ... → core)
        ▼
     dispatch loop
        │
-       ├─ Matcher.match(name)
+       ├─ Router.match(name)
        └─ create_task(handler_wrapper)
             ├─ semaphore (concurrency limit)
             ├─ asyncio.timeout

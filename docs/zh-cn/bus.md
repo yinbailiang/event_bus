@@ -15,6 +15,7 @@ class EventBus:
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
         queue: Optional[EventQueue] = None,
+        router: Optional[Router] = None,
         max_handler_semaphore: int = 256,
         shutdown: ShutdownConfig = ShutdownConfig(),
         middleware_chain: Optional[MiddlewareChain] = None
@@ -28,6 +29,10 @@ class EventBus:
 
     # 创建代理
     def proxy(self, source: str, raw_event: Optional[Event] = None) -> Proxy
+
+    # 路由器
+    @property
+    def router(self) -> Router
 
     # 可观测性
     @property
@@ -47,18 +52,19 @@ class EventBus:
 | `event_registry` | `EventRegistry` | (必需) | 事件注册表实例。 |
 | `handler_registry` | `EventHandlerRegistry` | (必需) | 处理器注册表实例。 |
 | `queue` | `Optional[EventQueue]` | `None` | 内部派发队列，总线仅依赖 `EventQueue` 抽象。缺省为 `InMemoryEventQueue()`（容量取其自身默认配置 1024）。参见 [事件队列文档](queue.md)。 |
+| `router` | `Optional[Router]` | `None` | 内部路由 / 分派表。缺省为 `Router(event_registry)`，经 `bus.router` 暴露。参见 [路由文档](router.md)。 |
 | `max_handler_semaphore` | `int` | `256` | 最大并发处理器数量（信号量）。 |
 | `shutdown` | `ShutdownConfig` | `ShutdownConfig()` | 停机行为配置，参见 [ShutdownConfig](#shutdownconfig)。 |
 | `middleware_chain` | `Optional[MiddlewareChain]` | `None` | 中间件链，用于在发布流程中插入自定义逻辑。参见 [中间件文档](middleware.md)。 |
 
-构造时自动注册 `ShutdownEvent` 和 `TaskErrorEvent`（若注册表中不存在），并内部创建 [Matcher](matcher.md) 用于事件-处理器路由。队列容量等配置由队列自身持有，总线不感知；需要自定义容量时注入 `InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=N))`。中间件链在每次分发时按需构建，运行时增删即时生效。
+构造时自动注册 `ShutdownEvent` 和 `TaskErrorEvent`（若注册表中不存在），并内部创建 [Router](router.md)（经 `bus.router` 暴露）用于事件-处理器路由——处理器在激活（总线启动）时登记自己的订阅束。队列容量等配置由队列自身持有，总线不感知；需要自定义容量时注入 `InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=N))`。中间件链在每次分发时按需构建，运行时增删即时生效。
 
 ### 生命周期
 
 | 方法 | 说明 |
 | - | - |
-| `start()` | 启动调度循环。重复调用安全。 |
-| `stop()` | 优雅停止：发布 `__shutdown__` → 拒绝新发布 → 等待队列排空 → 取消调度 → 等待活跃任务完成。重复调用安全。 |
+| `start()` | 启动调度循环并激活处理器注册表（`registry.activate(bus)`——各处理器把订阅束登记进 `bus.router`）。重复调用安全。 |
+| `stop()` | 优雅停止：发布 `__shutdown__` → 拒绝新发布 → 等待队列排空 → 取消调度 → 等待活跃任务完成 → 下线处理器注册表（`registry.deactivate()`）。重复调用安全。 |
 | `async with EventBus(...) as bus:` | 上下文管理器，自动启停。退出时 `stop()` 异常不会掩盖上下文体异常。 |
 
 ### 可观测性

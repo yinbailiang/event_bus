@@ -1,116 +1,175 @@
-# Matcher
+# Router / Subscriptions
 
 ## Overview
 
-`Matcher` is the event-to-handler router. It pre-computes a dispatch table from the event
-and handler registries, routing event types to matching handlers efficiently.
-It is auto-constructed by `EventBus` — users do not need to create it directly.
+`Router` is the **single source of truth** for routing: it owns a route table that contains
+**only activated subscriptions** (mirroring message brokers, where bindings live only while a
+consumer is connected), and `match()` pre-computes a dispatch table routing event types to
+registered handlers. `Subscriptions` is the managed subscription container a handler holds
+(instead of a bare list), supporting runtime `add/remove/replace` for dynamic self-subscription.
+
+Users usually do not build a `Router` directly — `EventBus` creates one internally and exposes it
+as `bus.router`; `EventHandler.on_activate` registers the handler's subscription bundle by default
+(activation is routing).
 
 ---
 
 ## Architecture
 
 ```text
-EventRegistry ──┐
-                ├──> Matcher ──> {event_name: [handler_id, ...]}
-HandlerRegistry ┘      ↑
-                       │ auto-rebuild on version change
+EventHandler ──Subscriptions bundle──┐
+                                     ├──> Router.route_table ──> {event_name: [handler_id, ...]}
+        on_activate(bus) registers ───┘            ↑
+                                 event-registry version + route version auto-rebuild
 ```
 
-`Matcher` replaced the old `EventHandlerRegistry.get_handlers()` matching logic.
-Registries focus on storage (CRUD), matching is a separate concern — single responsibility.
+`Router` replaces the old `Matcher` (which passively scanned `handler.subscriptions`):
+subscription data moved from "bare list on the handler + scan" to "a bundle the handler holds,
+registered into the Router on activation".
 
 ---
 
-## Matcher
+## Subscriptions
+
+The managed subscription container held by a handler:
 
 ```python
-class Matcher:
-    def __init__(
-        self,
-        event_registry: EventRegistry,
-        handler_registry: EventHandlerRegistry
-    ) -> None
-
-    def match(self, event_type: str) -> List[tuple[str, EventHandler]]
-
+class Subscriptions:
+    def __init__(self, patterns: Iterable[str | Regex] | None = None) -> None
+    def add(self, pattern: str | Regex) -> None              # append (dedup)
+    def remove(self, pattern: str | Regex) -> bool           # remove
+    def replace(self, patterns: Iterable[str | Regex]) -> None  # full replace (state machine)
     @property
-    def dispatch_table(self) -> Dict[str, List[tuple[str, EventHandler]]]
+    def patterns(self) -> tuple[str | Regex, ...]           # read-only snapshot
+    @property
+    def is_bound(self) -> bool                              # registered on a Router (active)
+    def __iter__ / __len__ / __contains__ / __eq__(list|tuple) / __bool__
 ```
 
-### Constructor Parameters
+**Changes auto-sync while active**: on registration (`Router.subscribe`) the bundle binds to that
+Router; any subsequent `add/remove/replace` bumps the Router version so the dispatch table rebuilds
+lazily. **Changes while inactive** only update the declaration and take effect on the next
+`subscribe` (activation).
 
-| Parameter | Type | Description |
-| - | - | - |
-| `event_registry` | `EventRegistry` | Provides all known event type names. |
-| `handler_registry` | `EventHandlerRegistry` | Provides all registered handlers and their subscriptions. |
+---
 
-The dispatch table is pre-computed at construction time by iterating over all known event types.
+## Router
 
-### Pre-computed Dispatch Table
+```python
+class Router:
+    def __init__(self, event_registry: EventRegistry) -> None
 
-The dispatch table is a `{event_name: [handler_id, ...]}` mapping:
+    def subscribe(self, handler_id: str, subs: Subscriptions) -> None  # register (idempotent)
+    def unsubscribe(self, handler_id: str) -> bool                     # revoke
+    def clear(self) -> None                                            # revoke all
 
-- **Exact `str` subscriptions** → reverse index `{event_type: [hid, ...]}`, O(1) lookup
-- **`Regex` subscriptions** → separate scan list, only `fullmatch` against regex subscriptions
+    def match(self, event_name: str) -> list[str]                      # matched handler ids
+    @property
+    def routes(self) -> tuple[tuple[str, Subscriptions], ...]          # active routes snapshot
+    @property
+    def dispatch_table(self) -> dict[str, list[str]]                   # read-only dispatch view
+    version: int                                                       # route version
+```
 
-Only handler IDs (strings) are stored in memory. `match()` resolves them to `(hid, handler)` tuples on demand from the registry.
+### Dispatch table
 
-### Version-Aware Caching
+- **Exact `str` subscriptions** → reverse index, O(1) lookup
+- **`Regex` subscriptions** → separate scan list, `fullmatch` only
+- Per event, matches follow subscription order and are deduped by handler; only handler ids are
+  stored — the bus resolves instances from the handler registry.
 
-Both registries expose a `version` property (incremented on every add/remove). `Matcher` automatically compares versions on every `match()` / `dispatch_table` access, rebuilding the dispatch table when a change is detected — no manual notification needed.
+### Version-aware caching
+
+Any change in the event-registry version or the Router version
+(subscribe/unsubscribe/clear/bundle mutation) triggers a lazy rebuild on the next
+`match()` / `dispatch_table` access.
 
 ```text
 match() call → check version (O(1) int compare) → stale? → _rebuild()
-                                                   ↓ fresh
-                                            lookup table (O(1) dict)
+                                                  ↓ fresh
+                                           lookup table (O(1) dict)
 ```
 
-### `match()`
+---
+
+## Lifecycle: Activation Is Routing
+
+The `EventHandler` base class hooks routing registration into bus-lifecycle hooks
+(overriders must call `super()`):
 
 ```python
-def match(self, event_type: str) -> List[tuple[str, EventHandler]]
+class EventHandler(ABC):
+    def on_activate(self, bus: EventBus) -> None:
+        if self.handler_id is not None and self.subscriptions:
+            bus.router.subscribe(self.handler_id, self.subscriptions)  # activation is routing
+
+    def on_deactivate(self, bus: EventBus) -> None:
+        if self.handler_id is not None:
+            bus.router.unsubscribe(self.handler_id)                    # offline revokes
 ```
 
-- Known event → O(1) dispatch table lookup
-- Returns `(handler_id, handler)` tuple list
-- Auto-detects registry version changes
+Triggered on registry `activate` (bus start) for every registered handler, and on `register`
+into an already-bound registry. **The route table contains only activated subscriptions** — after
+`deactivate` (bus stop) or handler unregister, the Router has no entry for it
+(the broker forgets disconnected consumers).
 
-### `dispatch_table`
+---
+
+## Dynamic Self-subscription
+
+Changing your own subscriptions at runtime means mutating your bundle
+(auto-synced with the live routes while active):
 
 ```python
-@property
-def dispatch_table(self) -> Dict[str, List[tuple[str, EventHandler]]]
+class GameStateHandler(EventHandler):
+    def __init__(self):
+        super().__init__(subscriptions=['game.start'])
+
+    async def handle(self, payload, bus_proxy, raw_event) -> None:
+        if raw_event.name == 'game.start':
+            # state machine: only care about the next stage
+            self.subscriptions.replace(['game.tick', 'game.over'])
+
+    # or incrementally at runtime:
+    #   self.subscriptions.add('game.over')
+    #   self.subscriptions.remove('game.start')
 ```
 
-Returns a read-only snapshot of the current dispatch table. Auto-refreshes on version change. Primarily used for debugging and observability.
+Changing while inactive only updates the declaration (applied on next activation), without errors.
 
 ---
 
 ## Relationship with EventBus
 
-`EventBus` internally creates a `Matcher` at construction time. The dispatch loop uses `self._matcher.match(event.name)` to find handlers:
+`EventBus` creates a `Router` internally (injectable via `router=`), and the dispatch loop takes
+matched ids from it, then resolves handler instances from the handler registry:
 
 ```python
 class EventBus:
-    def __init__(self, event_registry, handler_registry, ...):
-        self._matcher = Matcher(event_registry, handler_registry)  # internal, automatic
+    def __init__(self, event_registry, handler_registry, router=None, ...):
+        self._router = router or Router(event_registry)
+
+    @property
+    def router(self) -> Router: ...          # public access (subscription mgmt / debugging)
 
     async def _dispatch_loop(self):
         ...
-        for handler_id, handler in self._matcher.match(event.name):
-            ...
+        for handler_id in self._router.match(event.name):
+            handler = self._handlers.get(handler_id)
+            if handler is not None:
+                ...
 ```
 
-Users do not need to interact with `Matcher` directly — just provide the two registries.
+Users normally do not touch the Router; for runtime dynamic subscriptions they use the handler's
+own subscription bundle.
 
 ---
 
 ## Why Pre-compute?
 
-Without pre-computation, every event dispatch would require iteration over all handlers
-and regex matching. With pre-computation:
+Without pre-computation every dispatch would iterate over all active subscriptions and run regex
+matching per event. With pre-computation:
 
 - Exact `str` subscriptions → O(1) reverse-index lookup
-- `Regex` subscriptions → scan list only (no event iteration)
-- Version-aware caching → rebuild only when registries change, not per dispatch
+- `Regex` subscriptions → scan list only
+- Version-aware caching → rebuild only when the event registry or routes change, not per dispatch

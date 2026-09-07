@@ -17,6 +17,7 @@ class EventBus:
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
         queue: Optional[EventQueue] = None,
+        router: Optional[Router] = None,
         max_handler_semaphore: int = 256,
         shutdown: ShutdownConfig = ShutdownConfig(),
         middleware_chain: Optional[MiddlewareChain] = None
@@ -30,6 +31,10 @@ class EventBus:
 
     # Proxy
     def proxy(self, source: str, raw_event: Optional[Event] = None) -> Proxy
+
+    # Router
+    @property
+    def router(self) -> Router
 
     # Observability
     @property
@@ -49,12 +54,14 @@ class EventBus:
 | `event_registry` | `EventRegistry` | (required) | Event registry instance. |
 | `handler_registry` | `EventHandlerRegistry` | (required) | Handler registry instance. |
 | `queue` | `Optional[EventQueue]` | `None` | Internal dispatch queue; the bus depends only on the `EventQueue` abstraction. Defaults to `InMemoryEventQueue()` (capacity from its own default config, 1024). See [Event Queue doc](queue.md). |
+| `router` | `Optional[Router]` | `None` | Internal router / dispatch table. Defaults to `Router(event_registry)`; exposed as `bus.router`. See [Router doc](router.md). |
 | `max_handler_semaphore` | `int` | `256` | Max concurrent handlers (semaphore). |
 | `shutdown` | `ShutdownConfig` | `ShutdownConfig()` | Shutdown behavior config. |
 | `middleware_chain` | `Optional[MiddlewareChain]` | `None` | Middleware chain for publish hooks. |
 
 Constructing automatically registers `ShutdownEvent` and `TaskErrorEvent` (if not present),
-and creates an internal [Matcher](matcher.md) for event-to-handler routing. Queue capacity and
+and creates an internal [Router](router.md) (exposed as `bus.router`) for event-to-handler
+routing — handlers register their subscription bundles on activation (bus start). Queue capacity and
 other settings live on the queue itself — the bus never knows them; inject
 `InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=N))` to control capacity.
 
@@ -62,8 +69,8 @@ other settings live on the queue itself — the bus never knows them; inject
 
 | Method | Description |
 | - | - |
-| `start()` | Starts the dispatch loop. Idempotent. |
-| `stop()` | Graceful shutdown: publish `__shutdown__` → reject new publishes → drain queue → cancel dispatch → wait for active tasks. Idempotent. |
+| `start()` | Starts the dispatch loop and activates the handler registry (`registry.activate(bus)` — each handler's subscription bundle registers into `bus.router`). Idempotent. |
+| `stop()` | Graceful shutdown: publish `__shutdown__` → reject new publishes → drain queue → cancel dispatch → wait for active tasks → deactivate the handler registry (`registry.deactivate()`). Idempotent. |
 | `async with EventBus(...) as bus:` | Context manager, auto start/stop. `stop()` errors on exit won't mask body exceptions. |
 
 ### Observability

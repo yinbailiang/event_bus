@@ -78,6 +78,7 @@ class EventBus:
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
         queue: Optional[EventQueue] = None,   # 注入的队列抽象，缺省为 InMemoryEventQueue()
+        router: Optional[Router] = None,      # 注入的路由器，缺省为 Router(event_registry)
         max_handler_semaphore: int = 256,
         shutdown: ShutdownConfig = ShutdownConfig(),
         middleware_chain: Optional[MiddlewareChain] = None,

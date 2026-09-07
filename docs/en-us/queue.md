@@ -81,6 +81,7 @@ class EventBus:
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
         queue: Optional[EventQueue] = None,   # injected queue; default InMemoryEventQueue()
+        router: Optional[Router] = None,      # injected router; default Router(event_registry)
         max_handler_semaphore: int = 256,
         shutdown: ShutdownConfig = ShutdownConfig(),
         middleware_chain: Optional[MiddlewareChain] = None,

@@ -29,6 +29,14 @@ class EventHandler(ABC):
         bus_proxy: EventBus.Proxy,
         raw_event: Event
     ) -> None: ...
+
+    @property
+    def handler_id(self) -> Optional[str]: ...
+
+    def on_registered(self, handler_id: str) -> None: ...
+    def on_unregistered(self) -> None: ...
+    def on_activate(self, bus: EventBus) -> None: ...
+    def on_deactivate(self, bus: EventBus) -> None: ...
 ```
 
 | Parameter/Method | Description |
@@ -37,6 +45,28 @@ class EventHandler(ABC):
 | `handle_timeout` | Per-invocation timeout (seconds). `None` = no limit. Default `32.0`. |
 | `__call__` | Internal entry point. Receives the raw `EventBus`, creates a proxy via `bus.proxy(handler_name, event)`, then delegates to `handle()`. |
 | `handle(payload, bus_proxy, raw_event)` | **Subclass must implement.** `payload` is the unpacked payload (may be `None`). `bus_proxy` provides limited bus access. `raw_event` is the full event object. |
+| `handler_id` | Read-only. The registry-assigned id once registered; `None` before registration / after removal. |
+| `on_registered(handler_id)` | **Lifecycle hook.** Called by the registry after `register()` succeeds, backfilling the handler with its assigned id. Subclasses may override — call `super()` to keep backfill. |
+| `on_unregistered()` | **Lifecycle hook.** Called by the registry after `unregister()` / `clear()` removes the handler, clearing its id. Subclasses may override — call `super()` to keep clearing. |
+| `on_activate(bus)` | **Bus-activation hook.** Called when the owning registry is bound to a bus (`registry.activate(bus)`) or when a new handler is registered into an already-bound registry. `handler_id` is already available. **Base default: registers this handler's `Subscriptions` bundle into `bus.router` (activation is routing).** Overriders must call `super().on_activate(bus)` to keep that behavior. |
+| `on_deactivate(bus)` | **Bus-deactivation hook.** Symmetric to `on_activate`: called on `registry.deactivate()` or when a single handler is unregistered from a bound registry. `handler_id` is still available. **Base default: unregisters the bundle from `bus.router`.** Overriders must call `super().on_deactivate(bus)` to keep that behavior. |
+
+### Lifecycle Hooks (self-aware id)
+
+The moment a handler is registered, the registry delivers its assigned `handler_id` to it through a hook;
+removal (`unregister` / `clear`) symmetrically clears it. The handler thus knows its identity inside the
+registry (e.g., building subscription records, self-identification, error reporting).
+
+```python
+class MyHandler(EventHandler):
+    def on_registered(self, handler_id: str) -> None:
+        super().on_registered(handler_id)   # base class backfills self.handler_id
+        print(f'online, my id is {handler_id}')
+
+    def on_unregistered(self) -> None:
+        print(f'offline, my id was {self.handler_id}')
+        super().on_unregistered()
+```
 
 ### `handle()` Signature
 
@@ -66,7 +96,10 @@ class LoginHandler(EventHandler):
 
 ### Subscription Patterns
 
-`subscriptions` supports two matching modes:
+`subscriptions` accepts two matching modes (see table below). At runtime the handler holds them
+as a managed `Subscriptions` bundle (`self.subscriptions`): mutate it with `add` / `remove` /
+`replace` — while the bus is running (active) the change auto-syncs to the live `Router`. See
+[Router](router.md).
 
 | Type | Example | Matches |
 | - | - | - |
@@ -91,14 +124,16 @@ class AuditHandler(EventHandler):
 
 ## EventHandlerRegistry
 
-Manages handler instance registration, lookup, and removal.
+Manages handler instance registration, lookup, and removal. **Active routing is owned by [Router](router.md)**.
 
 ```python
 class EventHandlerRegistry:
     def __init__(self) -> None
     def register(self, handler: EventHandler) -> str
-    def get(self, handler_id: str) -> Optional[EventHandler]
     def unregister(self, handler_id: str) -> bool
+    def activate(self, bus: EventBus) -> None
+    def deactivate(self) -> None
+    def get(self, handler_id: str) -> Optional[EventHandler]
     def clear(self) -> None
 
     def __len__(self) -> int
@@ -115,14 +150,20 @@ class EventHandlerRegistry:
 
 | Method/Property | Description |
 | - | - |
-| `register(handler)` | Register a handler instance, returns a unique handler ID (UUID hex). Version increments. |
-| `unregister(handler_id)` | Remove by ID. Returns `True` if removed, `False` if ID not found. Version increments. |
+| `register(handler)` | Register a handler instance, returns a unique handler ID (UUID hex). **Atomic**: fires `handler.on_registered(id)` after success (plus `on_activate(bus)` if the registry is already bound to a bus); re-registering the same instance raises `ValueError`; a hook failure rolls back the insertion (version unchanged) and re-raises. Version increments. |
+| `unregister(handler_id)` | Remove by ID. **Guaranteed removal**: the handler is always removed (`False` if the ID is not found); if bound to a bus it first fires `handler.on_deactivate(bus)` (id still available), then `handler.on_unregistered()`. Hook failures are the handler's own business — the registry only logs them. Version increments. |
+| `activate(bus)` | Bind the registry to one bus and activate every registered handler (fires `on_activate` on each). **Atomic**: a registry **cannot be shared across buses** — calling again while bound raises `RuntimeError`; the bus is bound *before* activation so handlers nested-`register`ed during `on_activate` get `on_activate` immediately; if any `on_activate` raises the whole activation rolls back (unbind, fire `on_deactivate` on already-activated handlers) and re-raises — handlers stay registered. |
+| `deactivate()` | Unbind the bus and fire `on_deactivate` on every registered handler (id still available). **Keeps failing handlers**: those whose `on_deactivate` raises stay registered (only logged), avoiding surprising silent removals. No-op when not bound. |
 | `get(handler_id)` | Lookup by ID, returns `None` if not found. |
-| `clear()` | Remove all registered handlers. Version increments. |
+| `clear()` | Remove all handlers. **Guaranteed removal**: first `deactivate()` if bound, then fires `on_unregistered()` on each remaining handler; a single hook failure does not interrupt the rest. Version increments. |
 | `__len__()` | Supports `len(registry)`. |
 | `__contains__()` | Supports `handler_id in registry`. |
 | `__iter__()` | Supports `for hid, h in registry` iteration. |
-| `version` | Monotonic version, incremented on every change (add/remove/clear). Used by [Matcher](matcher.md) for invalidation. |
+
+> **Registry-bus binding**: `EventBus.start()` calls `registry.activate(bus)` and `stop()` calls `registry.deactivate()` automatically.
+> So "registered (has an id)" and "active on a bus (can receive events)" are two distinct lifecycle layers,
+> and one registry cannot be bound to two buses at the same time.
+| `version` | Monotonic version, incremented on every change (add/remove/clear). Used by [Router](router.md) for invalidation. |
 | `handlers_count` | Total number of registered handlers. |
 | `all_handlers` | Snapshot copy of all registered handlers as `Dict[str, EventHandler]`. |
 
@@ -140,4 +181,4 @@ handler_registry.unregister(handler_id)
 assert handler_registry.version == 2  # unregister also increments
 ```
 
-> **Note**: `get_handlers(event_type)` has been removed. Matching logic moved to [Matcher](matcher.md); the bus uses it internally.
+> **Note**: `get_handlers(event_type)` has been removed. Matching logic moved to [Router](router.md); the bus uses it internally.

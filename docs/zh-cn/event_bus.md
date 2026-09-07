@@ -12,7 +12,7 @@ EventBus 是一个基于 asyncio 的轻量级事件总线，实现发布/订阅�
 | - | - |
 | [event.md](event.md) | `Event` 运行时实例、`EventDeclaration` 事件声明、`EventRegistry` 注册表 |
 | [handler.md](handler.md) | `EventHandler` 处理器基类、`EventHandlerRegistry` 处理器注册表 |
-| [matcher.md](matcher.md) | `Matcher` 事件匹配器、预计算分派表、版本感知 |
+| [router.md](router.md) | `Router` + `Subscriptions`：路由表（仅激活）、预计算分派表、版本感知 |
 | [queue.md](queue.md) | `EventQueue` 队列抽象、`InMemoryEventQueue` 默认实现、可注入队列配置 |
 | [bus.md](bus.md) | `EventBus` 事件总线、`Proxy` 代理、`ShutdownConfig` 停机配置、内置事件与异常 |
 | [middleware.md](middleware.md) | `Middleware` 中间件基类、`MiddlewareChain` 责任链管理器、洋葱模型 |
@@ -27,16 +27,15 @@ graph TD
     ED[EventDeclaration] -->|注册到| ER[EventRegistry]
     EH[EventHandler] -->|注册到| HR[EventHandlerRegistry]
     MW[Middleware] -->|注册到| MC[MiddlewareChain]
-    ER --> EB[EventBus]
-    HR --> EB
-    ER --> MT[Matcher]
-    HR --> MT
-    MT -->|内部| EB
+    ER -->|预计算分派| R[Router]
+    HR --> EB[EventBus]
+    EH -->|on_activate 登记订阅束| R[Router]
+    EB -->|持有并据此分发| R[Router]
+    R -->|match 返回 handler_id| EB
     Q[EventQueue] --> EB
     MC --> EB
     EB -->|创建| PX[Proxy]
     PX -->|publish| EB
-    EB -->|dispatch| EH
 ```
 
 ### 发布流程
@@ -55,7 +54,7 @@ before_publish 链 (中间件 1 → 2 → ... → 核心)
        ▼
     分发循环
        │
-       ├─ Matcher.match(name)
+       ├─ Router.match(name)
        └─ create_task(handler_wrapper)
             ├─ semaphore (并发限制)
             ├─ asyncio.timeout

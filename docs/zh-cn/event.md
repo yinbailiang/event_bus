@@ -92,7 +92,7 @@ class EventRegistry:
 | `unregister(event_name)` | 注销指定名称的事件声明（不存在则静默忽略）。 |
 | `get(name)` | 按名称查找事件声明，不存在返回 `None`。 |
 | `list_names()` | 返回所有已注册事件名称的列表。 |
-| `version` | 注册表版本号，每次增删递增，供 [Matcher](matcher.md) 感知变化。 |
+| `version` | 注册表版本号，每次增删递增，供 [Router](router.md) 感知变化。 |
 
 ### 使用示例
 

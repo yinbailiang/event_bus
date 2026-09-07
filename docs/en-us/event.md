@@ -92,7 +92,7 @@ class EventRegistry:
 | `unregister(event_name)` | Unregister by name (silently ignores if not found). |
 | `get(name)` | Lookup by name, returns `None` if not found. |
 | `list_names()` | List all registered event names. |
-| `version` | Monotonic version — incremented on every add/remove. Used by [Matcher](matcher.md) for invalidation. |
+| `version` | Monotonic version — incremented on every add/remove. Used by [Router](router.md) for invalidation. |
 
 ### Usage
 

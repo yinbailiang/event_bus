@@ -37,11 +37,13 @@ class MailboxHandler(EventHandler, ABC):
 
 | Member | Type | Description |
 | - | - | - |
-| `subscriptions` | `list[str \| Regex]` | Event patterns to subscribe to. `ShutdownEvent` is automatically appended. |
+| `subscriptions` | `list[str \| Regex]` | Event patterns to subscribe to (kept as-is; `ShutdownEvent` is no longer auto-appended). |
 | `config` | `MailboxConfig \| None` | Mailbox configuration. Uses defaults when `None`. |
 | `process()` | `@abstractmethod async` | Custom task loop that subclasses must implement. Use `await self.get()` to fetch the next event. |
 | `get()` | `async → (Event, Proxy)` | Dequeues the next `(event, bus proxy)` from the mailbox. Blocks when the queue is empty. |
-| `bus` | `EventBus \| None` | The bound `EventBus` instance, available after the first event arrives. |
+| `on_activate(bus)` | hook | Starts the `process()` task when the registry is bound to a bus (`activate`). |
+| `on_deactivate(bus)` | hook | Cancels the task and clears the backlog on bus unbind / unregister. |
+| `bus` | `EventBus \| None` | The bound `EventBus` instance, available after activation (`on_activate`). |
 | `is_running` | `bool` | Whether the `process()` background task is currently running. |
 
 ---
@@ -73,14 +75,7 @@ class MailboxConfig(BaseModel):
 Event arrives
   │
   ▼
-handle() ─── ShutdownEvent? ─── Yes ─── Cancel process() task ─── Return
-  │
-  │ No
-  ▼
-First call? ─── Yes ─── Create process() background Task
-  │
-  ▼
-put(event, proxy) → Enqueue
+handle() → put(event, proxy) → Enqueue
   │
   ▼
 process() coroutine (independent Task)
@@ -95,11 +90,11 @@ Business logic (publish new events via proxy.publish())
 Loop back to get()
 ```
 
-1. **Lazy start**: The `process()` background `asyncio.Task` is created only when the **first non-ShutdownEvent** arrives.
+1. **Hook-driven start**: `on_activate` creates the `process()` background `asyncio.Task` when the handler is registered to an active bus, or when the bus starts (`registry.activate`).
 2. **Enqueue**: `handle()` places `(Event, EventBus.Proxy)` tuples into the internal `asyncio.Queue`.
 3. **Serial consumption**: `process()` loops on `await self.get()` to handle events one by one.
 4. **Exception restart**: If `process()` exits due to a non-`CancelledError` exception, `_process_loop` waits `restart_delay + jitter` seconds, then re-invokes `process()`.
-5. **Graceful shutdown**: On `ShutdownEvent`, the `process()` task is cancelled and awaited to completion.
+5. **Hook-driven shutdown**: On bus stop (`registry.deactivate`), `on_deactivate` cancels the `process()` task and clears the backlog.
 
 ---
 
@@ -195,8 +190,8 @@ class BusAwareHandler(MailboxHandler):
 
 - **`process()` must be an infinite loop**: `_process_loop` re-invokes `process()` after it returns normally. If `process()` runs once and returns, it will be called again immediately, creating a busy loop. Always wrap your logic in `while True`.
 - **Event loss on crash**: If `process()` crashes after `get()` returns but before processing completes, that event is lost. The restart loop calls `get()` again for the next event — it does not retry the lost one.
-- **ShutdownEvent auto-subscription**: `ShutdownEvent` is automatically added to subscriptions at construction time. When received, it cancels the `process()` task and does **not** enqueue the shutdown event.
-- **Single bus capture**: `self.bus` is set on the first `handle()` call and never changes. If the same handler is referenced by multiple buses, `bus` points to the first one only.
+- **No implicit `ShutdownEvent` subscription**: Shutdown is driven by the `on_deactivate` hook; if you subscribe to `ShutdownEvent` yourself it is just enqueued as an ordinary event.
+- **Bus bound on activation**: `self.bus` is set in `on_activate` (bus activation) and cleared in `on_deactivate`. The single-bus registry constraint prevents cross-bus confusion.
 - **Only non-`CancelledError` exceptions** trigger a restart. `KeyboardInterrupt` and `SystemExit` (subclasses of `BaseException`) are not caught and will propagate upward.
 
 ---
@@ -207,7 +202,7 @@ class BusAwareHandler(MailboxHandler):
 | - | - | - |
 | Concurrency model | Events may execute concurrently | Enforced serial consumption |
 | Backpressure | Relies on bus Semaphore | Additional queue capacity limit |
-| Task lifecycle | Managed by the bus | Independent `asyncio.Task`, lazy start |
+| Task lifecycle | Managed by the bus | Independent `asyncio.Task`, started/stopped by `activate`/`deactivate` |
 | Custom loop | Not supported | Batch, timer, and other flexible patterns |
 | Error recovery | Relies on `TaskErrorEvent` | Built-in restart mechanism |
-| Shutdown behavior | Relies on `ShutdownEvent` subscription | Auto-cancels background task |
+| Shutdown behavior | Relies on `ShutdownEvent` subscription | `on_deactivate` hook auto-cancels the task |

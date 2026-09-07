@@ -37,11 +37,13 @@ class MailboxHandler(EventHandler, ABC):
 
 | 成员 | 类型 | 说明 |
 | - | - | - |
-| `subscriptions` | `list[str \| Regex]` | 订阅的事件模式列表。`ShutdownEvent` 会自动追加，无需手动添加。 |
+| `subscriptions` | `list[str \| Regex]` | 订阅的事件模式列表（原样保留，不隐式追加 `ShutdownEvent`）。 |
 | `config` | `MailboxConfig \| None` | 邮箱配置，`None` 时使用默认值。 |
 | `process()` | `@abstractmethod async` | 子类必须实现的自定义任务循环。通过 `await self.get()` 获取下一事件。 |
 | `get()` | `async → (Event, Proxy)` | 从邮箱取出下一个 `(事件, 总线代理)`。队列空时阻塞等待。 |
-| `bus` | `EventBus \| None` | 当前绑定的 `EventBus` 实例，首次事件到达后可用。 |
+| `on_activate(bus)` | 钩子 | 总线激活（注册表 `activate`）时启动 `process()` 任务。 |
+| `on_deactivate(bus)` | 钩子 | 总线解绑 / 注销时取消任务并清空积压。 |
+| `bus` | `EventBus \| None` | 当前绑定的 `EventBus` 实例，激活（`on_activate`）后可用。 |
 | `is_running` | `bool` | `process()` 后台任务是否正在运行。 |
 
 ---
@@ -73,14 +75,7 @@ class MailboxConfig(BaseModel):
 事件到达
   │
   ▼
-handle() ─── 检查是否 ShutdownEvent ─── 是 ─── 取消 process() 任务 ─── 返回
-  │
-  │ 否
-  ▼
-首次调用？── 是 ─── 创建 process() 后台 Task
-  │
-  ▼
-put(event, proxy) → 入队
+handle() → put(event, proxy) → 入队
   │
   ▼
 process() 协程（独立 Task）
@@ -95,11 +90,11 @@ await get() → 取出 (event, proxy)
 循环回到 get()
 ```
 
-1. **惰性启动**：`process()` 作为后台 `asyncio.Task` 仅在**首个非 ShutdownEvent 事件到达**时创建。
+1. **钩子启动**：注册到已激活总线或总线启动（`registry.activate`）时，`on_activate` 创建 `process()` 后台任务。
 2. **事件入队**：`handle()` 将 `(Event, EventBus.Proxy)` 元组放入内部 `asyncio.Queue`。
 3. **串行消费**：`process()` 循环调用 `await self.get()` 逐一取出事件处理。
 4. **异常重启**：若 `process()` 因非 `CancelledError` 异常退出，`_process_loop` 会在等待 `restart_delay + jitter` 后重新调用 `process()`。
-5. **优雅关闭**：收到 `ShutdownEvent` 时取消 `process()` 任务，并等待其完成。
+5. **钩子停机**：总线停止（`registry.deactivate`）时 `on_deactivate` 取消 `process()` 任务并清空积压。
 
 ---
 
@@ -197,8 +192,8 @@ class BusAwareHandler(MailboxHandler):
 
 - **process() 必须是无限循环**：`_process_loop` 在 `process()` 正常返回后会重新调用它。如果 `process()` 只执行一次就返回，它将立即被再次调用，形成忙等循环。请始终使用 `while True` 包裹业务逻辑。
 - **事件丢失**：若 `process()` 在 `get()` 返回后、处理完成前崩溃，该事件会丢失。`_process_loop` 重启后会从下一个 `get()` 开始，不会重试已取出的事件。
-- **ShutdownEvent 自动订阅**：构造时自动将 `ShutdownEvent` 加入订阅列表。收到此事件时取消 `process()` 任务，且**不会**将其放入邮箱队列。
-- **只捕获一个 Bus**：`self.bus` 在首次 `handle()` 调用时设置，后续不会改变。如果同一 handler 被多个总线索引用，`bus` 仅指向第一个。
+- **不再隐式订阅 ShutdownEvent**：停机由 `on_deactivate` 钩子驱动；若自行订阅了 `ShutdownEvent`，它只会作为普通事件入队。
+- **bus 随激活绑定**：`self.bus` 在 `on_activate`（总线激活）时设置、`on_deactivate` 时清空。注册表单总线约束下不会出现多总线串扰。
 - **`CancelledError` 以外的异常**才会触发重启。`KeyboardInterrupt` 和 `SystemExit` 属于 `BaseException`，当前不会被捕获，会向上传播。
 
 ---
@@ -209,7 +204,7 @@ class BusAwareHandler(MailboxHandler):
 | - | - | - |
 | 并发模型 | 每个事件可能并发执行 | 强制串行消费 |
 | 背压控制 | 依赖总线 Semaphore | 额外提供队列容量限制 |
-| 任务生命周期 | 由总线管理 | 独立的 `asyncio.Task`，惰性启动 |
+| 任务生命周期 | 由总线管理 | 独立的 `asyncio.Task`，随 `activate`/`deactivate` 启停 |
 | 自定义循环 | 不支持 | 支持批处理、定时器等灵活模式 |
 | 异常恢复 | 依赖 `TaskErrorEvent` | 内建重启机制 |
-| 关闭行为 | 依赖 `ShutdownEvent` 订阅 | 自动取消后台任务 |
+| 关闭行为 | 依赖 `ShutdownEvent` 订阅 | `on_deactivate` 钩子自动取消任务 |
