@@ -1,6 +1,6 @@
 # Commit Log — `infinity_bus`
 
-> 共 **116** 个提交 · 21 个版本标签 · 2026-06-07 ~ 2026-09-08
+> 共 **120** 个提交 · 21 个版本标签 · 2026-06-07 ~ 2026-09-08
 
 ## 版本标签
 
@@ -33,6 +33,25 @@
 ## 全部提交
 
 ### 2026-09-08
+
+- **`7928e85`** `ci(publish): run RabbitMQ integration tests before release`
+  - Publish pipeline now runs the RabbitMQ cross-process slow tests against a real broker before release (they were silently skipped before)
+
+- **`c59e0bc`** `fix(middleware): fail-fast setup, atomic rollback, explicit teardown/removal reporting`
+  - setup() is atomic & fail-fast like handler activate — rolls back (incl. the failing middleware) and raises; middlewares stay in chain for retry
+  - add()/insert() on_setup failure fires on_teardown rollback before removal
+  - teardown(strict) returns failures; remove()/clear() return explicit errors; not-found is an idempotent None
+  - bus.stop() summarizes middleware teardown failures; docs (EN/ZH) synced
+
+- **`9e332e2`** `fix(handler): lifecycle rollback, retryable start, explicit failure returns`
+  - bus.start(): activate handlers before dispatch; any late-stage failure rolls back to a clean, retryable state (no leaked dispatch task)
+  - register()/activate() rollback now revokes bus-side side effects (subscriptions/tasks, clears handler id) — no ghost routes
+  - on_activate() subscribes even empty bundles so active ⟺ routed holds; runtime add() takes effect immediately
+  - deactivate(strict)/unregister/clear return explicit failures instead of silent logging; unregister not-found is an idempotent None
+  - mailbox drops late in-flight put() after deactivation; tests + docs (EN/ZH) synced
+
+- **`38989d8`** `docs: sync release baselines to v4.0.0 (COMMIT_LOG/ENGINEERING/README)`
+  - Baseline snapshot synced to v4.0.0 (COMMIT_LOG / ENGINEERING metrics / README comparison table)
 
 - **`1bae1f0`** `chore: bump version to 4.0.0`
   - Version bumped 3.1.0 → 4.0.0 (breaking: Matcher → Router + Subscriptions; handler lifecycle hooks)

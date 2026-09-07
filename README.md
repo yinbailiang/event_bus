@@ -59,7 +59,7 @@
 | Slow Handler Alert | ❌ | ✅ 15s timeout alert | ❌ | N/A |
 | Recursion Guard | ✅ middleware (configurable) | ✅ built-in (non-configurable) | ❌ | N/A |
 | Logging & Auditing | ✅ JSONL + SQLite (middleware) | ✅ built-in JSONL WAL logging | ❌ no built-in | ⚠️ debug tracing |
-| Test Coverage | ✅ 94% (354 tests) | ✅ 83% (138 tests) | ✅ 94% (43 tests) | ✅ 86% (167 tests) |
+| Test Coverage | ✅ 94% (365 tests) | ✅ 83% (138 tests) | ✅ 94% (43 tests) | ✅ 86% (167 tests) |
 | Python Version | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
 | Baseline Version | v4.0.0 `1bae1f0` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
 

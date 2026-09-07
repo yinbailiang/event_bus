@@ -72,8 +72,8 @@ ignore-nested-functions = true
 ### 覆盖率
 
 ```text
-354 passed · 5 deselected(slow) · 0 failed · 10.7s
-总覆盖率: 94%（1978 statements / 116 missed）
+365 passed · 5 deselected(slow) · 0 failed · 10.3s
+总覆盖率: 94%（2067 statements / 132 missed）
 ```
 
 12 个模块达到 **100%** 覆盖，最低模块 > 82%。
@@ -158,8 +158,8 @@ uv run pre-commit run --all-files   # 手动全量运行
 
 | 指标 | 数值 |
 | - | - |
-| 最大单文件 | ~406 行 (`templates/middlewares/metrics.py`) |
-| 模块平均 | ~176 行/文件 |
+| 最大单文件 | ~446 行 (`bus.py`) |
+| 模块平均 | ~181 行/文件 |
 | 生产文件数 | 27 个 `.py` |
 
 每个文件一个职责，打开瞬间看完。新增功能不改旧代码。
