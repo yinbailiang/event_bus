@@ -154,40 +154,62 @@ async def running_bus(
 # 生命周期
 # ============================================================================
 class TestLifecycle:
-    """任务惰性启动、is_running、bus 属性"""
+    """任务随总线激活启动、is_running、bus 属性"""
 
     async def test_task_not_started_on_init(self) -> None:
-        """构造后 process() 任务未启动"""
+        """构造后（未激活）process() 任务未启动"""
         handler = _CollectHandler(subscriptions=['mailbox.ping'])
         assert not handler.is_running
 
-    async def test_task_starts_on_first_event(
+    async def test_task_starts_on_register_to_active_bus(
         self, running_bus: EventBus, handler_registry: EventHandlerRegistry
     ) -> None:
-        """首个事件到达时自动启动 process() 后台任务"""
+        """注册到已激活总线时经 on_activate 立即启动 process() 任务"""
         handler = _CollectHandler(subscriptions=['mailbox.ping'])
         handler_registry.register(handler)
-        assert not handler.is_running
+        assert handler.is_running
 
+    async def test_task_starts_on_bus_start(
+        self, event_registry: EventRegistry, handler_registry: EventHandlerRegistry
+    ) -> None:
+        """总线启动（registry.activate）时对在册处理器启动 process() 任务"""
+        handler = _CollectHandler(subscriptions=['mailbox.ping'])
+        handler_registry.register(handler)
+        assert not handler.is_running  # 已注册但总线未启动 → 未激活
+
+        bus = EventBus(event_registry, handler_registry, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=32)))
+        await bus.start()
+        assert handler.is_running
+        await bus.stop()
+
+    async def test_bus_property_none_before_activation(self) -> None:
+        """未激活时 bus 属性为 None"""
+        handler = _BusCaptureHandler(subscriptions=['mailbox.ping'])
+        assert handler.bus is None
+
+    async def test_bus_property_set_on_activation(
+        self, running_bus: EventBus, handler_registry: EventHandlerRegistry
+    ) -> None:
+        """激活（注册到已运行总线）后 bus 属性指向正确的 EventBus"""
+        handler = _BusCaptureHandler(subscriptions=['mailbox.ping'])
+        handler_registry.register(handler)
+        assert handler.bus is running_bus
+
+    async def test_deactivate_stops_task_and_clears_bus(
+        self, running_bus: EventBus, handler_registry: EventHandlerRegistry
+    ) -> None:
+        """总线停止（registry.deactivate）时取消任务并清空 bus"""
+        handler = _CollectHandler(subscriptions=['mailbox.ping'])
+        handler_registry.register(handler)
         await running_bus._publish('mailbox.ping', source='test')
         await asyncio.sleep(0.05)
         assert handler.is_running
 
-    async def test_bus_property_none_before_event(self) -> None:
-        """事件到达前 bus 属性为 None"""
-        handler = _BusCaptureHandler(subscriptions=['mailbox.ping'])
-        assert handler.bus is None
-
-    async def test_bus_property_set_after_event(
-        self, running_bus: EventBus, handler_registry: EventHandlerRegistry
-    ) -> None:
-        """事件到达后 bus 属性指向正确的 EventBus"""
-        handler = _BusCaptureHandler(subscriptions=['mailbox.ping'])
-        handler_registry.register(handler)
-
-        await running_bus._publish('mailbox.ping', source='test')
+        await running_bus.stop()
         await asyncio.sleep(0.05)
-        assert handler.bus is running_bus
+        assert not handler.is_running
+        assert handler._task is None
+        assert handler.bus is None
 
 
 # ============================================================================
@@ -231,12 +253,12 @@ class TestQueueing:
 # 关闭行为
 # ============================================================================
 class TestShutdown:
-    """ShutdownEvent 的处理逻辑"""
+    """总线停机（registry.deactivate 钩子）的行为"""
 
     async def test_shutdown_cancels_running_task(
         self, running_bus: EventBus, handler_registry: EventHandlerRegistry
     ) -> None:
-        """ShutdownEvent 取消正在运行的 process() 任务"""
+        """bus.stop()（registry.deactivate 钩子）取消正在运行的 process() 任务"""
         handler = _CollectHandler(subscriptions=['mailbox.ping'])
         handler_registry.register(handler)
 
@@ -249,20 +271,21 @@ class TestShutdown:
         assert not handler.is_running
 
     async def test_shutdown_before_any_event_does_not_crash(self, handler_registry: EventHandlerRegistry) -> None:
-        """任务未启动时收到 ShutdownEvent，不会崩溃也不会创建任务"""
+        """未激活时直接调用 handle 不会崩溃也不会创建任务（事件仅入队）"""
         handler = _CollectHandler(subscriptions=['mailbox.ping'])
         handler_registry.register(handler)
         assert not handler.is_running
 
-        # 直接调用 handle 传入 shutdown 事件 — 不应崩溃
-        event = Event(name='event_bus.__shutdown__', data=None)
+        # 直接调用 handle 传入任意事件 — 不应崩溃
+        event = Event(name='mailbox.ping', data=None)
         await handler.handle(None, None, event)  # type: ignore[arg-type]
         assert not handler.is_running
+        assert handler._queue.qsize() == 1
 
     async def test_shutdown_event_not_queued(
         self, running_bus: EventBus, handler_registry: EventHandlerRegistry
     ) -> None:
-        """ShutdownEvent 不会进入邮箱队列"""
+        """mailbox 不再隐式订阅 ShutdownEvent：停机由 deactivate 钩子驱动，不会收到它"""
         handler = _CollectHandler(subscriptions=['mailbox.ping'])
         handler_registry.register(handler)
 
@@ -500,12 +523,12 @@ class TestEdgeCases:
         assert 'mailbox.ping' in names
         assert 'mailbox.pong' in names
 
-    async def test_shutdown_event_auto_subscribed(self) -> None:
-        """ShutdownEvent 自动加入订阅列表"""
+    async def test_no_implicit_shutdown_subscription(self) -> None:
+        """mailbox 不再隐式订阅 ShutdownEvent（停机由 deactivate 钩子驱动）"""
         handler = _CollectHandler(subscriptions=['mailbox.ping'])
-        assert 'event_bus.__shutdown__' in handler.subscriptions
+        assert handler.subscriptions == ['mailbox.ping']
 
-    async def test_shutdown_not_duplicated_in_subscriptions(self) -> None:
-        """手动添加 ShutdownEvent 时不会重复"""
+    async def test_declared_subscriptions_preserved(self) -> None:
+        """显式声明的订阅原样保留（含重复也不去重——已无隐式追加）"""
         handler = _CollectHandler(subscriptions=['mailbox.ping', 'event_bus.__shutdown__'])
-        assert handler.subscriptions.count('event_bus.__shutdown__') == 1
+        assert handler.subscriptions == ['mailbox.ping', 'event_bus.__shutdown__']

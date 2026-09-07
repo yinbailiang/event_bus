@@ -18,9 +18,9 @@ from event_bus import (
     EventRegistry,
     InMemoryEventQueue,
     InMemoryEventQueueConfig,
-    Matcher,
     MiddlewareChain,
     Regex,
+    Router,
     TaskErrorEvent,
     TaskErrorPayload,
 )
@@ -278,9 +278,9 @@ def handler_registry() -> EventHandlerRegistry:
 
 
 @pytest.fixture
-def matcher(base_event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> Matcher:
-    """基于事件注册表和处理器注册表的预计算匹配器"""
-    return Matcher(base_event_registry, handler_registry)
+def router(base_event_registry: EventRegistry) -> Router:
+    """基于事件注册表的路由器"""
+    return Router(base_event_registry)
 
 
 @pytest.fixture

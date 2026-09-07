@@ -59,7 +59,7 @@ class TestEventTransformMiddleware:
         class TargetWatcher(SimplePingHandler):
             def __init__(self) -> None:
                 super().__init__()
-                self.subscriptions = ['rename.target']
+                self.subscriptions.replace(['rename.target'])
 
             async def handle(
                 self,
@@ -182,7 +182,7 @@ class TestEventTransformMiddleware:
 
         handler = SimplePingHandler()
         # 修改订阅以匹配转换后的事件名
-        handler.subscriptions = ['prefix.mw.ping']
+        handler.subscriptions.replace(['prefix.mw.ping'])
         handler_registry.register(handler)
 
         bus = EventBus(

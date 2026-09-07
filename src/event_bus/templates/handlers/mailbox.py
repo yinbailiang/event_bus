@@ -8,7 +8,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from event_bus import Event, EventBus, EventHandler, Regex, ShutdownEvent
+from event_bus import Event, EventBus, EventHandler, Regex
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,11 @@ class MailboxConfig(BaseModel):
 class MailboxHandler(EventHandler, ABC):
     """邮箱模式处理器
 
-    首次 ``handle()`` 被调用时自动启动 ``process()`` 作为后台 Task。
+    ``process()`` 后台任务的生命周期由**总线生命周期钩子**驱动：
+
+    - :meth:`on_activate`——注册表绑定总线时启动 ``process()`` 任务；
+    - :meth:`on_deactivate`——总线解绑 / 注销时取消任务并清空积压。
+
     ``get()`` 返回 ``(event, proxy)``——proxy 携带正确的事件链追踪。
 
     用法::
@@ -57,24 +61,41 @@ class MailboxHandler(EventHandler, ABC):
     """
 
     def __init__(self, subscriptions: list[str | Regex], config: MailboxConfig | None = None) -> None:
-        subs = subscriptions.copy()
-        if ShutdownEvent.name not in subs:
-            subs.append(ShutdownEvent.name)
         self._config: MailboxConfig = config or MailboxConfig()
-        super().__init__(subscriptions=subs, handle_timeout=None)
+        super().__init__(subscriptions=subscriptions.copy(), handle_timeout=None)
         self._queue: asyncio.Queue[tuple[Event, EventBus.Proxy]] = asyncio.Queue(maxsize=self._config.max_queue_size)
         self._task: asyncio.Task[None] | None = None
         self._bus: EventBus | None = None
 
     # ------------------------------------------------------------------
-    # EventHandler 入口 — 捕获 bus + 入队 + 惰性启动
+    # 生命周期钩子 — 任务随总线激活/解绑启停
     # ------------------------------------------------------------------
 
-    async def __call__(self, bus: EventBus, event: Event) -> None:
-        """捕获原始 EventBus，供 ``process()`` 通过 ``self.bus`` 访问"""
-        if self._bus is None:
-            self._bus = bus
-        return await super().__call__(bus, event)
+    def on_activate(self, bus: EventBus) -> None:
+        """总线激活：订阅登记由基类完成；本类捕获 bus 并启动 process() 后台任务。"""
+        super().on_activate(bus)
+        self._bus = bus
+        if self._task is None or self._task.done():
+            self._task = asyncio.create_task(self._process_loop(), name=f'{self.__class__.__name__}._process_loop')
+
+    def on_deactivate(self, bus: EventBus) -> None:
+        """总线下线：订阅撤销由基类完成；本类取消任务并清空积压。"""
+        super().on_deactivate(bus)
+        task = self._task
+        self._task = None
+        if task is not None and not task.done():
+            task.cancel()
+        while True:
+            try:
+                self._queue.get_nowait()
+                self._queue.task_done()
+            except asyncio.QueueEmpty:
+                break
+        self._bus = None
+
+    # ------------------------------------------------------------------
+    # 事件入口 — 入队
+    # ------------------------------------------------------------------
 
     async def handle(
         self,
@@ -82,21 +103,7 @@ class MailboxHandler(EventHandler, ABC):
         bus_proxy: EventBus.Proxy,
         raw_event: Event,
     ) -> None:
-        """事件到达 → 入队；首次调用时启动 process() 后台任务"""
-
-        if raw_event.name == ShutdownEvent.name:
-            if self._task is not None:
-                self._task.cancel()
-                try:
-                    await self._task
-                except asyncio.CancelledError:
-                    pass
-                self._task = None
-            return
-
-        if self._task is None:
-            self._task = asyncio.create_task(self._process_loop(), name=f'{self.__class__.__name__}._process_loop')
-
+        """事件到达 → 入队（process() 任务由 :meth:`on_activate` 启动）"""
         await self.put(raw_event, bus_proxy)
 
     @property

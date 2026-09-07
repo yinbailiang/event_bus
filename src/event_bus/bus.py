@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field
 
 from .event import Event, EventDeclaration, EventRegistry
 from .handler import EventHandler, EventHandlerRegistry
-from .matcher import Matcher
 from .middleware import MiddlewareChain
 from .queue import EventQueue, InMemoryEventQueue
+from .router import Router
 
 logger = logging.getLogger(__name__)
 
@@ -94,13 +94,14 @@ class EventBus:
         event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
         queue: Optional[EventQueue] = None,
+        router: Optional[Router] = None,
         max_handler_semaphore: int = 256,
         shutdown: ShutdownConfig = ShutdownConfig(),
         middleware_chain: Optional[MiddlewareChain] = None,
     ) -> None:
         self._events: EventRegistry = event_registry
         self._handlers: EventHandlerRegistry = handler_registry
-        self._matcher: Matcher = Matcher(event_registry, handler_registry)
+        self._router: Router = router or Router(event_registry)
         self._mw_chain: MiddlewareChain = middleware_chain or MiddlewareChain()
 
         if self._events.get(ShutdownEvent.name) is None:
@@ -208,6 +209,11 @@ class EventBus:
     ) -> None:
         """on_publish 链的末端处理器（空操作）"""
 
+    @property
+    def router(self) -> Router:
+        """事件路由器：订阅管理与分派（handler 在 on_activate 时经此登记订阅）。"""
+        return self._router
+
     async def start(self) -> None:
         """启动事件分发循环"""
         async with self._state_lock:
@@ -218,6 +224,7 @@ class EventBus:
             except Exception:
                 logger.exception('Error occurred while starting event bus')
                 raise
+            self._handlers.activate(self)
             self._running.set()
             self._enable_publish.set()
             await self._mw_chain.setup(self)
@@ -252,6 +259,7 @@ class EventBus:
             await self._wait_all_tasks_done()  # 等待所有处理器任务完成
 
             self._running.clear()
+            self._handlers.deactivate()
             await self._mw_chain.teardown(self)
             logger.info('EventBus stopped')
 
@@ -319,8 +327,12 @@ class EventBus:
             event: Optional[Event] = None
             try:
                 event = await self._queue.get()
-                for handler_id, handler in self._matcher.match(event.name):
-                    self._register_task(asyncio.create_task(self._handler_wrapper(handler, handler_id, self, event)))
+                for handler_id in self._router.match(event.name):
+                    handler = self._handlers.get(handler_id)
+                    if handler is not None:
+                        self._register_task(
+                            asyncio.create_task(self._handler_wrapper(handler, handler_id, self, event))
+                        )
             except Exception:
                 logger.exception('Unexpected error in dispatch loop')
             finally:

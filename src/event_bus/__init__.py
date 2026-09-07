@@ -1,6 +1,6 @@
 """event_bus - 基于 asyncio 的轻量级事件总线"""
 
-__version__ = '3.1.0'
+__version__ = '4.0.0'
 
 from .bus import (
     BusShuttingDown,
@@ -20,9 +20,6 @@ from .handler import (
     EventHandlerRegistry,
     Regex,
 )
-from .matcher import (
-    Matcher,
-)
 from .middleware import (
     BeforePublishNext,
     Middleware,
@@ -35,6 +32,10 @@ from .queue import (
     InMemoryEventQueue,
     InMemoryEventQueueConfig,
 )
+from .router import (
+    Router,
+    Subscriptions,
+)
 
 __all__: list[str] = [
     '__version__',
@@ -44,7 +45,8 @@ __all__: list[str] = [
     'EventHandler',
     'EventHandlerRegistry',
     'Regex',
-    'Matcher',
+    'Router',
+    'Subscriptions',
     'Middleware',
     'MiddlewareChain',
     'BeforePublishNext',

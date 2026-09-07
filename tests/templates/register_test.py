@@ -10,9 +10,27 @@ from event_bus import (
     EventHandler,
     EventHandlerRegistry,
     EventRegistry,
-    Matcher,
+    Router,
 )
 from event_bus.templates.register import ModuleEventRegister, ModuleHandlerRegister
+
+
+class Matcher:
+    """测试兼容：按已注册 handler 的订阅束求命中（Router 语义）。"""
+
+    def __init__(self, event_registry: EventRegistry, handler_registry: EventHandlerRegistry) -> None:
+        self._router = Router(event_registry)
+        for hid, handler in handler_registry:
+            self._router.subscribe(hid, handler.subscriptions)
+        self._handlers = handler_registry
+
+    def match(self, event_type: str) -> list[tuple[str, EventHandler]]:
+        result: list[tuple[str, EventHandler]] = []
+        for hid in self._router.match(event_type):
+            handler = self._handlers.get(hid)
+            if handler is not None:
+                result.append((hid, handler))
+        return result
 
 
 # ============================================================================
