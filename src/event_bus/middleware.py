@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict
 
 from pydantic import BaseModel
 
@@ -114,10 +114,16 @@ class MiddlewareChain:
         if middleware in self._middlewares:
             raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
         self._middlewares.append(middleware)
-        if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_setup 方法
+        if self._bus is not None:  # 已绑定总线 → 立即 on_setup（失败回滚副作用后移除）
             try:
                 await middleware.on_setup(self._bus)
             except Exception:
+                try:
+                    await middleware.on_teardown(self._bus)  # 撤销 on_setup 已产生的副作用
+                except Exception:
+                    logger.exception(
+                        'Middleware %s on_teardown failed during add rollback', middleware.__class__.__name__
+                    )
                 self._middlewares.remove(middleware)
                 raise RuntimeError(f'Middleware {middleware.__class__.__name__} on_setup failed')
         self._invalidate()
@@ -128,74 +134,115 @@ class MiddlewareChain:
         if middleware in self._middlewares:
             raise ValueError(f'Middleware {middleware.__class__.__name__} is already in the chain')
         self._middlewares.insert(index, middleware)
-        if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_setup 方法
+        if self._bus is not None:  # 已绑定总线 → 立即 on_setup（失败回滚副作用后移除）
             try:
                 await middleware.on_setup(self._bus)
             except Exception:
+                try:
+                    await middleware.on_teardown(self._bus)  # 撤销 on_setup 已产生的副作用
+                except Exception:
+                    logger.exception(
+                        'Middleware %s on_teardown failed during insert rollback', middleware.__class__.__name__
+                    )
                 self._middlewares.remove(middleware)
                 raise RuntimeError(f'Middleware {middleware.__class__.__name__} on_setup failed')
         self._invalidate()
         return self
 
-    async def remove(self, middleware: Middleware) -> None:
-        """移除指定中间件实例。
+    async def remove(self, middleware: Middleware) -> Exception | None:
+        """移除指定中间件实例（**保证移除，失败显式上报**）。
 
-        调用 ``on_teardown`` 后立即从链中移除。已在飞行的链引用不会
-        被撤销 —— 中间件作者应自行处理 ``on_teardown`` 后仍被调用的
-        情况（参见 :meth:`Middleware.on_teardown`）。
+        - 不存在时视为幂等空操作，返回 ``None``（成员判断用 ``in chain.middlewares``）；
+        - 已绑定总线时先触发 ``on_teardown``，再立即从链中移除；
+        - ``on_teardown`` 失败不阻断移除，但**返回该异常**；
+        - 已在飞行的链引用不会撤销 —— 中间件作者应自行处理 ``on_teardown``
+          后仍被调用的情况（参见 :meth:`Middleware.on_teardown`）。
         """
         if middleware not in self._middlewares:
-            raise ValueError(f'Middleware {middleware.__class__.__name__} is not in the chain')
-        if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_teardown 方法
+            return None
+        error: Exception | None = None
+        if self._bus is not None:  # 已绑定总线 → 立即 on_teardown
             try:
                 await middleware.on_teardown(self._bus)
-            except Exception:
+            except Exception as exc:
+                error = exc
                 logger.exception('Middleware %s on_teardown failed', middleware.__class__.__name__)
         self._middlewares.remove(middleware)
         self._invalidate()
+        return error
 
-    async def clear(self) -> None:
-        """清空所有中间件。"""
+    async def clear(self) -> list[tuple[Middleware, Exception]]:
+        """清空所有中间件（**保证清空，失败显式上报**）。
+
+        已绑定总线时逐项触发 ``on_teardown``；单个失败不中断其余清理，
+        返回 ``[(middleware, 异常), ...]`` 失败清单。
+        """
+        failures: list[tuple[Middleware, Exception]] = []
         for middleware in list(self._middlewares):
-            if self._bus is not None:  # 如果已经启动，则立即调用中间件的 on_teardown 方法
+            if self._bus is not None:  # 已绑定总线 → 立即 on_teardown
                 try:
                     await middleware.on_teardown(self._bus)
-                except Exception:
+                except Exception as exc:
+                    failures.append((middleware, exc))
                     logger.exception('Middleware %s on_teardown failed', middleware.__class__.__name__)
         self._middlewares.clear()
         self._invalidate()
+        return failures
 
     @property
     def middlewares(self) -> list[Middleware]:
         """返回当前注册的中间件列表"""
         return list(self._middlewares)
 
-    async def setup(self, bus: EventBus) -> List[Middleware]:
-        """按注册顺序通知所有中间件执行初始化。"""
+    async def setup(self, bus: EventBus) -> None:
+        """按注册顺序初始化全部中间件（**原子，含总线侧副作用回滚**）。
+
+        - 先绑定总线，再逐个触发 ``on_setup``；
+        - 任一 ``on_setup`` 抛错即**整体回退**：解除绑定，并对**已尝试的中间件
+          （含当前失败者）**补发 ``on_teardown``（撤销其部分副作用），然后向上
+          抛出首个错误；
+        - 中间件**保留在链中**（失败后修复可重新 ``setup``）——语义与处理器
+          ``activate`` 一致；
+        - 重复调用（已绑定）抛 ``RuntimeError``。
+        """
         if self._bus is not None:
             raise RuntimeError('MiddlewareChain has already been setup')
         self._bus = bus
-        error_middlewares: List[Middleware] = []
-        for mw in list(self._middlewares):
-            try:
+        attempted: list[Middleware] = []
+        try:
+            for mw in list(self._middlewares):  # 快照：允许 on_setup 内嵌套变更
+                attempted.append(mw)
                 await mw.on_setup(bus)
-            except Exception:
-                error_middlewares.append(mw)
-                logger.exception('Middleware %s on_setup failed', mw.__class__.__name__)
-        for error_mw in error_middlewares:
-            await self.remove(error_mw)
-        return error_middlewares
+        except Exception:
+            self._bus = None
+            for mw in reversed(attempted):
+                try:
+                    await mw.on_teardown(bus)
+                except Exception:
+                    logger.exception('Middleware %s on_teardown failed during setup rollback', mw.__class__.__name__)
+            raise
 
-    async def teardown(self, bus: EventBus) -> None:
-        """按注册**逆序**通知所有中间件执行清理，重复调用安全（幂等）。"""
+    async def teardown(self, bus: EventBus, strict: bool = False) -> list[tuple[Middleware, Exception]]:
+        """按注册**逆序**通知所有中间件执行清理，重复调用安全（幂等）。
+
+        - 逐项触发 ``on_teardown``，单个失败不中断其余清理（记录日志并记入返回值）；
+        - 返回 ``[(middleware, 异常), ...]`` 失败清单，调用方（如 :meth:`EventBus.stop`）
+          可感知清理不完整；``strict=True`` 在全部尝试后抛出首个失败；
+        - 未绑定时返回 ``[]``。
+        """
         if self._bus is None:
-            return
+            return []
         self._bus = None
+        failures: list[tuple[Middleware, Exception]] = []
         for mw in reversed(list(self._middlewares)):
             try:
                 await mw.on_teardown(bus)
-            except Exception:
+            except Exception as exc:
+                failures.append((mw, exc))
                 logger.exception('Middleware %s on_teardown failed', mw.__class__.__name__)
+        if strict and failures:
+            raise failures[0][1]
+        return failures
 
     def build_before_publish(
         self,

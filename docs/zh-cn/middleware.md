@@ -81,7 +81,7 @@ class Middleware(ABC):
 
 总线生命周期钩子。`on_setup` 在总线 `start()` 完成后调用，也会在**运行时通过 `add()` / `insert()` 热添加中间件时立即调用**。`on_teardown` 在 `stop()` 结束时**逆序**调用，也会在运行时 `remove()` / `clear()` 时立即调用。适用于初始化连接池、注册后台任务等场景。
 
-> **注意**：`on_setup` 中抛出异常的中间件会被自动从链中移除（启动时）或拒绝加入（运行时热添加），防止影响总线正常运行。
+> **注意**：中间件生命周期与处理器一致，**fail-fast 且原子**——`on_setup` 失败会使总线启动整体失败（回滚后可重试修复），运行时热添加的中间件 `on_setup` 失败会被回滚并拒绝加入；失败的中间件不会被静默丢弃。
 >
 > **警告**：运行时 `remove()` 不等待已在飞行的钩子完成。`on_teardown` 被调用后，已进入 `before_publish` / `on_publish` 的中间件实例仍可能继续执行。中间件作者应确保自身状态清理不影响这些残留调用。
 
@@ -152,22 +152,22 @@ class MiddlewareChain:
     ) -> OnPublishErrorNext
 
     # 生命周期
-    async def setup(self, bus: EventBus) -> List[Middleware]
-    async def teardown(self, bus: EventBus) -> None
+    async def setup(self, bus: EventBus) -> None
+    async def teardown(self, bus: EventBus, strict: bool = False) -> list[tuple[Middleware, Exception]]
 ```
 
 | 方法 / 属性 | 说明 |
 | - | - |
-| `add(middleware)` | **async**。在链**末尾**追加中间件。总线启动后立即调用 `on_setup`。返回自身，支持 `await` 后再调用。重复添加同一实例抛出 `ValueError`。 |
-| `insert(index, middleware)` | **async**。在指定位置插入中间件。总线启动后立即调用 `on_setup`。重复添加同一实例抛出 `ValueError`。 |
-| `remove(middleware)` | **async**。移除指定中间件实例。总线启动后立即调用 `on_teardown`。不存在的实例抛出 `ValueError`。 |
-| `clear()` | **async**。清空所有中间件。总线启动后立即逐一调用 `on_teardown`。 |
+| `add(middleware)` | **async**。在链**末尾**追加中间件。总线启动后立即调用 `on_setup`；若 `on_setup` 失败，先补发 `on_teardown`（副作用回滚）、不加入链并抛 `RuntimeError`。返回自身。重复添加同一实例抛出 `ValueError`。 |
+| `insert(index, middleware)` | **async**。在指定位置插入中间件。总线启动后立即调用 `on_setup`（失败回滚语义同 `add`）。重复添加同一实例抛出 `ValueError`。 |
+| `remove(middleware)` | **async**。移除指定中间件实例。不存在的实例视为幂等空操作，返回 `None`（成员判断用 `in chain.middlewares`）；总线启动后立即调用 `on_teardown`，其失败会作为返回值返回，但移除仍完成。 |
+| `clear()` | **async**。清空所有中间件。总线启动后立即逐一调用 `on_teardown`；返回 `[(middleware, 异常), ...]` 失败清单。 |
 | `middlewares` | （属性）返回当前中间件列表的副本。 |
 | `build_before_publish(final_handler)` | 构建 ``before_publish`` 责任链。传入核心发布逻辑作为末端处理器，返回包装后的可调用链。 |
 | `build_on_publish(final_handler)` | 构建 ``on_publish`` 责任链。传入空操作作为末端处理器，返回包装后的可调用链。 |
 | `build_on_publish_error(final_handler)` | 构建 ``on_publish_error`` 责任链。传入空操作作为末端处理器，返回包装后的可调用链。 |
-| `setup(bus)` | 按注册顺序调用所有中间件的 `on_setup`。返回初始化失败的中间件列表（这些中间件已被自动移除）。 |
-| `teardown(bus)` | 按注册**逆序**调用所有中间件的 `on_teardown`。单个异常不影响其他。**幂等**——重复调用安全。 |
+| `setup(bus)` | 按注册顺序调用所有中间件的 `on_setup`。**原子（fail-fast）**：任一 `on_setup` 抛错即解绑，并对**已尝试的中间件（含失败者）**补发 `on_teardown` 后向上抛出——中间件保留在链中（修复后可重试），与处理器 `activate` 语义一致。 |
+| `teardown(bus)` | 按注册**逆序**调用所有中间件的 `on_teardown`。单个异常不影响其他。**幂等**。返回 `[(middleware, 异常), ...]` 失败清单，调用方（如 `EventBus.stop()`）可感知清理不完整；传 `strict=True` 在全部尝试后抛出首个失败。 |
 
 ### 责任链构建
 

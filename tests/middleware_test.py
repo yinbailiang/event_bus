@@ -115,7 +115,7 @@ class ShortCircuitBeforeMiddleware(Middleware):
 
 
 class FailingSetupMiddleware(Middleware):
-    """on_setup 抛出异常的中间件 —— 应被自动移除"""
+    """on_setup 抛出异常的中间件 —— 使 setup 原子失败（回滚），或运行时 add 回滚"""
 
     def __init__(self, name: str = 'failing') -> None:
         self.name = name
@@ -364,22 +364,66 @@ class TestMiddlewareChainCRUD:
 
     @pytest.mark.asyncio
     async def test_remove_middleware(self) -> None:
-        """移除指定中间件"""
+        """移除指定中间件；干净移除返回 None"""
         chain = MiddlewareChain()
         mw1 = LoggingMiddleware('mw1')
         mw2 = LoggingMiddleware('mw2')
         await chain.add(mw1)
         await chain.add(mw2)
-        await chain.remove(mw1)
+        err = await chain.remove(mw1)
+        assert err is None
         assert chain.middlewares == [mw2]
 
     @pytest.mark.asyncio
+    async def test_remove_nonexistent_is_idempotent_noop(self) -> None:
+        """移除不存在的中间件视为幂等空操作：返回 None 且不改变链"""
+        chain = MiddlewareChain()
+        mw = LoggingMiddleware('mw1')
+        await chain.add(mw)
+        ghost = LoggingMiddleware('ghost')
+        err = await chain.remove(ghost)
+        assert err is None
+        assert chain.middlewares == [mw]
+
+    @pytest.mark.asyncio
+    async def test_remove_returns_teardown_failure(self) -> None:
+        """on_teardown 失败时 remove 仍保证移除，并显式返回该异常"""
+        chain = MiddlewareChain()
+        mw = ThrowingTeardownMiddleware('throw')
+        await chain.add(mw)
+        await chain.setup(_mock_bus())
+
+        err = await chain.remove(mw)
+        assert isinstance(err, RuntimeError)
+        assert 'throw teardown failed' in str(err)
+        assert chain.middlewares == []  # 移除仍成功
+
+    @pytest.mark.asyncio
+    async def test_clear_returns_teardown_failures(self) -> None:
+        """clear 逐项 on_teardown：单个失败不中断，返回带实体的失败清单"""
+        chain = MiddlewareChain()
+        throw_mw = ThrowingTeardownMiddleware('throw')
+        good_mw = LoggingMiddleware('good')
+        await chain.add(throw_mw)
+        await chain.add(good_mw)
+        await chain.setup(_mock_bus())
+
+        failures = await chain.clear()
+
+        assert chain.middlewares == []
+        assert len(failures) == 1
+        assert failures[0][0] is throw_mw
+        assert 'throw teardown failed' in str(failures[0][1])
+        assert good_mw.teardown_called
+
+    @pytest.mark.asyncio
     async def test_clear_all(self) -> None:
-        """清空所有中间件"""
+        """清空所有中间件（无失败时返回空列表）"""
         chain = MiddlewareChain()
         await chain.add(LoggingMiddleware('mw1'))
         await chain.add(LoggingMiddleware('mw2'))
-        await chain.clear()
+        failures = await chain.clear()
+        assert failures == []
         assert chain.middlewares == []
 
     @pytest.mark.asyncio
@@ -412,17 +456,16 @@ class TestMiddlewareChainLifecycle:
         await chain.add(mw2)
         # 需要传入一个 mock bus
         bus = _mock_bus()
-        failed = await chain.setup(bus)
+        await chain.setup(bus)
 
-        assert failed == []
         assert mw1.setup_called
         assert mw2.setup_called
         assert mw1.calls[0] == 'mw1:on_setup'
         assert mw2.calls[0] == 'mw2:on_setup'
 
     @pytest.mark.asyncio
-    async def test_setup_removes_failing_middleware(self) -> None:
-        """setup 中失败的中间件被移除，且不影响其他"""
+    async def test_setup_is_atomic_and_rolls_back_on_failure(self) -> None:
+        """setup 中任一 on_setup 失败 → 整体回退（含失败者补发 on_teardown）并抛出；中间件保留可重试"""
         chain = MiddlewareChain()
         mw1 = LoggingMiddleware('mw1')
         fail_mw = FailingSetupMiddleware('fail')
@@ -432,16 +475,22 @@ class TestMiddlewareChainLifecycle:
         await chain.add(fail_mw)
         await chain.add(mw2)
         bus = _mock_bus()
-        failed = await chain.setup(bus)
 
-        assert len(failed) == 1
-        assert failed[0] is fail_mw
+        with pytest.raises(RuntimeError, match='fail setup failed'):
+            await chain.setup(bus)
+
         assert fail_mw.setup_attempted
-        # fail_mw 被移除，mw1/mw2 保留
+        # 中间件保留在链中（修复后可重试）；已尝试者（mw1/失败者）收到回卷 teardown，
+        # 未尝试的 mw2 不应收到
         assert mw1 in chain.middlewares
+        assert fail_mw in chain.middlewares
         assert mw2 in chain.middlewares
-        assert fail_mw not in chain.middlewares
-        assert mw1.setup_called
+        assert mw1.teardown_called
+        assert not mw2.teardown_called
+
+        # 移除坏中间件后可重新 setup 成功
+        await chain.remove(fail_mw)
+        await chain.setup(bus)
         assert mw2.setup_called
 
     @pytest.mark.asyncio
@@ -467,7 +516,7 @@ class TestMiddlewareChainLifecycle:
 
     @pytest.mark.asyncio
     async def test_teardown_continues_on_error(self) -> None:
-        """teardown 中某个中间件异常不影响其他中间件的清理"""
+        """teardown 中某个中间件异常不影响其他中间件的清理；失败被记入返回值"""
         chain = MiddlewareChain()
         throw_mw = ThrowingTeardownMiddleware('throw')
         mw1 = LoggingMiddleware('mw1')
@@ -477,10 +526,24 @@ class TestMiddlewareChainLifecycle:
         bus = _mock_bus()
         # 不应抛出异常
         await chain.setup(bus)
-        await chain.teardown(bus)
+        failures = await chain.teardown(bus)
 
+        assert len(failures) == 1
+        assert failures[0][0] is throw_mw
+        assert 'throw teardown failed' in str(failures[0][1])
         assert throw_mw.teardown_attempted
         assert mw1.teardown_called
+
+    async def test_teardown_strict_raises_first_failure(self) -> None:
+        """teardown(strict=True) 在全部尝试后抛出首个失败"""
+        chain = MiddlewareChain()
+        throw_mw = ThrowingTeardownMiddleware('throw')
+        await chain.add(throw_mw)
+        bus = _mock_bus()
+        await chain.setup(bus)
+
+        with pytest.raises(RuntimeError, match='throw teardown failed'):
+            await chain.teardown(bus, strict=True)
 
 
 # ============================================================================
@@ -987,12 +1050,12 @@ class TestMiddlewareIntegration:
         # 这个测试验证 mutating middleware 自己的记录
 
     @pytest.mark.asyncio
-    async def test_failing_setup_middleware_removed_and_does_not_block(
+    async def test_failing_setup_middleware_fails_bus_start_then_retryable(
         self,
         base_event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
     ) -> None:
-        """setup 失败的中间件被移除后，总线仍可正常发布"""
+        """setup 失败的中间件使总线启动整体失败（fail-fast，与 handler activate 一致）；移除后可重试"""
         fail_mw = FailingSetupMiddleware('fail')
         good_mw = LoggingMiddleware('good')
         chain = MiddlewareChain()
@@ -1008,12 +1071,19 @@ class TestMiddlewareIntegration:
             queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=10)),
             middleware_chain=chain,
         )
+        with pytest.raises(RuntimeError, match='fail setup failed'):
+            await bus.start()
+
+        # 已整体回滚：未运行、中间件与注册表均已解绑，可重试
+        assert not bus.is_running
+        assert not bus.is_publishing_enabled
+
+        # 移除坏中间件后重试成功，good 正常工作
+        await chain.remove(fail_mw)
         async with bus:
             await bus.proxy('src').publish('mw.ping', {'key': 'k', 'count': 1})
             await handler.wait_received(timeout=2.0)
 
-        # fail 被移除，good 正常工作
-        assert fail_mw not in chain.middlewares
         assert any('good:before_publish:mw.ping' in c for c in good_mw.calls)
         assert len(handler.received) >= 1
 
@@ -1274,12 +1344,12 @@ class TestMiddlewareHotReload:
             assert chain.middlewares == []
 
     @pytest.mark.asyncio
-    async def test_remove_nonexistent_during_runtime_raises(
+    async def test_remove_nonexistent_during_runtime_is_noop(
         self,
         base_event_registry: EventRegistry,
         handler_registry: EventHandlerRegistry,
     ) -> None:
-        """运行时移除不存在的中间件抛出 ValueError"""
+        """运行时移除不存在的中间件为幂等空操作（返回 None）"""
         chain = MiddlewareChain()
         bus = EventBus(
             base_event_registry,
@@ -1289,8 +1359,9 @@ class TestMiddlewareHotReload:
         )
         async with bus:
             ghost = LoggingMiddleware('ghost')
-            with pytest.raises(ValueError, match='not in the chain'):
-                await bus.proxy('admin').middleware.remove(ghost)
+            err = await bus.proxy('admin').middleware.remove(ghost)
+            assert err is None
+            assert chain.middlewares == []
 
     @pytest.mark.asyncio
     async def test_add_during_runtime_preserves_bus_reference(

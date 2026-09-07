@@ -88,7 +88,7 @@ class Middleware(ABC):
 
 Bus lifecycle hooks. `on_setup` is called after `bus.start()` completes, and **immediately when hot-adding via `add()` / `insert()` on a running bus**. `on_teardown` is called in **reverse registration order** when `stop()` finishes, and immediately when `remove()` / `clear()` is called on a running bus. Use these for initializing connection pools, registering background tasks, etc.
 
-> **Note**: Middlewares that raise exceptions in `on_setup` are automatically removed from the chain (at startup) or rejected (at hot-add), preventing them from affecting normal bus operation.
+> **Note**: Middleware lifecycle is **fail-fast and atomic**, mirroring handler activation: an `on_setup` failure fails the whole bus start (rolled back, retryable after fixing), and a hot-added middleware whose `on_setup` fails is rolled back and rejected. Failing middlewares are never silently dropped.
 >
 > **Warning**: Runtime `remove()` does not wait for in-flight hooks to complete. After `on_teardown` is called, a middleware instance that has already entered `before_publish` / `on_publish` may still execute. Middleware authors should ensure their own state cleanup is safe against these residual calls.
 
@@ -156,22 +156,22 @@ class MiddlewareChain:
     ) -> OnPublishErrorNext
 
     # Lifecycle
-    async def setup(self, bus: EventBus) -> List[Middleware]
-    async def teardown(self, bus: EventBus) -> None
+    async def setup(self, bus: EventBus) -> None
+    async def teardown(self, bus: EventBus, strict: bool = False) -> list[tuple[Middleware, Exception]]
 ```
 
 | Method | Description |
 | - | - |
-| `add(mw)` | **async**. Append to the chain. Calls `on_setup` immediately if bus is running. Returns self. |
-| `insert(i, mw)` | **async**. Insert at position. Calls `on_setup` immediately if bus is running. |
-| `remove(mw)` | **async**. Remove from chain. Calls `on_teardown` immediately if bus is running. Raises `ValueError` if not found. |
-| `clear()` | **async**. Remove all middlewares. Calls `on_teardown` on each if bus is running. |
+| `add(mw)` | **async**. Append to the chain. Calls `on_setup` immediately if bus is running. If that `on_setup` fails, its `on_teardown` is fired first (side-effect rollback), it is **not** added, and a `RuntimeError` is raised. Returns self. |
+| `insert(i, mw)` | **async**. Insert at position. Calls `on_setup` immediately if bus is running (same failure rollback as `add`). |
+| `remove(mw)` | **async**. Remove from chain. A missing middleware is an idempotent no-op returning `None` (use `in chain.middlewares` to test membership). Calls `on_teardown` immediately if bus is running; its failure is returned but the removal still happens. |
+| `clear()` | **async**. Remove all middlewares. Calls `on_teardown` on each if bus is running; returns `[(middleware, exception), ...]` for failures. |
 | `middlewares` | Returns a copy of the current middleware list. |
 | `build_before_publish(f)` | Build the `before_publish` chain with `f` as the innermost handler. |
 | `build_on_publish(f)` | Build the `on_publish` chain with `f` as the innermost handler. |
 | `build_on_publish_error(f)` | Build the `on_publish_error` chain with `f` as the innermost handler. |
-| `setup(bus)` | Call `on_setup` on all middlewares in registration order. Returns failed ones (auto-removed). |
-| `teardown(bus)` | Call `on_teardown` on all middlewares in **reverse** order. **Idempotent** — safe to call repeatedly. |
+| `setup(bus)` | Call `on_setup` on all middlewares in registration order. **Atomic (fail-fast)**: if any `on_setup` raises, the chain unbinds and fires `on_teardown` on every middleware already attempted (including the failing one), then re-raises — middlewares stay in the chain so you can fix and retry. Consistent with handler `activate`. |
+| `teardown(bus)` | Call `on_teardown` on all middlewares in **reverse** order. **Idempotent**. Returns `[(middleware, exception), ...]` so callers (e.g. `EventBus.stop()`) can observe incomplete cleanup; pass `strict=True` to raise the first failure after attempting all. |
 
 ### Hot Reload
 
