@@ -42,7 +42,7 @@ class MailboxHandler(EventHandler, ABC):
 | `process()` | `@abstractmethod async` | Custom task loop that subclasses must implement. Use `await self.get()` to fetch the next event. |
 | `get()` | `async → (Event, Proxy)` | Dequeues the next `(event, bus proxy)` from the mailbox. Blocks when the queue is empty. |
 | `on_activate(bus)` | hook | Starts the `process()` task when the registry is bound to a bus (`activate`). |
-| `on_deactivate(bus)` | hook | Cancels the task and clears the backlog on bus unbind / unregister. |
+| `on_deactivate(bus)` | hook | Cancels the task and clears the backlog on bus unbind / unregister. Late in-flight `put()`s after shutdown are dropped (rolled back) rather than left as orphaned backlog. |
 | `bus` | `EventBus \| None` | The bound `EventBus` instance, available after activation (`on_activate`). |
 | `is_running` | `bool` | Whether the `process()` background task is currently running. |
 

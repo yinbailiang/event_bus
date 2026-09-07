@@ -42,7 +42,7 @@ class MailboxHandler(EventHandler, ABC):
 | `process()` | `@abstractmethod async` | 子类必须实现的自定义任务循环。通过 `await self.get()` 获取下一事件。 |
 | `get()` | `async → (Event, Proxy)` | 从邮箱取出下一个 `(事件, 总线代理)`。队列空时阻塞等待。 |
 | `on_activate(bus)` | 钩子 | 总线激活（注册表 `activate`）时启动 `process()` 任务。 |
-| `on_deactivate(bus)` | 钩子 | 总线解绑 / 注销时取消任务并清空积压。 |
+| `on_deactivate(bus)` | 钩子 | 总线解绑 / 注销时取消任务并清空积压。停机后迟到的在途 `put()` 会被丢弃（自回滚），不留孤儿积压。 |
 | `bus` | `EventBus \| None` | 当前绑定的 `EventBus` 实例，激活（`on_activate`）后可用。 |
 | `is_running` | `bool` | `process()` 后台任务是否正在运行。 |
 

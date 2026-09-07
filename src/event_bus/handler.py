@@ -106,11 +106,12 @@ class EventHandler(ABC):
         触发时机：注册表 ``activate`` 时对全部在册处理器触发；已绑定的注册表内
         新注册的处理器在 ``register`` 时触发。调用时 :attr:`handler_id` 已可用。
 
-        **基类默认把本处理器的订阅束登记到 ``bus.router``（激活即路由）**；
+        **基类默认把本处理器的订阅束登记到 ``bus.router``（激活即路由）**——空订阅束
+        也会登记，使「激活 ⟺ 已登记」恒成立：之后运行期 ``add`` 立即生效；
         子类覆写需调用 ``super().on_activate(bus)`` 保留该行为（如 mailbox
         需同时启动后台任务）。
         """
-        if self.handler_id is not None and self.subscriptions:
+        if self.handler_id is not None:
             bus.router.subscribe(self.handler_id, self.subscriptions)
 
     def on_deactivate(self, bus: 'EventBus') -> None:
@@ -152,13 +153,14 @@ class EventHandlerRegistry:
         return iter(self._handlers.items())
 
     def activate(self, bus: 'EventBus') -> None:
-        """把注册表绑定到一个总线并激活全部在册处理器（**原子**）。
+        """把注册表绑定到一个总线并激活全部在册处理器（**原子，含总线侧副作用回滚**）。
 
         - 同一注册表**禁止跨总线共用**：已绑定时再次调用抛 ``RuntimeError``；
         - 先绑定总线，再逐个触发 :meth:`EventHandler.on_activate`——激活过程中
           嵌套 ``register`` 的新处理器会立即收到 ``on_activate``；
-        - 任一 ``on_activate`` 抛错即**整体回退**：解除绑定、对已成功激活的
-          处理器补发 :meth:`EventHandler.on_deactivate`（尽力回卷），并向上
+        - 任一 ``on_activate`` 抛错即**整体回退**：解除绑定，并对**已尝试激活的
+          处理器（含当前失败者）**补发 :meth:`EventHandler.on_deactivate`，撤销其
+          on_activate 已产生的订阅登记 / 后台任务（避免总线侧幽灵路由），并向上
           抛出首个错误；处理器保持注册，修复后可重新 ``activate``。
         """
         if self._bus is not None:
@@ -167,8 +169,8 @@ class EventHandlerRegistry:
         activated: list[EventHandler] = []
         try:
             for handler in list(self._handlers.values()):  # 快照：允许嵌套 register
-                handler.on_activate(bus)
                 activated.append(handler)
+                handler.on_activate(bus)
         except Exception:
             self._bus = None
             for handler in reversed(activated):
@@ -181,41 +183,52 @@ class EventHandlerRegistry:
                     )
             raise
 
-    def deactivate(self) -> None:
+    def deactivate(self, strict: bool = False) -> list[tuple[str, Exception]]:
         """解除总线绑定并使全部在册处理器下线（**尽力而为，保留失败者**）。
 
         - 遍历在册处理器触发 :meth:`EventHandler.on_deactivate`（此时
           :attr:`EventHandler.handler_id` 仍可用）；
         - ``on_deactivate`` 抛错的处理器**保留在册**（避免静默移除的意外行为），
-          仅记录日志；其余处理器照常下线；
-        - 未绑定时为空操作（幂等）。
+          记录日志并记入返回值；其余处理器照常下线；
+        - 返回 ``[(handler_id, 异常), ...]`` 失败清单，调用方（如 :meth:`EventBus.stop`）
+          可据此感知清理不完整；``strict=True`` 时在全部尝试后抛出首个失败异常；
+        - 未绑定时返回 ``[]``（幂等）。
         """
         if self._bus is None:
-            return
+            return []
         bus: 'EventBus' = self._bus
+        failures: list[tuple[str, Exception]] = []
         for hid, handler in list(self._handlers.items()):  # 快照：允许 on_deactivate 内嵌套变更
             try:
                 handler.on_deactivate(bus)
-            except Exception:
+            except Exception as exc:
+                failures.append((hid, exc))
                 logger.exception('Handler %s:%s on_deactivate failed', handler.__class__.__name__, hid)
         self._bus = None
+        if strict and failures:
+            raise failures[0][1]
+        return failures
 
-    def clear(self) -> None:
-        """清除所有已注册处理器（**兜底：保证全部移除**）。
+    def clear(self) -> list[tuple[str, Exception]]:
+        """清除所有已注册处理器（**兜底：保证全部移除，失败显式上报**）。
 
         若已绑定总线，先 :meth:`deactivate` 使全部在册处理器下线；随后逐个
-        触发 :meth:`EventHandler.on_unregistered`。单个钩子失败不中断其余清理
-        （仅记录日志），全部处理器必然被移除。
+        触发 :meth:`EventHandler.on_unregistered`。单个钩子失败不中断其余清理，
+        全部处理器必然被移除；返回 ``[(handler_id, 异常), ...]`` 失败清单
+        （含 deactivate 与 on_unregistered 两阶段）。
         """
+        failures: list[tuple[str, Exception]] = []
         if self._bus is not None:
-            self.deactivate()
+            failures.extend(self.deactivate())
         for handler in list(self._handlers.values()):
             try:
                 handler.on_unregistered()
-            except Exception:
+            except Exception as exc:
+                failures.append((handler.handler_id or '', exc))
                 logger.exception('Handler %s on_unregistered failed', handler.__class__.__name__)
         self._handlers.clear()
         self._version += 1
+        return failures
 
     def __del__(self) -> None:
         """注册表销毁时兜底清理：触发全部在册处理器的下线钩子。
@@ -230,13 +243,16 @@ class EventHandlerRegistry:
             pass
 
     def register(self, handler: EventHandler) -> str:
-        """注册一个事件处理器实例（**原子**）。
+        """注册一个事件处理器实例（**原子，含总线侧副作用回滚**）。
 
         同一实例不可重复注册（抛 ``ValueError``）。注册后触发
         :meth:`EventHandler.on_registered` 钩子回填处理器 id；若注册表已绑定
         总线，还触发 :meth:`EventHandler.on_activate` 激活处理器。任一钩子抛异常，
-        回退本次注册——撤销入库、不递增版本号——并向上抛出，注册表不残留
-        半注册状态。处理器自身状态的清理属处理器职责。
+        回退本次注册——撤销入库、不递增版本号——并向上抛出：
+
+        - ``on_registered`` 失败：补发 :meth:`EventHandler.on_unregistered` 清空 id；
+        - ``on_activate`` 失败：先补发 :meth:`EventHandler.on_deactivate`，撤销其已产生的
+          订阅登记 / 后台任务（避免总线侧幽灵路由），再补发 ``on_unregistered`` 清空 id。
         """
         if handler in self._handlers.values():
             raise ValueError(f'处理器实例 {handler.__class__.__name__} 已注册，禁止重复注册')
@@ -244,10 +260,36 @@ class EventHandlerRegistry:
         self._handlers[id] = handler
         try:
             handler.on_registered(id)
+        except Exception:
+            del self._handlers[id]
+            try:
+                handler.on_unregistered()
+            except Exception:
+                logger.exception(
+                    'Handler %s on_unregistered failed during register rollback',
+                    handler.__class__.__name__,
+                )
+            raise
+        try:
             if self._bus is not None:
                 handler.on_activate(self._bus)
         except Exception:
             del self._handlers[id]
+            if self._bus is not None:
+                try:
+                    handler.on_deactivate(self._bus)
+                except Exception:
+                    logger.exception(
+                        'Handler %s on_deactivate failed during register rollback',
+                        handler.__class__.__name__,
+                    )
+            try:
+                handler.on_unregistered()
+            except Exception:
+                logger.exception(
+                    'Handler %s on_unregistered failed during register rollback',
+                    handler.__class__.__name__,
+                )
             raise
         self._version += 1
         return id
@@ -256,29 +298,35 @@ class EventHandlerRegistry:
         """根据ID获取事件处理器实例"""
         return self._handlers.get(handler_id)
 
-    def unregister(self, handler_id: str) -> bool:
-        """注销一个事件处理器实例（**兜底：保证移除**）。
+    def unregister(self, handler_id: str) -> Exception | None:
+        """注销一个事件处理器实例（**兜底：保证移除，失败显式上报**）。
 
-        处理器必然被移除（id 不存在时返回 ``False``）。若注册表已绑定总线，
-        先触发 :meth:`EventHandler.on_deactivate` 使处理器下线（此时
-        :attr:`EventHandler.handler_id` 仍可用）；随后触发
-        :meth:`EventHandler.on_unregistered` 清空 id。钩子自身的失败由处理器
-        负责，注册表仅记录日志，不影响移除结果。
+        - 处理器必然被移除；id 不存在时视为幂等空操作，返回 ``None``
+          （存在性请用 ``handler_id in registry`` 判断）；
+        - 若注册表已绑定总线，先触发 :meth:`EventHandler.on_deactivate` 使处理器
+          下线（此时 :attr:`EventHandler.handler_id` 仍可用）；随后触发
+          :meth:`EventHandler.on_unregistered` 清空 id；
+        - 钩子失败不阻断移除，但**返回首个失败异常**（其余记录日志），
+          调用方据此感知清理不完整。
         """
         handler: Optional[EventHandler] = self._handlers.pop(handler_id, None)
         if handler is None:
-            return False
+            return None
+        first_error: Exception | None = None
         if self._bus is not None:
             try:
                 handler.on_deactivate(self._bus)
-            except Exception:
+            except Exception as exc:
+                first_error = exc
                 logger.exception('Handler %s on_deactivate failed', handler.__class__.__name__)
         try:
             handler.on_unregistered()
-        except Exception:
+        except Exception as exc:
+            if first_error is None:
+                first_error = exc
             logger.exception('Handler %s on_unregistered failed', handler.__class__.__name__)
         self._version += 1
-        return True
+        return first_error
 
     @property
     def handlers_count(self) -> int:

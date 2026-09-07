@@ -69,8 +69,8 @@ other settings live on the queue itself — the bus never knows them; inject
 
 | Method | Description |
 | - | - |
-| `start()` | Starts the dispatch loop and activates the handler registry (`registry.activate(bus)` — each handler's subscription bundle registers into `bus.router`). Idempotent. |
-| `stop()` | Graceful shutdown: publish `__shutdown__` → reject new publishes → drain queue → cancel dispatch → wait for active tasks → deactivate the handler registry (`registry.deactivate()`). Idempotent. |
+| `start()` | Starts the event bus: first activates the handler registry (`registry.activate(bus)` — each handler's subscription bundle registers into `bus.router`), then starts the dispatch loop and initializes middleware. **Failure-safe & retryable**: any failure rolls back (cancel dispatch, deactivate handlers, tear down middleware) to a clean not-started state. Idempotent. |
+| `stop()` | Graceful shutdown: publish `__shutdown__` → reject new publishes → drain queue → cancel dispatch → wait for active tasks → deactivate the handler registry (`registry.deactivate()`); handler deactivation failures are logged and summarized. Idempotent. |
 | `async with EventBus(...) as bus:` | Context manager, auto start/stop. `stop()` errors on exit won't mask body exceptions. |
 
 ### Observability

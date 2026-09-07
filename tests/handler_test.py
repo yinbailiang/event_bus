@@ -1,10 +1,19 @@
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel
 
-from event_bus import Event, EventBus, EventHandler, EventHandlerRegistry, Regex
+from event_bus import (
+    Event,
+    EventBus,
+    EventDeclaration,
+    EventHandler,
+    EventHandlerRegistry,
+    EventRegistry,
+    Regex,
+    Router,
+)
 
 # ============================================================================
 # EventHandlerRegistry CRUD
@@ -35,12 +44,12 @@ async def test_handler_register_crud(handler_registry: EventHandlerRegistry):
     assert handler_registry.get(hid) == handler
     assert hid in handler_registry
 
-    assert handler_registry.unregister(hid) is True
+    assert handler_registry.unregister(hid) is None
     assert handler_registry.get(hid) is None
     assert hid not in handler_registry
     assert handler_registry.handlers_count == 0
 
-    assert handler_registry.unregister('invalid_id') is False
+    assert handler_registry.unregister('invalid_id') is None
 
 
 @pytest.mark.asyncio
@@ -262,12 +271,12 @@ def test_handler_loses_id_on_unregister(handler_registry: EventHandlerRegistry):
     hid = handler_registry.register(handler)
     assert handler.handler_id == hid
 
-    assert handler_registry.unregister(hid) is True
+    assert handler_registry.unregister(hid) is None
     assert handler.handler_id is None
 
-    # 未注册的 id 不应触发任何钩子副作用
+    # 未注册的 id 视为幂等空操作（返回 None），不触发任何钩子副作用
     handler2 = IdAwareHandler()
-    assert handler_registry.unregister('invalid_id') is False
+    assert handler_registry.unregister('invalid_id') is None
     assert handler2.handler_id is None
 
 
@@ -307,7 +316,7 @@ def test_handler_on_unregistered_override_observes(handler_registry: EventHandle
 
     handler = OverridingHandler()
     hid = handler_registry.register(handler)
-    assert handler_registry.unregister(hid) is True
+    assert handler_registry.unregister(hid) is None
 
     assert observed == [hid]
     assert handler.handler_id is None
@@ -341,7 +350,7 @@ def test_registry_rejects_duplicate_instance(handler_registry: EventHandlerRegis
 
 
 # ============================================================================
-# 原子注册回退 & 兜底注销（注册表只保证自身簿记；钩子失败属处理器职责）
+# 原子注册回退 & 兜底注销（回滚覆盖总线侧副作用：补发 on_deactivate / on_unregistered）
 # ============================================================================
 
 
@@ -387,35 +396,40 @@ def test_register_is_atomic_on_hook_failure(handler_registry: EventHandlerRegist
     assert ok.handler_id == hid
 
 
-def test_unregister_guarantees_removal_when_hook_fails(handler_registry: EventHandlerRegistry):
-    """on_unregistered 抛错时 unregister 仍保证移除，且不向调用方抛错"""
+def test_unregister_guarantees_removal_and_reports_hook_failure(handler_registry: EventHandlerRegistry):
+    """on_unregistered 抛错时 unregister 仍保证移除，并把失败显式返回（不静默）"""
     handler = RaisingUnregisterHandler()
     hid = handler_registry.register(handler)
     version_after_register = handler_registry.version
 
-    assert handler_registry.unregister(hid) is True  # 移除成功（兜底保证）
+    err = handler_registry.unregister(hid)  # 移除成功且失败显式上报
+    assert isinstance(err, RuntimeError)
+    assert 'unregister hook boom' in str(err)
     assert hid not in handler_registry
     assert handler_registry.get(hid) is None
     assert handler_registry.version == version_after_register + 1
 
 
-def test_unregister_unknown_id_returns_false(handler_registry: EventHandlerRegistry):
-    """未知 id 返回 False，不触发任何钩子"""
-    assert handler_registry.unregister('invalid_id') is False
+def test_unregister_unknown_id_is_idempotent_noop(handler_registry: EventHandlerRegistry):
+    """未知 id 视为幂等空操作：返回 None、不触发任何钩子、版本不变"""
+    assert handler_registry.unregister('invalid_id') is None
     assert handler_registry.version == 0
 
 
-def test_clear_removes_all_when_hooks_fail(handler_registry: EventHandlerRegistry):
-    """clear 逐个触发 on_unregistered：单个失败不中断，全部处理器必然被移除"""
+def test_clear_removes_all_and_reports_hook_failures(handler_registry: EventHandlerRegistry):
+    """clear 逐个触发 on_unregistered：单个失败不中断、全部移除，且失败显式上报（带实体）"""
     bad = RaisingUnregisterHandler()
     good = IdAwareHandler()
-    handler_registry.register(bad)
+    bad_id = handler_registry.register(bad)
     handler_registry.register(good)
 
-    handler_registry.clear()
+    failures = handler_registry.clear()
 
     assert len(handler_registry) == 0
     assert good.handler_id is None
+    assert len(failures) == 1
+    assert failures[0][0] == bad_id
+    assert 'unregister hook boom' in str(failures[0][1])
 
 
 # ============================================================================
@@ -597,7 +611,7 @@ def test_registry_unregister_while_active_orders_deactivate_then_unregistered(
     hid = handler_registry.register(h)
     handler_registry.activate(MagicMock())
 
-    assert handler_registry.unregister(hid) is True
+    assert handler_registry.unregister(hid) is None
 
     assert h.events == [f'registered:{hid}', f'active:{hid}', f'deactivate:{hid}', 'unregistered']
     assert h.handler_id is None
@@ -639,9 +653,9 @@ def test_registry_activate_all_or_nothing_rolls_back_on_failure(handler_registry
     assert bad.handler_id is not None
     assert handler_registry.version == version_before
 
-    # good 已成功激活 → 回卷补发 on_deactivate；bad 是失败者本身（无回卷）
+    # 回卷覆盖全部已尝试者：good 与失败者 bad 都收到 on_deactivate（撤销副作用）
     assert good.events[-1].startswith('deactivate:')
-    assert bad.events[-1] == f'active:{bad.handler_id}'
+    assert bad.events[-1].startswith('deactivate:')
 
     # 回退后注册表未绑定；修复（移除坏者）后可重新激活
     handler_registry.unregister(bad.handler_id or '')
@@ -695,3 +709,100 @@ def test_registry_deactivate_keeps_failing_handlers(handler_registry: EventHandl
     # 两者都收到 on_deactivate
     assert bad.events[-1].startswith('deactivate:')
     assert good.events[-1].startswith('deactivate:')
+
+
+# ============================================================================
+# 总线侧副作用回滚回归（exp2/exp3）：幽灵路由 / 残留 id / 束绑定
+# ============================================================================
+
+
+class _GhostEvent(EventDeclaration):
+    name = 'lc.ghost.event'
+
+
+class _SubscribeThenRaiseHandler(EventHandler):
+    """on_activate 先 super() 订阅再抛错：验证回滚能撤销已登记的订阅"""
+
+    def __init__(self, fail_after_subscribe: bool = False):
+        super().__init__([_GhostEvent.name])
+        self.fail_after_subscribe = fail_after_subscribe
+        self.deactivate_calls = 0
+
+    async def handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event) -> None:
+        pass
+
+    def on_activate(self, bus: Any) -> None:
+        super().on_activate(bus)  # 先登记订阅
+        if self.fail_after_subscribe:
+            raise RuntimeError('boom after subscribe')
+
+    def on_deactivate(self, bus: Any) -> None:
+        super().on_deactivate(bus)
+        self.deactivate_calls += 1
+
+
+class _RouterBus:
+    """暴露 router 的最小总线替身（用于单测总线侧副作用）"""
+
+    def __init__(self, event_registry: EventRegistry) -> None:
+        self.router = Router(event_registry)
+
+
+def test_register_rollback_cleans_partial_activation_side_effects():
+    """register：on_activate 订阅后抛错 → 回滚应撤销订阅、解绑束、清空 id（无幽灵路由）"""
+    events = EventRegistry()
+    events.register(_GhostEvent)
+    bus = _RouterBus(events)
+    hreg = EventHandlerRegistry()
+    hreg.activate(cast(Any, bus))  # 绑定到总线（空注册表）
+
+    h = _SubscribeThenRaiseHandler(fail_after_subscribe=True)
+    with pytest.raises(RuntimeError, match='boom after subscribe'):
+        hreg.register(h)
+
+    assert len(hreg) == 0
+    assert h.handler_id is None
+    assert not h.subscriptions.is_bound
+    assert bus.router.match(_GhostEvent.name) == []  # 无幽灵路由
+    assert h.deactivate_calls == 1  # 回滚补发 on_deactivate
+
+
+def test_activate_rollback_includes_failing_handler_side_effects():
+    """activate：on_activate 订阅后抛错 → 回滚覆盖失败者本身，路由表无幽灵条目"""
+    events = EventRegistry()
+    events.register(_GhostEvent)
+    bus = _RouterBus(events)
+    hreg = EventHandlerRegistry()
+    good = _SubscribeThenRaiseHandler()
+    bad = _SubscribeThenRaiseHandler(fail_after_subscribe=True)
+    hreg.register(good)
+    hreg.register(bad)
+
+    with pytest.raises(RuntimeError, match='boom after subscribe'):
+        hreg.activate(cast(Any, bus))
+
+    assert len(hreg) == 2  # 处理器保留在册
+    assert bus.router.routes == ()  # 路由表干净
+    assert good.deactivate_calls == 1
+    assert bad.deactivate_calls == 1  # 失败者也收到回卷
+
+
+def test_deactivate_returns_failures_and_strict_raises(handler_registry: EventHandlerRegistry):
+    """deactivate() 返回失败清单；strict=True 时抛出首个失败（调用方感知清理不完整）"""
+    bad = BusLifecycleHandler(fail_deactivate=True)
+    good = BusLifecycleHandler()
+    handler_registry.register(bad)
+    handler_registry.register(good)
+    handler_registry.activate(MagicMock())
+
+    failures = handler_registry.deactivate()
+    assert isinstance(failures, list)
+    assert len(failures) == 1
+    assert failures[0][0] == bad.handler_id
+    assert 'deactivate boom' in str(failures[0][1])
+    assert len(handler_registry) == 2  # 失败者保留在册
+
+    # 再次激活后 strict=True 应抛出首个失败
+    handler_registry.activate(MagicMock())
+    with pytest.raises(RuntimeError, match='deactivate boom'):
+        handler_registry.deactivate(strict=True)

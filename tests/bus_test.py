@@ -26,6 +26,7 @@ from event_bus import (
     EventRegistry,
     InMemoryEventQueue,
     InMemoryEventQueueConfig,
+    MiddlewareChain,
     ShutdownConfig,
     ShutdownEvent,
     TaskErrorEvent,
@@ -412,3 +413,77 @@ async def test_long_running_stability(
 
     assert handler.count >= expected * 0.95
     assert bus.active_task_count == 0
+
+
+# ============================================================================
+# start() 失败回滚（回归 exp2）：不泄漏调度任务、可重试
+# ============================================================================
+
+
+class _StartBoomHandler(EventHandler):
+    """on_activate 抛错：用于验证 start() 失败回滚与可重试"""
+
+    def __init__(self):
+        super().__init__(['test.event'])
+        self.activated = 0
+
+    async def handle(self, payload: Optional[BaseModel], bus_proxy: Any, raw_event: Event) -> None:
+        pass
+
+    def on_activate(self, bus: EventBus) -> None:
+        self.activated += 1
+        raise RuntimeError('start boom')
+
+
+@pytest.mark.asyncio
+async def test_start_failure_is_retryable_and_no_dispatch_leak(event_bus_factory: Callable[..., EventBus]):
+    """start() 激活失败 → 回滚到未启动态、不泄漏调度任务；修复后可成功重试"""
+    hreg = EventHandlerRegistry()
+    hreg.register(_StartBoomHandler())
+
+    bus = event_bus_factory(h_registry=hreg)
+    with pytest.raises(RuntimeError, match='start boom'):
+        await bus.start()
+
+    # 已回滚：未运行、未就绪、无泄漏的调度任务
+    assert not bus.is_running
+    assert not bus.is_publishing_enabled
+    assert bus._dispatch_task is None
+
+    # 移除坏处理器后可成功重试，事件正常路由分发
+    hreg.clear()
+    good = CountingHandler()
+    hreg.register(good)
+
+    await bus.start()
+    await bus.proxy('pub').publish('test.event', {'value': 1})
+    await wait_for_condition(lambda: good.count == 1)
+    await bus.stop()
+    assert good.count == 1
+
+
+@pytest.mark.asyncio
+async def test_start_rolls_back_when_late_stage_fails(event_bus_factory: Callable[..., EventBus]):
+    """激活成功但后续阶段（中间件 setup）失败 → 整体回滚调度任务与处理器，可重试（覆盖 _abort_start）"""
+    hreg = EventHandlerRegistry()
+    good = CountingHandler()
+    hreg.register(good)
+    chain = MiddlewareChain()
+    bus = event_bus_factory(h_registry=hreg, middleware_chain=chain)
+    await chain.setup(bus)  # 预绑定 → start 内的 mw_chain.setup 抛 RuntimeError（走回滚）
+
+    with pytest.raises(RuntimeError, match='already been setup'):
+        await bus.start()
+
+    # 已回滚：未运行、无泄漏调度任务、注册表与中间件链均解绑
+    assert not bus.is_running
+    assert not bus.is_publishing_enabled
+    assert bus._dispatch_task is None
+    assert hreg._bus is None
+
+    # 无需人工清理即可成功重试，事件正常路由分发
+    await bus.start()
+    await bus.proxy('pub').publish('test.event', {'value': 1})
+    await wait_for_condition(lambda: good.count == 1)
+    await bus.stop()
+    assert good.count == 1

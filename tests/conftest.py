@@ -297,10 +297,12 @@ def event_bus_factory(
         middleware_chain: Optional[MiddlewareChain] = None,
         queue: Optional[EventQueue] = None,
     ) -> EventBus:
+        # 注意：注册表实现 __len__，空注册表 bool() 为 False——须用显式 None 判断
+        # 而非 `x or default`，否则传入空注册表会被静默回退到默认 fixture。
         return EventBus(
-            registry or base_event_registry,
-            h_registry or handler_registry,
-            queue=queue or InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=max_queue_size)),
+            registry if registry is not None else base_event_registry,
+            h_registry if h_registry is not None else handler_registry,
+            queue=queue if queue is not None else InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=max_queue_size)),
             max_handler_semaphore=max_handler_semaphore,
             middleware_chain=middleware_chain,
         )

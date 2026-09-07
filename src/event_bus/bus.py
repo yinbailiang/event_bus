@@ -215,20 +215,57 @@ class EventBus:
         return self._router
 
     async def start(self) -> None:
-        """启动事件分发循环"""
+        """启动事件分发循环（**失败可重试**）。
+
+        先激活处理器（订阅登记）再启动调度循环：任一环节失败都会整体回滚——
+        撤销调度任务、下线处理器、回滚中间件——使总线回到可安全重试的
+        「未启动」态，不会泄漏半启动的后台任务。
+        """
         async with self._state_lock:
             if self._running.is_set():
                 return
+            # 阶段一：激活处理器（订阅登记）。失败时不产生任何后台任务，天然可重试。
+            self._handlers.activate(self)
+            # 阶段二：启动调度循环、对外就绪、初始化中间件。失败则回滚已获得资源。
             try:
                 self._dispatch_task = asyncio.create_task(self._dispatch_loop())
+                self._running.set()
+                self._enable_publish.set()
+                await self._mw_chain.setup(self)
             except Exception:
                 logger.exception('Error occurred while starting event bus')
+                await self._abort_start()
                 raise
-            self._handlers.activate(self)
-            self._running.set()
-            self._enable_publish.set()
-            await self._mw_chain.setup(self)
             logger.info('EventBus started')
+
+    async def _abort_start(self) -> None:
+        """启动失败回滚（尽力而为，不掩盖原始错误）。
+
+        撤销调度循环、清理进行中的处理器任务、下线处理器、回滚中间件，
+        使总线回到可重试的「未启动」态。
+        """
+        try:
+            task = self._dispatch_task
+            self._dispatch_task = None
+            if task is not None and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+            self._running.clear()
+            self._enable_publish.clear()
+            await self._wait_all_tasks_done()
+        except Exception:
+            logger.exception('Failed to roll back dispatch during start')
+        try:
+            self._handlers.deactivate()
+        except Exception:
+            logger.exception('Handler deactivation failed during start rollback')
+        try:
+            await self._mw_chain.teardown(self)
+        except Exception:
+            logger.exception('Middleware teardown failed during start rollback')
 
     async def stop(self) -> None:
         """停止事件总线"""
@@ -259,8 +296,15 @@ class EventBus:
             await self._wait_all_tasks_done()  # 等待所有处理器任务完成
 
             self._running.clear()
-            self._handlers.deactivate()
-            await self._mw_chain.teardown(self)
+            failures = self._handlers.deactivate()
+            if failures:
+                logger.warning(
+                    '%d handler(s) failed to deactivate during stop; they remain registered',
+                    len(failures),
+                )
+            mw_failures = await self._mw_chain.teardown(self)
+            if mw_failures:
+                logger.warning('%d middleware(s) failed to tear down during stop', len(mw_failures))
             logger.info('EventBus stopped')
 
     async def __aenter__(self) -> 'EventBus':

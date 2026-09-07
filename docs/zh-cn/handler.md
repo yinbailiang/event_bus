@@ -47,7 +47,7 @@ class EventHandler(ABC):
 | `handler_id` | 只读属性。注册后为注册表分配的 id；未注册 / 已注销为 `None`。 |
 | `on_registered(handler_id)` | **生命周期钩子**。注册表在 `register()` 成功后调用，把分配的 id 回填给处理器。子类可覆写，需调用 `super()` 保留回填。 |
 | `on_unregistered()` | **生命周期钩子**。注册表在 `unregister()` / `clear()` 移除后调用，清空处理器的 id。子类可覆写，需调用 `super()` 保留清空。 |
-| `on_activate(bus)` | **总线激活钩子**。所属注册表绑定总线（`registry.activate(bus)`）时，或在已绑定注册表内新注册时触发。调用时 `handler_id` 已可用。**基类默认把本处理器的 `Subscriptions` 订阅束登记进 `bus.router`（激活即路由）**。子类覆写需调用 `super().on_activate(bus)` 保留该行为。 |
+| `on_activate(bus)` | **总线激活钩子**。所属注册表绑定总线（`registry.activate(bus)`）时，或在已绑定注册表内新注册时触发。调用时 `handler_id` 已可用。**基类默认把本处理器的 `Subscriptions` 订阅束登记进 `bus.router`（激活即路由）**——空订阅束也会登记，使「激活 ⟺ 已登记」恒成立，运行期 `add()` 立即生效。子类覆写需调用 `super().on_activate(bus)` 保留该行为。 |
 | `on_deactivate(bus)` | **总线下线钩子**。与 `on_activate` 对称：注册表 `deactivate()` 或从已绑定注册表注销单个处理器时触发。调用时 `handler_id` 仍可用。**基类默认把订阅束从 `bus.router` 撤销**。子类覆写需调用 `super().on_deactivate(bus)` 保留该行为。 |
 
 ### 生命周期钩子（处理器可感知自己的 id）
@@ -126,11 +126,11 @@ class AuditHandler(EventHandler):
 class EventHandlerRegistry:
     def __init__(self) -> None
     def register(self, handler: EventHandler) -> str
-    def unregister(self, handler_id: str) -> bool
+    def unregister(self, handler_id: str) -> Exception | None
     def activate(self, bus: EventBus) -> None
-    def deactivate(self) -> None
+    def deactivate(self, strict: bool = False) -> list[tuple[str, Exception]]
     def get(self, handler_id: str) -> Optional[EventHandler]
-    def clear(self) -> None
+    def clear(self) -> list[tuple[str, Exception]]
     def __len__(self) -> int
     def __contains__(self, handler_id: str) -> bool
     def __iter__(self) -> Iterator[tuple[str, EventHandler]]
@@ -145,12 +145,12 @@ class EventHandlerRegistry:
 
 | 方法 / 属性 | 说明 |
 | - | - |
-| `register(handler)` | 注册处理器实例，返回唯一 handler ID（UUID hex）。**原子**：注册成功后触发 `handler.on_registered(id)` 回填处理器 id；若注册表已绑定总线还触发 `handler.on_activate(bus)`；同一实例禁止重复注册（抛 `ValueError`）；钩子抛错则回退入库、版本不变并向上抛出。版本号递增。 |
-| `unregister(handler_id)` | 注销处理器。**兜底：保证移除**——处理器必然出库（id 不存在返回 `False`）；已绑定总线时先触发 `handler.on_deactivate(bus)`（id 仍可用）再触发 `handler.on_unregistered()`；钩子失败由处理器负责，注册表仅记录日志、不影响移除结果。版本号递增。 |
-| `activate(bus)` | 把注册表绑定到一个总线并激活全部在册处理器（逐个触发 `handler.on_activate`，**原子**）。同一注册表**禁止跨总线共用**（已绑定再次调用抛 `RuntimeError`）；先绑定再激活——激活过程中嵌套注册的新处理器会立即收到 `on_activate`；任一 `on_activate` 抛错则**整体回退**：解绑、对已激活者补发 `on_deactivate` 并向上抛出，处理器保持注册。 |
-| `deactivate()` | 解除总线绑定并逐个触发 `handler.on_deactivate`（id 仍可用）。**保留失败者**：`on_deactivate` 抛错的处理器保留在册（仅记录日志），避免静默移除的意外行为。未绑定时为空操作（幂等）。 |
+| `register(handler)` | 注册处理器实例，返回唯一 handler ID（UUID hex）。**原子（含总线侧副作用回滚）**：注册成功后触发 `handler.on_registered(id)` 回填处理器 id；若注册表已绑定总线还触发 `handler.on_activate(bus)`；同一实例禁止重复注册（抛 `ValueError`）。`on_registered` 失败时补发 `on_unregistered()` 清空 id；`on_activate` 失败时先补发 `on_deactivate(bus)` 撤销其已产生的订阅/后台任务（避免幽灵路由），再补发 `on_unregistered()`。失败时版本不变并向上抛出；成功时版本号递增。 |
+| `unregister(handler_id)` | 注销处理器。**兜底：保证移除 + 失败显式上报**——处理器必然出库；id 不存在视为幂等空操作，返回 `None`（存在性用 `handler_id in registry` 判断）；已绑定总线时先触发 `handler.on_deactivate(bus)`（id 仍可用）再触发 `handler.on_unregistered()`；钩子失败不阻断移除，但**返回首个失败异常**（其余记录日志）。版本号递增。 |
+| `activate(bus)` | 把注册表绑定到一个总线并激活全部在册处理器（逐个触发 `handler.on_activate`，**原子，含总线侧副作用回滚**）。同一注册表**禁止跨总线共用**（已绑定再次调用抛 `RuntimeError`）；先绑定再激活——激活过程中嵌套注册的新处理器会立即收到 `on_activate`；任一 `on_activate` 抛错则**整体回退**：解绑，并对**全部已尝试的处理器（含当前失败者）**补发 `on_deactivate`（撤销其部分订阅/任务），再向上抛出，处理器保持注册。 |
+| `deactivate()` | 解除总线绑定并逐个触发 `handler.on_deactivate`（id 仍可用）。**保留失败者**：`on_deactivate` 抛错的处理器保留在册（记录日志）而非静默移除。返回 `[(handler_id, 异常), ...]` 失败清单，调用方（如 `EventBus.stop()`）可感知清理不完整；传 `strict=True` 在全部尝试后抛出首个失败。未绑定时返回 `[]`（幂等）。 |
 | `get(handler_id)` | 按 ID 获取处理器实例。 |
-| `clear()` | 清除全部处理器。**兜底：保证全部移除**——若已绑定总线先 `deactivate()`，再逐一向在册处理器触发 `on_unregistered()`，单个钩子失败不中断其余清理。版本号递增。 |
+| `clear()` | 清除全部处理器。**兜底：保证全部移除 + 失败显式上报**——若已绑定总线先 `deactivate()`，再逐一向在册处理器触发 `on_unregistered()`，单个钩子失败不中断其余清理。返回 `[(handler_id, 异常), ...]` 失败清单（覆盖 deactivate 与 on_unregistered 两阶段）。版本号递增。 |
 | `__len__()` | 支持 `len(registry)`。 |
 | `__contains__()` | 支持 `handler_id in registry`。 |
 | `__iter__()` | 支持 `for hid, h in registry` 迭代。 |

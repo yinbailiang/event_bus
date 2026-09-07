@@ -324,3 +324,25 @@ class TestBusIntegration:
         assert handler.received == ['test.event']
         active_ids = {hid for hid, _ in event_bus.router.routes}
         assert handler.handler_id not in active_ids
+
+    async def test_active_empty_subscription_handler_runtime_add_routes(self) -> None:
+        """激活中的空订阅处理器也被登记（激活 ⟺ 已路由）；运行期 add() 立即生效（回归 exp1）"""
+        reg = _make_registry(_EventAlpha)
+        hreg = EventHandlerRegistry()
+        handler = _RecordNameHandler(subscriptions=[])
+        bus = EventBus(reg, hreg)
+        try:
+            await bus.start()
+            hid = hreg.register(handler)  # 运行中注册：空订阅束也应被登记
+            assert handler.handler_id == hid
+            assert handler.subscriptions.is_bound  # 激活 ⟺ 已登记恒成立
+
+            handler.subscriptions.add(_EventAlpha.name)  # 运行期动态自订阅
+            await bus.proxy('pub').publish(_EventAlpha.name, None)
+            await _wait_until(lambda: len(handler.received) == 1)
+
+            assert handler.received == [_EventAlpha.name]
+            active_ids = {hid for hid, _ in bus.router.routes}
+            assert hid in active_ids
+        finally:
+            await bus.stop()

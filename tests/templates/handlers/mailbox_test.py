@@ -532,3 +532,21 @@ class TestEdgeCases:
         """显式声明的订阅原样保留（含重复也不去重——已无隐式追加）"""
         handler = _CollectHandler(subscriptions=['mailbox.ping', 'event_bus.__shutdown__'])
         assert handler.subscriptions == ['mailbox.ping', 'event_bus.__shutdown__']
+
+    async def test_put_after_deactivation_is_dropped_not_orphaned(
+        self, event_registry: EventRegistry, handler_registry: EventHandlerRegistry
+    ) -> None:
+        """下线后迟到入队（put）应被丢弃，而非留下无人消费的孤儿积压"""
+        handler = _CollectHandler(subscriptions=[MailboxPingEvent.name])
+        handler_registry.register(handler)
+        bus = EventBus(event_registry, handler_registry, queue=InMemoryEventQueue(InMemoryEventQueueConfig(maxsize=32)))
+        await bus.start()
+        assert handler.is_running
+        await bus.stop()  # deactivate：取消 process 任务并排空
+        assert not handler.is_running
+
+        # 模拟停机瞬间仍在飞行的 handle() 迟到入队 → put 侧应自回滚丢弃
+        await handler.put(Event(name=MailboxPingEvent.name), bus.proxy('probe'))
+
+        assert handler._queue.qsize() == 0  # 无孤儿积压
+        assert handler.received == []

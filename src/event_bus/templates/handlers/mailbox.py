@@ -66,6 +66,7 @@ class MailboxHandler(EventHandler, ABC):
         self._queue: asyncio.Queue[tuple[Event, EventBus.Proxy]] = asyncio.Queue(maxsize=self._config.max_queue_size)
         self._task: asyncio.Task[None] | None = None
         self._bus: EventBus | None = None
+        self._deactivated: bool = False
 
     # ------------------------------------------------------------------
     # 生命周期钩子 — 任务随总线激活/解绑启停
@@ -75,12 +76,14 @@ class MailboxHandler(EventHandler, ABC):
         """总线激活：订阅登记由基类完成；本类捕获 bus 并启动 process() 后台任务。"""
         super().on_activate(bus)
         self._bus = bus
+        self._deactivated = False
         if self._task is None or self._task.done():
             self._task = asyncio.create_task(self._process_loop(), name=f'{self.__class__.__name__}._process_loop')
 
     def on_deactivate(self, bus: EventBus) -> None:
         """总线下线：订阅撤销由基类完成；本类取消任务并清空积压。"""
         super().on_deactivate(bus)
+        self._deactivated = True
         task = self._task
         self._task = None
         if task is not None and not task.done():
@@ -116,11 +119,25 @@ class MailboxHandler(EventHandler, ABC):
         return self._bus
 
     async def put(self, event: Event, proxy: EventBus.Proxy) -> None:
-        """将事件入队，供 ``process()`` 处理"""
+        """将事件入队，供 ``process()`` 处理。
+
+        若入队期间处理器**已被下线**（deactivate / 运行中 unregister 的竞态），
+        撤销本次入队并丢弃事件——处理任务已停，遗留积压将无人消费，不如显式丢弃。
+        尚未激活（从未上线）时入队不受影响，事件待激活后处理。
+        """
         try:
             await asyncio.wait_for(self._queue.put((event, proxy)), timeout=self._config.queue_put_timeout)
         except asyncio.TimeoutError:
             raise RuntimeError(f'{self.__class__.__name__} 事件入队超时')
+        if self._deactivated:
+            # 入队与下线竞态：邮箱已整体废弃，撤销刚入队的项（撤出的可能是其它
+            # 并发入队项——均属丢弃范围，可接受）
+            try:
+                self._queue.get_nowait()
+                self._queue.task_done()
+            except asyncio.QueueEmpty:
+                pass
+            logger.debug('%s 丢弃下线后的迟到事件: %s', self.__class__.__name__, event.name)
 
     async def _process_loop(self) -> None:
         """process() 异常处理循环"""
