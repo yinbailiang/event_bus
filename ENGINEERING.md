@@ -61,7 +61,7 @@ ignore-nested-functions = true
 
 | 指标 | 数值 |
 | - | - |
-| 公开 API docstring 覆盖 | **89.5%** |
+| 公开 API docstring 覆盖 | **90.8%** |
 | 最低阈值 | 60% |
 | 文档文件 | 53 篇 `.md` |
 
@@ -72,11 +72,11 @@ ignore-nested-functions = true
 ### 覆盖率
 
 ```text
-325 passed · 5 deselected(slow) · 0 failed · 10.0s
-总覆盖率: 94%（1828 statements / 108 missed）
+354 passed · 5 deselected(slow) · 0 failed · 10.7s
+总覆盖率: 94%（1978 statements / 116 missed）
 ```
 
-14 个模块达到 **100%** 覆盖，最低模块 > 82%。
+12 个模块达到 **100%** 覆盖，最低模块 > 82%。
 
 ### 架构
 
@@ -86,7 +86,7 @@ tests/
 ├── bus_test.py             EventBus 集成测试
 ├── event_test.py           Event / Declaration / Registry
 ├── handler_test.py         EventHandler / Registry
-├── matcher_test.py         Matcher
+├── router_test.py          Router / Subscriptions
 ├── middleware_test.py      Middleware / MiddlewareChain
 ├── queue_test.py           EventQueue / InMemoryEventQueue
 └── templates/
@@ -159,7 +159,7 @@ uv run pre-commit run --all-files   # 手动全量运行
 | 指标 | 数值 |
 | - | - |
 | 最大单文件 | ~406 行 (`templates/middlewares/metrics.py`) |
-| 模块平均 | ~164 行/文件 |
+| 模块平均 | ~176 行/文件 |
 | 生产文件数 | 27 个 `.py` |
 
 每个文件一个职责，打开瞬间看完。新增功能不改旧代码。
@@ -170,8 +170,8 @@ uv run pre-commit run --all-files   # 手动全量运行
 src/event_bus/
 ├── __init__.py           公开 API 入口
 ├── event.py              事件系统（Event / Declaration / Registry）
-├── handler.py            处理器系统（EventHandler / Registry）
-├── matcher.py            订阅匹配（Matcher）
+├── handler.py            处理器系统（EventHandler / Registry / 生命周期钩子）
+├── router.py             路由器（Router / Subscriptions 订阅束）
 ├── queue.py              队列抽象（EventQueue / InMemoryEventQueue / Config）
 ├── bus.py                事件总线（EventBus / Proxy / 停机）
 ├── middleware.py         中间件系统（Middleware / Chain / 洋葱模型）

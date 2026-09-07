@@ -1,11 +1,12 @@
 # Commit Log — `infinity_bus`
 
-> 共 **112** 个提交 · 20 个版本标签 · 2026-06-07 ~ 2026-09-06
+> 共 **116** 个提交 · 21 个版本标签 · 2026-06-07 ~ 2026-09-08
 
 ## 版本标签
 
 | Tag | Commit |
 | --- | ------ |
+| `v3.1.0` | `56b6140` |
 | `v3.0.0` | `612e712` |
 | `v2.2.1` | `72fc567` |
 | `v2.2.0` | `e27164d` |
@@ -31,7 +32,27 @@
 
 ## 全部提交
 
+### 2026-09-08
+
+- **`1bae1f0`** `chore: bump version to 4.0.0`
+  - Version bumped 3.1.0 → 4.0.0 (breaking: Matcher → Router + Subscriptions; handler lifecycle hooks)
+
+- **`3f22a89`** `docs(router): rewrite bus/event/handler/router docs for Router + Subscriptions API`
+  - Docs (EN+ZH): matcher.md → router.md; rewrite bus/event/handler/router pages for the Router API
+  - Fix lifecycle-hook default semantics, EventBus.router property + constructor, mermaid component graph
+
+- **`f01f1c7`** `feat(router): Router + Subscriptions replace Matcher; handler lifecycle hooks (breaking)`
+  - Router (activated-only route table + version-aware dispatch) replaces Matcher (passive scan of handler.subscriptions)
+  - Subscriptions: managed subscription bundle with add/remove/replace; auto-syncs to the live router while active
+  - EventHandler lifecycle: handler_id + on_registered / on_unregistered / on_activate / on_deactivate (activation is routing)
+  - EventHandlerRegistry.activate(bus) / deactivate(); EventBus.router property + router= injection; bus start/stop drive activation
+  - MailboxHandler task lifecycle now driven by on_activate / on_deactivate (no implicit ShutdownEvent subscription)
+  - BREAKING: Matcher removed; EventHandler.subscriptions is now a Subscriptions bundle (not a bare list)
+
 ### 2026-09-06
+
+- **`56b6140`** `docs: sync release baselines to v3.1.0 (COMMIT_LOG/ENGINEERING/README)`
+  - Baseline snapshot synced to v3.1.0 (COMMIT_LOG rebuilt / ENGINEERING metrics / README comparison table)
 
 - **`d7a67f0`** `chore: bump version to 3.1.0`
   - Version bumped 3.0.0 → 3.1.0 (new templates: cross-process queues + idempotency)

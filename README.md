@@ -59,9 +59,9 @@
 | Slow Handler Alert | ❌ | ✅ 15s timeout alert | ❌ | N/A |
 | Recursion Guard | ✅ middleware (configurable) | ✅ built-in (non-configurable) | ❌ | N/A |
 | Logging & Auditing | ✅ JSONL + SQLite (middleware) | ✅ built-in JSONL WAL logging | ❌ no built-in | ⚠️ debug tracing |
-| Test Coverage | ✅ 94% (325 tests) | ✅ 83% (138 tests) | ✅ 94% (43 tests) | ✅ 86% (167 tests) |
+| Test Coverage | ✅ 94% (354 tests) | ✅ 83% (138 tests) | ✅ 94% (43 tests) | ✅ 86% (167 tests) |
 | Python Version | 3.12+ | 3.11+ | 3.12+ | 3.7–3.14 |
-| Baseline Version | v3.1.0 `d7a67f0` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
+| Baseline Version | v4.0.0 `1bae1f0` | v1.5.6 `7c09342` | v13.0.1 `5157de2` | v4.0.7 `4ec2c47` |
 
 > **Choose InfinityBus when**: you need a middleware-native architecture — hot-reloadable onion pipeline with 8 built-in middlewares (logging, metrics, rate-limit, transform, block, recursion guard, forwarding); you run pyright strict across the entire codebase with literally zero `# type: ignore` in any production code; you want full production-grade features (backpressure, graceful shutdown, regex subscriptions, Pydantic payload validation) with a single core dependency.
 >
@@ -72,7 +72,7 @@
 > **Choose PyPubSub when**: you don't use asyncio; you need very broad Python version compatibility (3.7–3.14); you prefer traditional topic hierarchy string matching.
 >
 > Full commits:
-> · [InfinityBus `d7a67f0`](https://github.com/yinbailiang/event_bus/commit/d7a67f0)
+> · [InfinityBus `1bae1f0`](https://github.com/yinbailiang/event_bus/commit/1bae1f0)
 > · [bubus `7c09342`](https://github.com/browser-use/bubus/commit/7c09342)
 > · [pyee `5157de2`](https://github.com/jfhbrook/pyee/commit/5157de2) (no coverage in official CI; manually measured via `pytest-cov`)
 > · [PyPubSub `4ec2c47`](https://github.com/schollii/pypubsub/commit/4ec2c47)
@@ -237,10 +237,11 @@ asyncio.run(main())
 | **Event** | Runtime event instance with name, payload, and handler chain tracking |
 | **EventDeclaration** | Event type metadata declaration (name + optional Pydantic payload model) |
 | **EventRegistry** | Central management of registered event declarations; validates on publish |
-| **EventHandler** | Handler base class; implement `handle` method for business logic |
-| **EventHandlerRegistry** | Manages handler instances; matches handler lists by event name |
+| **EventHandler** | Handler base class; implement `handle` method for business logic; lifecycle hooks (`on_registered` / `on_activate` / `on_deactivate` / `on_unregistered`) |
+| **EventHandlerRegistry** | Manages handler lifecycle: `register` / `unregister` / `activate(bus)` / `deactivate`; routing owned by **Router** |
+| **Router** | Activated-only route table (`Router` + `Subscriptions`); precomputed dispatch table, version-aware |
 | **EventQueue** | Replaceable dispatch queue abstraction: `EventQueue` ABC + `InMemoryEventQueue` default (config owned by the queue) |
-| **EventBus** | Event dispatch hub: concurrency control, error reporting, lifecycle (queue injected via `queue=`) |
+| **EventBus** | Event dispatch hub: concurrency control, error reporting, lifecycle (queue / `router` injectable) |
 | **Middleware** | Middleware base class, onion pipeline: `before_publish` / `on_publish` dual hooks |
 | **MiddlewareChain** | Chain of responsibility manager; wraps the publish flow in order |
 | **templates** | Advanced templates: `handler` simplified API, `expect` listener, `request` RPC, `pipe` channel, `register` batch registration |
