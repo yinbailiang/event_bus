@@ -36,10 +36,14 @@ class ResponseProtocol(BaseModel):
 
 
 def build_response(request: RequestProtocol, response_type: type[ResponseProtocol], **kargs: Any) -> ResponseProtocol:
+    """基于请求构造响应负载：自动带回 session_id/request_id，其余字段由 kargs 提供。
+
+    ``kargs`` 中若携带冲突的 session_id/request_id 会被请求值覆盖（请求是唯一事实源）。
+    """
     kargs = kargs.copy()
     kargs['session_id'] = request.session_id
     kargs['request_id'] = request.request_id
-    return response_type.model_validate(**kargs)
+    return response_type.model_validate(kargs)
 
 
 async def request(

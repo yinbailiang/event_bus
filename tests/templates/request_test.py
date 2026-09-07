@@ -18,6 +18,7 @@ from event_bus import (
 from event_bus.templates.request import (
     RequestProtocol,
     ResponseProtocol,
+    build_response,
     request,
 )
 
@@ -431,3 +432,24 @@ async def test_response_failure_raise_if_failed(
     assert result.success is False
     with pytest.raises(RuntimeError, match='something went wrong'):
         result.raise_if_failed()
+
+
+def test_build_response_echoes_request_ids_and_extra_fields() -> None:
+    """build_response 应带回 session_id/request_id 并填充业务字段（回归：pydantic v2 model_validate 收字典）"""
+    req = SimpleRequestPayload(session_id='s1', request_id='r1', data='hello')
+    resp = build_response(req, SimpleResponsePayload, result='world')
+
+    assert isinstance(resp, SimpleResponsePayload)
+    assert resp.session_id == 's1'
+    assert resp.request_id == 'r1'
+    assert resp.success is True
+    assert resp.result == 'world'
+
+
+def test_build_response_overrides_conflicting_ids_from_request() -> None:
+    """业务字段携带冲突的 session/request id 时，应以请求中的为准"""
+    req = SimpleRequestPayload(session_id='s1', request_id='r1', data='hello')
+    resp = build_response(req, SimpleResponsePayload, result='world', session_id='wrong', request_id='wrong2')
+
+    assert resp.session_id == 's1'
+    assert resp.request_id == 'r1'
