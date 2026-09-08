@@ -1,6 +1,6 @@
 # Commit Log — `infinity_bus`
 
-> 共 **121** 个提交 · 22 个版本标签 · 2026-06-07 ~ 2026-09-08
+> 共 **124** 个提交 · 22 个版本标签 · 2026-06-07 ~ 2026-09-09
 
 ## 版本标签
 
@@ -33,7 +33,17 @@
 
 ## 全部提交
 
+### 2026-09-09
+
+- **`82acd5a`** `chore: bump version to 4.0.1`
+  - Version bumped 4.0.0 → 4.0.1 (patch: request build_response passes fields dict to pydantic model_validate)
+
 ### 2026-09-08
+
+- **`0933ea3`** `fix(request): build_response passes fields dict to pydantic model_validate`
+  - model_validate(**kargs) raises TypeError under pydantic v2; pass the fields dict instead
+  - add docstring + regression tests (id echo-back, conflict override)
+  - badge regenerated: interrogate 90.8% -> 91.2%
 
 - **`7928e85`** `ci(publish): run RabbitMQ integration tests before release`
   - Publish pipeline now runs the RabbitMQ cross-process slow tests against a real broker before release (they were silently skipped before)
