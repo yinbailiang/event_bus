@@ -20,8 +20,7 @@ Advanced patterns built on top of the core event bus. These are optional — imp
 | `request` | Request-Response (RPC) | Sync-style async calls, inter-service communication | [request.md](request.md) |
 | `pipe` | Bidirectional Pipe | Streaming data exchange, long-connection simulation, persistent bidirectional flow | [pipe.md](pipe.md) |
 | `register` | Bulk Registration + DI | Large project modular organization, deferred registration, avoid circular imports | [register.md](register.md) |
-| `mailbox` | Mailbox Pattern Handler | Serial consumption, backpressure, custom task loop | [handlers/mailbox.md](handlers/mailbox.md) |
-| `service` | Service Handler | RPC server side: auto subscriptions, auto responses, auto error translation | [handlers/service.md](handlers/service.md) |
+| [handlers/](handlers/handlers.md) | Handler Template Collection | Mailbox pattern (serial, backpressure) + service handler (RPC server side) | [Handlers Overview](handlers/handlers.md) |
 | `idempotency` | Idempotency (injected dedup) | at-least-once dedup, cross-restart strong idempotency | [idempotency.md](idempotency.md) |
 | [queues/](queues/queues.md) | Cross-Process Queues | Shared bus across processes, fanout, replay / no-replay, payload rebuild | [Queues Overview](queues/queues.md) |
 | [middlewares/](middlewares/middlewares.md) | Middleware Collection | Logging, rate-limiting, transform, blocking, recursion guard | [Middlewares Overview](middlewares/middlewares.md) |
@@ -172,18 +171,28 @@ response = await request(
 
 See [request.md](request.md) for protocol definition and error handling.
 
-## service
+## handlers
+
+`event_bus.templates.handlers` ships two handler base classes:
 
 ```python
-from event_bus.templates import ServiceHandler, process
+from event_bus.templates import MailboxHandler, ServiceHandler, process
 
+# Service handler: RPC server side (@process decorator)
 class OrderService(ServiceHandler):
     @process(OrderCreateReqEvent, OrderCreateRespEvent)
     async def create(self, payload, proxy, raw):
         return {'order_id': 'ord-1'}
+
+# Mailbox pattern: serial consumption on a dedicated task
+class SerialWorker(MailboxHandler):
+    async def process(self) -> None:
+        while True:
+            event, proxy = await self.get()
+            ...
 ```
 
-See [handlers/service.md](handlers/service.md) for protocol validation, error translation, and single-direction events.
+See [Handlers Overview](handlers/handlers.md) for the comparison and selection guide.
 
 ## pipe
 

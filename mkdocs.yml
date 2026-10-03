@@ -48,6 +48,7 @@ plugins:
             Queue: 队列
             Templates: 高级模板
             Overview: 总览
+            Handlers: 处理器模板
             Middlewares: 内置中间件
             Logging: 日志
             Metrics: 指标
@@ -93,8 +94,10 @@ nav:
       - handler: templates/simple_handler.md
       - expect: templates/expect.md
       - request: templates/request.md
-      - service: templates/handlers/service.md
-      - mailbox: templates/handlers/mailbox.md
+      - Handlers:
+          - Overview: templates/handlers/handlers.md
+          - service: templates/handlers/service.md
+          - mailbox: templates/handlers/mailbox.md
       - pipe: templates/pipe.md
       - idempotency: templates/idempotency.md
       - register: templates/register.md

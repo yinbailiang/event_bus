@@ -19,8 +19,7 @@
 | `request` | 请求-响应 (RPC) | 同步风格的异步调用、服务间通信 | [request.md](request.md) |
 | `pipe` | 双向管道 | 流式数据交换、长连接模拟、持久化双向流 | [pipe.md](pipe.md) |
 | `register` | 批量注册 + 依赖注入 | 大型项目模块化组织、延迟注册、避免循环导入 | [register.md](register.md) |
-| `mailbox` | 邮箱模式处理器 | 串行消费、背压控制、自定义任务循环 | [handlers/mailbox.md](handlers/mailbox.md) |
-| `service` | 服务处理器 | RPC 服务端：订阅自动生成、响应自动构造、错误自动转换 | [handlers/service.md](handlers/service.md) |
+| [handlers/](handlers/handlers.md) | 处理器模板集合 | 邮箱模式（串行消费、背压）+ 服务处理器（RPC 服务端） | [handlers 总览](handlers/handlers.md) |
 | `idempotency` | 幂等（注入去重） | at-least-once 重复投递去重、跨重启强幂等 | [idempotency.md](idempotency.md) |
 | [queues/](queues/queues.md) | 跨进程队列 | 多进程共享总线、fanout 泛洪、补投/不补投、负载重建 | [queues 总览](queues/queues.md) |
 | [middlewares/](middlewares/middlewares.md) | 中间件集合 | 日志、限流、转换、屏蔽、递归防护 | [中间件总览](middlewares/middlewares.md) |
@@ -168,18 +167,28 @@ response = await request(
 
 详见 [request.md](request.md) 了解协议定义和错误处理。
 
-## service
+## handlers
+
+`event_bus.templates.handlers` 提供两种处理器基类模板：
 
 ```python
-from event_bus.templates import ServiceHandler, process
+from event_bus.templates import MailboxHandler, ServiceHandler, process
 
+# 服务处理器：RPC 服务端（@process 装饰器）
 class OrderService(ServiceHandler):
     @process(OrderCreateReqEvent, OrderCreateRespEvent)
     async def create(self, payload, proxy, raw):
         return {'order_id': 'ord-1'}
+
+# 邮箱模式：独立任务串行消费
+class SerialWorker(MailboxHandler):
+    async def process(self) -> None:
+        while True:
+            event, proxy = await self.get()
+            ...
 ```
 
-详见 [handlers/service.md](handlers/service.md) 了解协议校验、错误转换和单向事件。
+详见 [handlers 总览](handlers/handlers.md) 了解两种模式的对比与选择。
 
 ## pipe
 
