@@ -7,10 +7,11 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![PyPI Version](https://img.shields.io/pypi/v/infinity_bus)](https://pypi.org/project/infinity_bus/)
 [![Supported Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://pypi.org/project/infinity_bus/)
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://yinbailiang.github.io/event_bus/)
 
 **Strongly-typed, extensible async event bus — middleware pipeline + advanced templates.**
 
-> 📖 [中文版](README_zh.md)
+> 📖 [中文版](README_zh.md) · 🌐 [Documentation site](https://yinbailiang.github.io/event_bus/)
 
 ## 📑 Table of Contents
 
@@ -248,6 +249,8 @@ asyncio.run(main())
 | **middlewares** | Built-in middlewares: logging (JSONL+SQLite), rate limiting, transform, block, recursion guard |
 
 ## 📚 Documentation
+
+> 🌐 **Online documentation**: **https://yinbailiang.github.io/event_bus/** — bilingual (中文 / English), full-text search, dark mode.
 
 | Document | Content |
 | - | - |

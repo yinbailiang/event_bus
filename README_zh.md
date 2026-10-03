@@ -7,10 +7,11 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![PyPI Version](https://img.shields.io/pypi/v/infinity_bus)](https://pypi.org/project/infinity_bus/)
 [![Supported Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://pypi.org/project/infinity_bus/)
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://yinbailiang.github.io/event_bus/)
 
 **强类型、可扩展的异步事件总线——中间件管道 + 高级模板。**
 
-> 📖 [英文版](README.md)
+> 📖 [英文版](README.md) · 🌐 [在线文档](https://yinbailiang.github.io/event_bus/)
 
 ## 📑 目录
 
@@ -248,6 +249,8 @@ asyncio.run(main())
 | **middlewares** | 内置中间件：日志(JSONL+SQLite)、限流、转换、屏蔽、递归防护 |
 
 ## 📚 文档
+
+> 🌐 **在线文档**：**https://yinbailiang.github.io/event_bus/** —— 中英双语、全文搜索、暗色模式。
 
 | 文档 | 内容 |
 | - | - |
