@@ -1,6 +1,6 @@
 # Commit Log — `infinity_bus`
 
-> 共 **125** 个提交 · 23 个版本标签 · 2026-06-07 ~ 2026-09-09
+> 共 **130** 个提交 · 24 个版本标签 · 2026-06-07 ~ 2026-10-03
 
 ## 版本标签
 
@@ -33,6 +33,20 @@
 ---
 
 ## 全部提交
+
+### 2026-10-03
+
+- **`75a4f03`** `chore: bump version to 4.1.0`
+  - Version bumped 4.0.1 -> 4.1.0 (minor: ServiceHandler template + StopMailbox voluntary stop; top-level handler exports & build_response)
+
+- **`908b2cf`** `feat(templates): ServiceHandler + StopMailbox; export handlers & build_response`
+  - handlers/service.py: ServiceHandler base class + @process decorator — auto subscriptions, table-driven dispatch, automatic responses via build_response, ServiceError -> success=False translation (new template)
+  - handlers/mailbox.py: StopMailbox — voluntary stop signal exits process() without restart
+  - templates/__init__: export Mailbox* (incl. StopMailbox) / ServiceHandler & @process / ServiceError family / ProcessorMeta / build_response at top level
+  - pyright: pin pythonVersion to 3.12 (aligns with requires-python & ruff target)
+  - tests: service_test.py (22 cases; service.py at 100% coverage) + StopMailbox lifecycle cases for mailbox
+  - docs (EN/ZH): new handlers/service.md; mailbox.md StopMailbox semantics; request.md build_response helper section; templates.md index/exports updated
+  - badge regenerated: interrogate 91.2% -> 91.6%
 
 ### 2026-09-09
 

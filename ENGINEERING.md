@@ -61,9 +61,9 @@ ignore-nested-functions = true
 
 | 指标 | 数值 |
 | - | - |
-| 公开 API docstring 覆盖 | **91.2%** |
+| 公开 API docstring 覆盖 | **91.6%** |
 | 最低阈值 | 60% |
-| 文档文件 | 53 篇 `.md` |
+| 文档文件 | 55 篇 `.md` |
 
 ---
 
@@ -72,11 +72,11 @@ ignore-nested-functions = true
 ### 覆盖率
 
 ```text
-367 passed · 5 deselected(slow) · 0 failed · 10.5s
-总覆盖率: 94%（2067 statements / 128 missed）
+391 passed · 5 deselected(slow) · 0 failed · 9.4s
+总覆盖率: 94%（2157 statements / 128 missed）
 ```
 
-13 个模块达到 **100%** 覆盖，最低模块 > 82%。
+14 个模块达到 **100%** 覆盖，最低模块 > 82%。
 
 ### 架构
 
@@ -97,7 +97,8 @@ tests/
     ├── request_test.py
     ├── simple_handler_test.py
     ├── handlers/
-    │   └── mailbox_test.py
+    │   ├── mailbox_test.py
+    │   └── service_test.py
     ├── middlewares/
     │   ├── event_block_test.py
     │   ├── event_forward_test.py
@@ -184,7 +185,8 @@ src/event_bus/
     ├── request.py        请求-响应 RPC
     ├── simple_handler.py 处理器快速定义装饰模板
     ├── handlers/
-    │   └── mailbox.py    邮箱模板
+    │   ├── mailbox.py    邮箱模板
+    │   └── service.py    服务处理器模板
     ├── middlewares/
     │   ├── __init__.py
     │   ├── event_block.py       事件屏蔽
