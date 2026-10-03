@@ -36,7 +36,7 @@
 | Engineering Discipline | 90%+ test coverage · 85%+ docstring coverage · pre-commit automated gating |
 
 > Unlike similar projects: InfinityBus is **extensible** (middleware onion pipeline), rather than hardcoding all functionality in the core class.
-> See [Middleware System](docs/en-us/middleware.md) for details.
+> See [Middleware System](docs/en-US/middleware.md) for details.
 
 ## 🔍 Comparison
 
@@ -251,10 +251,10 @@ asyncio.run(main())
 
 | Document | Content |
 | - | - |
-| [Core Overview](docs/en-us/event_bus.md) | Event / EventDeclaration / EventHandler / EventBus / Middleware core concepts |
-| [Middleware System](docs/en-us/middleware.md) | `Middleware` base class, `MiddlewareChain` onion pipeline |
-| [Advanced Templates](docs/en-us/templates/templates.md) | `expect`, `request`, `pipe`, `register` — the four major templates |
-| [Built-in Middlewares](docs/en-us/templates/middlewares/middlewares.md) | Logging, rate limiting, transform, block, recursion guard |
+| [Core Overview](docs/en-US/event_bus.md) | Event / EventDeclaration / EventHandler / EventBus / Middleware core concepts |
+| [Middleware System](docs/en-US/middleware.md) | `Middleware` base class, `MiddlewareChain` onion pipeline |
+| [Advanced Templates](docs/en-US/templates/templates.md) | `expect`, `request`, `pipe`, `register` — the four major templates |
+| [Built-in Middlewares](docs/en-US/templates/middlewares/middlewares.md) | Logging, rate limiting, transform, block, recursion guard |
 | [Engineering Quality](ENGINEERING.md) | Type safety, test coverage, pre-commit gating, modularity standards |
 
 ## 🧪 Testing

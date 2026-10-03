@@ -4,8 +4,8 @@
 
 ## 规范
 
-- **双语镜像**：`docs/zh-cn/` 与 `docs/en-us/` 目录结构完全对应，新增文档必须同时创建中英版本。
-- **文件命名**：与 `src/event_bus/` 模块路径一一对应。如 `src/event_bus/templates/handler.py` → `docs/zh-cn/templates/handler.md`。
+- **双语镜像**：`docs/zh-CN/` 与 `docs/en-US/` 目录结构完全对应，新增文档必须同时创建中英版本。
+- **文件命名**：与 `src/event_bus/` 模块路径一一对应。如 `src/event_bus/templates/handler.py` → `docs/zh-CN/templates/handler.md`。
 - **更新索引**：新增文档后必须更新对应层级的索引文件：
   - 模板层 → `docs/*/templates/templates.md`
   - 中间件层 → `docs/*/templates/middlewares/middlewares.md`

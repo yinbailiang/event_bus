@@ -17,6 +17,9 @@ htmlcov/
 # ruff
 .ruff_cache/
 
+# mkdocs
+site/
+
 # uv
 uv.lock
 

@@ -1,0 +1,113 @@
+site_name: InfinityBus
+site_url: https://yinbailiang.github.io/event_bus/
+site_description: 强类型、可扩展的异步事件总线 — 中间件管道 + 高级模板
+repo_url: https://github.com/yinbailiang/event_bus
+repo_name: yinbailiang/event_bus
+edit_uri: edit/master/docs/
+copyright: MIT License
+
+theme:
+  name: material
+  logo: res/infinity_icon_simple/128x128.png
+  favicon: res/infinity_icon_simple/32x32.png
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search:
+      lang: [en, zh]
+  - i18n:
+      docs_structure: folder
+      languages:
+        - locale: zh-CN
+          default: true
+          name: 中文
+          theme:
+            language: zh
+          nav_translations:
+            Home: 首页
+            Core: 核心
+            'Event & Declaration': 事件与声明
+            Queue: 队列
+            Templates: 高级模板
+            Overview: 总览
+            Middlewares: 内置中间件
+            Logging: 日志
+            Metrics: 指标
+            Rate Limit: 速率限制
+            Event Block: 事件屏蔽
+            Event Transform: 事件转换
+            Event Forward: 事件转发
+            Recursion Guard: 递归防护
+            Queues: 跨进程队列
+            Codec: 编解码
+            RabbitMQ: RabbitMQ
+        - locale: en-US
+          name: English
+          theme:
+            language: en
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Core:
+      - Overview: event_bus.md
+      - EventBus: bus.md
+      - 'Event & Declaration': event.md
+      - Handler: handler.md
+      - Router: router.md
+      - Queue: queue.md
+      - Middleware: middleware.md
+  - Templates:
+      - Overview: templates/templates.md
+      - handler: templates/simple_handler.md
+      - expect: templates/expect.md
+      - request: templates/request.md
+      - service: templates/handlers/service.md
+      - mailbox: templates/handlers/mailbox.md
+      - pipe: templates/pipe.md
+      - idempotency: templates/idempotency.md
+      - register: templates/register.md
+      - Middlewares:
+          - Overview: templates/middlewares/middlewares.md
+          - Logging: templates/middlewares/logging.md
+          - Metrics: templates/middlewares/metrics.md
+          - Rate Limit: templates/middlewares/rate_limit.md
+          - Event Block: templates/middlewares/event_block.md
+          - Event Transform: templates/middlewares/event_transform.md
+          - Event Forward: templates/middlewares/event_forward.md
+          - Recursion Guard: templates/middlewares/recursion_guard.md
+      - Queues:
+          - Overview: templates/queues/queues.md
+          - Codec: templates/queues/codec.md
+          - RabbitMQ: templates/queues/rabbit.md

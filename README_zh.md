@@ -36,7 +36,7 @@
 | 工程纪律 | 90%+ 测试覆盖 · 85%+ docstring 覆盖 · pre-commit 自动门禁 |
 
 > 和同类项目不同：InfinityBus 是**可扩展的**（中间件洋葱管道），而非把所有功能硬编码在核心类里。
-> 详见 [中间件系统](docs/zh-cn/middleware.md)。
+> 详见 [中间件系统](docs/zh-CN/middleware.md)。
 
 ## 🔍 同类对比
 
@@ -251,10 +251,10 @@ asyncio.run(main())
 
 | 文档 | 内容 |
 | - | - |
-| [核心总览](docs/zh-cn/event_bus.md) | Event / EventDeclaration / EventHandler / EventBus / Middleware 核心概念 |
-| [中间件系统](docs/zh-cn/middleware.md) | `Middleware` 基类、`MiddlewareChain` 洋葱管道 |
-| [高级模板](docs/zh-cn/templates/templates.md) | `expect`、`request`、`pipe`、`register` 四大模板总览 |
-| [内置中间件](docs/zh-cn/templates/middlewares/middlewares.md) | 日志、限流、转换、屏蔽、递归防护 |
+| [核心总览](docs/zh-CN/event_bus.md) | Event / EventDeclaration / EventHandler / EventBus / Middleware 核心概念 |
+| [中间件系统](docs/zh-CN/middleware.md) | `Middleware` 基类、`MiddlewareChain` 洋葱管道 |
+| [高级模板](docs/zh-CN/templates/templates.md) | `expect`、`request`、`pipe`、`register` 四大模板总览 |
+| [内置中间件](docs/zh-CN/templates/middlewares/middlewares.md) | 日志、限流、转换、屏蔽、递归防护 |
 | [工程质量](ENGINEERING.md) | 类型安全、测试覆盖、pre-commit 门禁、模块化规范 |
 
 ## 🧪 测试

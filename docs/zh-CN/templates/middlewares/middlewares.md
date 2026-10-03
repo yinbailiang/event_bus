@@ -106,4 +106,4 @@ class CustomMiddleware(Middleware):
     async def on_publish_error(self, error, name, source, data): ...
 ```
 
-详见 [中间件文档](../middleware.md)。
+详见 [中间件文档](../../middleware.md)。

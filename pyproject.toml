@@ -44,6 +44,10 @@ templates = [
     "opentelemetry-api",
     "opentelemetry-sdk",
 ]
+docs = [
+    "mkdocs-material",
+    "mkdocs-static-i18n",
+]
 test = [
     "pytest",
     "pytest-cov",

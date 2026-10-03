@@ -11,7 +11,7 @@
 - 测试框架中模拟双向 RPC 通道。
 - 将同步式请求-响应模型扩展为持久化双向流。
 
-本模块依赖 [EventBus](./event_bus.md) 作为底层消息路由，并复用了 `request` 和 `expect` 模板来实现握手协议。
+本模块依赖 [EventBus](../event_bus.md) 作为底层消息路由，并复用了 `request` 和 `expect` 模板来实现握手协议。
 
 ---
 

@@ -101,7 +101,7 @@ async def member(member_id: str, strategy: str = 'restart') -> None:
 - 补投靠 durable 命名队列：不用时须显式删队列（`channel.queue_delete`），否则残留
   影响下次运行。
 - 消费端在途崩溃（已投递未 ack）：broker 会重投未 ack 消息（at-least-once）；
-  重复投递配合 [`templates/idempotency.md`](../../idempotency.md) 的 recorder 去重。
+  重复投递配合 [`templates/idempotency.md`](../idempotency.md) 的 recorder 去重。
 - 负载重建依赖注入的 registry / `EventCodec`；未注册事件保持原始 JSON 值透传。
 - `aio-pika` 惰性导入：缺失时 `create` 抛 `ImportError` 提示安装 `infinity_bus[templates]`。
 - 需要运行中的 broker：`docker run -p 5672:5672 rabbitmq:3`。

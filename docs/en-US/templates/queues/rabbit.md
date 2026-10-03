@@ -109,7 +109,7 @@ async def member(member_id: str, strategy: str = 'restart') -> None:
   (`channel.queue_delete`), otherwise leftovers affect the next run.
 - In-flight crash (delivered but un-acked): the broker redelivers un-acked messages
   (at-least-once); pair with the recorder from
-  [`templates/idempotency.md`](../../idempotency.md) for dedup.
+  [`templates/idempotency.md`](../idempotency.md) for dedup.
 - Payload rebuild depends on the injected registry / `EventCodec`; unregistered events
   pass data through as the raw JSON value.
 - `aio-pika` is lazily imported: `create` raises an `ImportError` hint when missing
