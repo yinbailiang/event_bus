@@ -46,6 +46,12 @@ class MailboxHandler(EventHandler, ABC):
 | `bus` | `EventBus \| None` | 当前绑定的 `EventBus` 实例，激活（`on_activate`）后可用。 |
 | `is_running` | `bool` | `process()` 后台任务是否正在运行。 |
 
+### 异常
+
+| 异常 | 抛出位置 | 说明 |
+| - | - | - |
+| `StopMailbox` | `process()` 内 | 主动停止信号：消费循环正常退出且**不触发重启**。 |
+
 ---
 
 ## MailboxConfig 配置
@@ -93,8 +99,9 @@ await get() → 取出 (event, proxy)
 1. **钩子启动**：注册到已激活总线或总线启动（`registry.activate`）时，`on_activate` 创建 `process()` 后台任务。
 2. **事件入队**：`handle()` 将 `(Event, EventBus.Proxy)` 元组放入内部 `asyncio.Queue`。
 3. **串行消费**：`process()` 循环调用 `await self.get()` 逐一取出事件处理。
-4. **异常重启**：若 `process()` 因非 `CancelledError` 异常退出，`_process_loop` 会在等待 `restart_delay + jitter` 后重新调用 `process()`。
-5. **钩子停机**：总线停止（`registry.deactivate`）时 `on_deactivate` 取消 `process()` 任务并清空积压。
+4. **异常重启**：若 `process()` 因非 `CancelledError` / `StopMailbox` 异常退出，`_process_loop` 会在等待 `restart_delay + jitter` 后重新调用 `process()`。
+5. **主动停止**：`process()` 内抛出 `StopMailbox` 时立即退出循环且不重启。
+6. **钩子停机**：总线停止（`registry.deactivate`）时 `on_deactivate` 取消 `process()` 任务并清空积压。
 
 ---
 
@@ -104,7 +111,7 @@ await get() → 取出 (event, proxy)
 
 ```python
 from event_bus import Event, EventBus
-from event_bus.templates.handlers.mailbox import MailboxHandler
+from event_bus.templates import MailboxHandler
 
 class MyHandler(MailboxHandler):
     def __init__(self):
@@ -171,6 +178,25 @@ class RobustHandler(MailboxHandler):
                 pass
 ```
 
+### 主动停止：业务驱动的退出
+
+```python
+from event_bus.templates import MailboxHandler, StopMailbox
+
+class DrainThenStopHandler(MailboxHandler):
+    """处理到停机指令后主动结束消费循环"""
+
+    def __init__(self):
+        super().__init__(subscriptions=['task.command'])
+
+    async def process(self) -> None:
+        while True:
+            event, proxy = await self.get()
+            if event.data is not None and getattr(event.data, 'action', None) == 'stop':
+                raise StopMailbox  # 退出循环且不触发重启
+            await self._handle(event)
+```
+
 ### 使用 bus 属性访问总线
 
 ```python
@@ -194,7 +220,8 @@ class BusAwareHandler(MailboxHandler):
 - **事件丢失**：若 `process()` 在 `get()` 返回后、处理完成前崩溃，该事件会丢失。`_process_loop` 重启后会从下一个 `get()` 开始，不会重试已取出的事件。
 - **不再隐式订阅 ShutdownEvent**：停机由 `on_deactivate` 钩子驱动；若自行订阅了 `ShutdownEvent`，它只会作为普通事件入队。
 - **bus 随激活绑定**：`self.bus` 在 `on_activate`（总线激活）时设置、`on_deactivate` 时清空。注册表单总线约束下不会出现多总线串扰。
-- **`CancelledError` 以外的异常**才会触发重启。`KeyboardInterrupt` 和 `SystemExit` 属于 `BaseException`，当前不会被捕获，会向上传播。
+- **重启与停止**：`CancelledError`（外部取消）与 `StopMailbox`（主动停止）都会退出循环且不重启；其余 `Exception` 触发重启等待后重新调用 `process()`。`KeyboardInterrupt` 和 `SystemExit` 属于 `BaseException`，不会被捕获，会向上传播。
+- **停止后的邮箱**：抛出 `StopMailbox` 仅结束消费任务，`is_running` 变为 `False`；后续到达的事件仍会入队但无人消费。如需彻底停收，请从注册表注销该处理器或停止总线。
 
 ---
 

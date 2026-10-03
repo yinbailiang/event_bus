@@ -1,6 +1,6 @@
 """MailboxHandler 完整测试
 
-覆盖：生命周期、入队/出队、关闭行为、异常重启、集成总线。
+覆盖：生命周期、入队/出队、关闭行为、异常重启、主动停止（StopMailbox）、集成总线。
 """
 
 import asyncio
@@ -18,7 +18,7 @@ from event_bus import (
     InMemoryEventQueueConfig,
     Regex,
 )
-from event_bus.templates.handlers.mailbox import MailboxConfig, MailboxHandler
+from event_bus.templates.handlers.mailbox import MailboxConfig, MailboxHandler, StopMailbox
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +122,19 @@ class _BusCaptureHandler(MailboxHandler):
     async def process(self) -> None:
         while True:
             await self.get()
+
+
+class _StopViaExceptionHandler(MailboxHandler):
+    """process() 在取到事件后抛出 StopMailbox，验证循环退出且不重启"""
+
+    def __init__(self, subscriptions: list[str | Regex]):
+        super().__init__(subscriptions=subscriptions, config=MailboxConfig(restart_delay=0.0, restart_jitter=0.0))
+        self.process_calls = 0
+
+    async def process(self) -> None:
+        self.process_calls += 1
+        await self.get()
+        raise StopMailbox
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +406,40 @@ class TestExceptionHandling:
             pass
 
         assert handler._task.done()
+
+    async def test_stop_mailbox_exits_loop_without_restart(self) -> None:
+        """StopMailbox 使 _process_loop 正常退出（非异常终止）且不触发重启"""
+        handler = _StopViaExceptionHandler(subscriptions=['mailbox.ping'])
+
+        handler._bus = object()  # type: ignore[assignment]
+        handler._task = asyncio.create_task(handler._process_loop())
+        await asyncio.sleep(0.02)
+
+        handler._queue.put_nowait((Event(name='mailbox.ping', data=None), None))  # type: ignore[arg-type]
+        await asyncio.sleep(0.1)
+
+        assert handler._task.done()
+        assert handler._task.exception() is None  # 正常退出，非异常终止
+        assert handler.process_calls == 1  # 未重启
+
+        # 等待超过默认 restart_delay，确认没有隐式重启
+        await asyncio.sleep(0.1)
+        assert handler.process_calls == 1
+
+    async def test_stop_mailbox_on_running_bus(
+        self, running_bus: EventBus, handler_registry: EventHandlerRegistry
+    ) -> None:
+        """活动总线上抛 StopMailbox：process 任务结束、总线继续运行"""
+        handler = _StopViaExceptionHandler(subscriptions=['mailbox.ping'])
+        handler_registry.register(handler)
+        assert handler.is_running
+
+        await running_bus._publish('mailbox.ping', source='test')
+        await asyncio.sleep(0.1)
+
+        assert not handler.is_running
+        assert handler.process_calls == 1
+        assert running_bus.is_running
 
 
 # ============================================================================

@@ -21,6 +21,7 @@ Advanced patterns built on top of the core event bus. These are optional — imp
 | `pipe` | Bidirectional Pipe | Streaming data exchange, long-connection simulation, persistent bidirectional flow | [pipe.md](pipe.md) |
 | `register` | Bulk Registration + DI | Large project modular organization, deferred registration, avoid circular imports | [register.md](register.md) |
 | `mailbox` | Mailbox Pattern Handler | Serial consumption, backpressure, custom task loop | [handlers/mailbox.md](handlers/mailbox.md) |
+| `service` | Service Handler | RPC server side: auto subscriptions, auto responses, auto error translation | [handlers/service.md](handlers/service.md) |
 | `idempotency` | Idempotency (injected dedup) | at-least-once dedup, cross-restart strong idempotency | [idempotency.md](idempotency.md) |
 | [queues/](queues/queues.md) | Cross-Process Queues | Shared bus across processes, fanout, replay / no-replay, payload rebuild | [Queues Overview](queues/queues.md) |
 | [middlewares/](middlewares/middlewares.md) | Middleware Collection | Logging, rate-limiting, transform, blocking, recursion guard | [Middlewares Overview](middlewares/middlewares.md) |
@@ -85,9 +86,13 @@ from event_bus.templates import (
     # register
     'ModuleEventRegister', 'ModuleHandlerRegister',
     # request
-    'request', 'RequestProtocol', 'ResponseProtocol',
+    'request', 'RequestProtocol', 'ResponseProtocol', 'build_response',
     # mailbox
-    'MailboxHandler', 'MailboxConfig',
+    'MailboxHandler', 'MailboxConfig', 'StopMailbox',
+    # service
+    'ServiceHandler', 'process', 'ServiceError',
+    'NotFoundError', 'ConflictError', 'InvalidRequestError', 'AccessDeniedError',
+    'ProcessorMeta',
     # idempotency (see idempotency.md)
     'IdempotencyRecorder', 'IdempotentHandler',
     'InMemoryIdempotencyRecorder', 'SqliteIdempotencyRecorder',
@@ -117,6 +122,7 @@ from event_bus.templates import (
 | - | - |
 | Quickly turn a function into an event handler | `handler` |
 | Send a request, wait for a response | `request` |
+| Quickly implement the server side of an RPC | `service` |
 | Establish a long connection, bidirectional send/receive | `pipe` |
 | Wait for a specific event to occur once | `expect` |
 | Organize events and handlers by module | `register` |
@@ -165,6 +171,19 @@ response = await request(
 ```
 
 See [request.md](request.md) for protocol definition and error handling.
+
+## service
+
+```python
+from event_bus.templates import ServiceHandler, process
+
+class OrderService(ServiceHandler):
+    @process(OrderCreateReqEvent, OrderCreateRespEvent)
+    async def create(self, payload, proxy, raw):
+        return {'order_id': 'ord-1'}
+```
+
+See [handlers/service.md](handlers/service.md) for protocol validation, error translation, and single-direction events.
 
 ## pipe
 

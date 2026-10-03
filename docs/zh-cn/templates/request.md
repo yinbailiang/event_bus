@@ -40,7 +40,7 @@
 ```python
 from pydantic import BaseModel, Field
 from event_bus import EventDeclaration
-from event_bus.templates.request import RequestProtocol, ResponseProtocol
+from event_bus.templates import RequestProtocol, ResponseProtocol, build_response
 
 # 定义负载
 class GetUserRequest(RequestProtocol):
@@ -86,10 +86,10 @@ class GetUserHandler(EventHandler):
         # 业务逻辑：查询用户
         user = await db.get_user(payload.user_id)
 
-        # 构造响应负载（session_id 和 request_id 必须原样带回）
-        response = GetUserResponse(
-            session_id=payload.session_id,
-            request_id=payload.request_id,
+        # 构造响应负载：build_response 自动回传 session_id / request_id
+        response = build_response(
+            payload,
+            GetUserResponse,
             success=user is not None,
             error_msg=None if user else "User not found",
             user_name=user.name if user else "",
@@ -150,6 +150,31 @@ async def request(
 | `timeout` | `Optional[float]` | 等待响应的超时时间（秒），超时抛出 `asyncio.TimeoutError`。`None` 表示无限等待。 |
 
 **返回值**：`ResponseProtocol` 实例（具体类型由响应事件声明的 `payload_type` 决定）。
+
+---
+
+## build_response 辅助函数
+
+服务端构造响应负载的辅助函数：自动回传请求的 `session_id` / `request_id`，其余字段由 `kargs` 提供。
+
+```python
+def build_response(
+    request: RequestProtocol,
+    response_type: type[ResponseProtocol],
+    **kargs: Any,
+) -> ResponseProtocol
+```
+
+| 参数 | 类型 | 说明 |
+| - | - | - |
+| `request` | `RequestProtocol` | 对应的请求负载（`session_id` / `request_id` 的事实来源）。 |
+| `response_type` | `type[ResponseProtocol]` | 响应负载类。 |
+| `kargs` | `Any` | 其余业务字段，直接交给响应模型的 `model_validate`。 |
+
+**返回值**：`response_type` 的实例。
+
+- `kargs` 中若携带冲突的 `session_id` / `request_id` 会被请求值**强制覆盖**（请求是唯一事实源），无需手动回传。
+- `ServiceHandler` 的自动响应构造内部使用同一个函数（见 [handlers/service.md](handlers/service.md)）。
 
 ---
 

@@ -46,6 +46,12 @@ class MailboxHandler(EventHandler, ABC):
 | `bus` | `EventBus \| None` | The bound `EventBus` instance, available after activation (`on_activate`). |
 | `is_running` | `bool` | Whether the `process()` background task is currently running. |
 
+### Exceptions
+
+| Exception | Raised in | Description |
+| - | - | - |
+| `StopMailbox` | `process()` | Voluntary stop signal: the consumption loop exits normally **without restarting**. |
+
 ---
 
 ## MailboxConfig
@@ -93,8 +99,9 @@ Loop back to get()
 1. **Hook-driven start**: `on_activate` creates the `process()` background `asyncio.Task` when the handler is registered to an active bus, or when the bus starts (`registry.activate`).
 2. **Enqueue**: `handle()` places `(Event, EventBus.Proxy)` tuples into the internal `asyncio.Queue`.
 3. **Serial consumption**: `process()` loops on `await self.get()` to handle events one by one.
-4. **Exception restart**: If `process()` exits due to a non-`CancelledError` exception, `_process_loop` waits `restart_delay + jitter` seconds, then re-invokes `process()`.
-5. **Hook-driven shutdown**: On bus stop (`registry.deactivate`), `on_deactivate` cancels the `process()` task and clears the backlog.
+4. **Exception restart**: If `process()` exits due to an exception other than `CancelledError` / `StopMailbox`, `_process_loop` waits `restart_delay + jitter` seconds, then re-invokes `process()`.
+5. **Voluntary stop**: Raising `StopMailbox` inside `process()` exits the loop immediately with no restart.
+6. **Hook-driven shutdown**: On bus stop (`registry.deactivate`), `on_deactivate` cancels the `process()` task and clears the backlog.
 
 ---
 
@@ -104,7 +111,7 @@ Loop back to get()
 
 ```python
 from event_bus import Event, EventBus
-from event_bus.templates.handlers.mailbox import MailboxHandler
+from event_bus.templates import MailboxHandler
 
 class MyHandler(MailboxHandler):
     def __init__(self):
@@ -169,6 +176,25 @@ class RobustHandler(MailboxHandler):
                 pass
 ```
 
+### Voluntary Stop: Business-Driven Exit
+
+```python
+from event_bus.templates import MailboxHandler, StopMailbox
+
+class DrainThenStopHandler(MailboxHandler):
+    """ends the consumption loop after a stop command"""
+
+    def __init__(self):
+        super().__init__(subscriptions=['task.command'])
+
+    async def process(self) -> None:
+        while True:
+            event, proxy = await self.get()
+            if event.data is not None and getattr(event.data, 'action', None) == 'stop':
+                raise StopMailbox  # exits the loop, no restart
+            await self._handle(event)
+```
+
 ### Accessing the Bus
 
 ```python
@@ -192,7 +218,8 @@ class BusAwareHandler(MailboxHandler):
 - **Event loss on crash**: If `process()` crashes after `get()` returns but before processing completes, that event is lost. The restart loop calls `get()` again for the next event — it does not retry the lost one.
 - **No implicit `ShutdownEvent` subscription**: Shutdown is driven by the `on_deactivate` hook; if you subscribe to `ShutdownEvent` yourself it is just enqueued as an ordinary event.
 - **Bus bound on activation**: `self.bus` is set in `on_activate` (bus activation) and cleared in `on_deactivate`. The single-bus registry constraint prevents cross-bus confusion.
-- **Only non-`CancelledError` exceptions** trigger a restart. `KeyboardInterrupt` and `SystemExit` (subclasses of `BaseException`) are not caught and will propagate upward.
+- **Restart vs. stop**: `CancelledError` (external cancellation) and `StopMailbox` (voluntary stop) both exit the loop without restart; any other `Exception` triggers a restart after the delay. `KeyboardInterrupt` and `SystemExit` (subclasses of `BaseException`) are not caught and will propagate upward.
+- **Mailbox after stop**: raising `StopMailbox` only ends the consumption task (`is_running` becomes `False`); events arriving later are still enqueued but never consumed. To stop receiving entirely, unregister the handler or stop the bus.
 
 ---
 

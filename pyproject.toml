@@ -104,6 +104,7 @@ line-ending = "lf"
 [tool.pyright]
 typeCheckingMode = "basic"
 strict = ["src"]
+pythonVersion = "3.12"
 reportMissingTypeStubs = false
 reportMissingImports = "error"
 include = ["src", "tests"]

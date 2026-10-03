@@ -20,6 +20,7 @@
 | `pipe` | 双向管道 | 流式数据交换、长连接模拟、持久化双向流 | [pipe.md](pipe.md) |
 | `register` | 批量注册 + 依赖注入 | 大型项目模块化组织、延迟注册、避免循环导入 | [register.md](register.md) |
 | `mailbox` | 邮箱模式处理器 | 串行消费、背压控制、自定义任务循环 | [handlers/mailbox.md](handlers/mailbox.md) |
+| `service` | 服务处理器 | RPC 服务端：订阅自动生成、响应自动构造、错误自动转换 | [handlers/service.md](handlers/service.md) |
 | `idempotency` | 幂等（注入去重） | at-least-once 重复投递去重、跨重启强幂等 | [idempotency.md](idempotency.md) |
 | [queues/](queues/queues.md) | 跨进程队列 | 多进程共享总线、fanout 泛洪、补投/不补投、负载重建 | [queues 总览](queues/queues.md) |
 | [middlewares/](middlewares/middlewares.md) | 中间件集合 | 日志、限流、转换、屏蔽、递归防护 | [中间件总览](middlewares/middlewares.md) |
@@ -81,9 +82,13 @@ from event_bus.templates import (
     # register
     'ModuleEventRegister', 'ModuleHandlerRegister',
     # request
-    'request', 'RequestProtocol', 'ResponseProtocol',
+    'request', 'RequestProtocol', 'ResponseProtocol', 'build_response',
     # mailbox
-    'MailboxHandler', 'MailboxConfig',
+    'MailboxHandler', 'MailboxConfig', 'StopMailbox',
+    # service
+    'ServiceHandler', 'process', 'ServiceError',
+    'NotFoundError', 'ConflictError', 'InvalidRequestError', 'AccessDeniedError',
+    'ProcessorMeta',
     # idempotency（详见 idempotency.md）
     'IdempotencyRecorder', 'IdempotentHandler',
     'InMemoryIdempotencyRecorder', 'SqliteIdempotencyRecorder',
@@ -113,6 +118,7 @@ from event_bus.templates import (
 | - | - |
 | 快速把函数变成事件处理器 | `handler` |
 | 发一个请求，等一个响应 | `request` |
+| 快速实现 RPC 服务端处理 | `service` |
 | 建立长连接，双向收发数据 | `pipe` |
 | 等待某个事件发生一次 | `expect` |
 | 按模块组织事件和处理器 | `register` |
@@ -161,6 +167,19 @@ response = await request(
 ```
 
 详见 [request.md](request.md) 了解协议定义和错误处理。
+
+## service
+
+```python
+from event_bus.templates import ServiceHandler, process
+
+class OrderService(ServiceHandler):
+    @process(OrderCreateReqEvent, OrderCreateRespEvent)
+    async def create(self, payload, proxy, raw):
+        return {'order_id': 'ord-1'}
+```
+
+详见 [handlers/service.md](handlers/service.md) 了解协议校验、错误转换和单向事件。
 
 ## pipe
 

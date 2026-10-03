@@ -38,6 +38,12 @@ class MailboxConfig(BaseModel):
         return self.restart_delay + random.uniform(0, self.restart_jitter)
 
 
+class StopMailbox(Exception):
+    """邮箱处理器停止异常，抛出后 process() 循环退出"""
+
+    pass
+
+
 class MailboxHandler(EventHandler, ABC):
     """邮箱模式处理器
 
@@ -146,6 +152,9 @@ class MailboxHandler(EventHandler, ABC):
                 await self.process()
             except asyncio.CancelledError:
                 logger.info(f'{self.__class__.__name__} process() 被取消')
+                break
+            except StopMailbox:
+                logger.info(f'{self.__class__.__name__} process() 被停止')
                 break
             except Exception:
                 logger.exception(f'{self.__class__.__name__} process() 异常')

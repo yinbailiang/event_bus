@@ -5,6 +5,17 @@
 """
 
 from .expect import OneShotEventHandler, expect, temporary_handler
+from .handlers.mailbox import MailboxConfig, MailboxHandler, StopMailbox
+from .handlers.service import (
+    AccessDeniedError,
+    ConflictError,
+    InvalidRequestError,
+    NotFoundError,
+    ProcessorMeta,
+    ServiceError,
+    ServiceHandler,
+    process,
+)
 from .idempotency import (
     IdempotencyRecorder,
     IdempotentHandler,
@@ -52,7 +63,7 @@ from .pipe import (
 )
 from .queues import EventCodec, PayloadType, RabbitFanoutQueue
 from .register import ModuleEventRegister, ModuleHandlerRegister
-from .request import RequestProtocol, ResponseProtocol, request
+from .request import RequestProtocol, ResponseProtocol, build_response, request
 from .simple_handler import handler
 
 __all__ = [
@@ -107,6 +118,20 @@ __all__ = [
     'request',
     'RequestProtocol',
     'ResponseProtocol',
+    'build_response',
+    # mailbox（邮箱模式处理器）
+    'MailboxHandler',
+    'MailboxConfig',
+    'StopMailbox',
+    # service（服务处理器）
+    'ServiceHandler',
+    'process',
+    'ServiceError',
+    'NotFoundError',
+    'ConflictError',
+    'InvalidRequestError',
+    'AccessDeniedError',
+    'ProcessorMeta',
     # idempotency（幂等 recorder 注入策略）
     'IdempotencyRecorder',
     'IdempotentHandler',

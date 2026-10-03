@@ -46,7 +46,7 @@ declare corresponding events.
 ```python
 from pydantic import BaseModel, Field
 from event_bus import EventDeclaration
-from event_bus.templates.request import RequestProtocol, ResponseProtocol
+from event_bus.templates import RequestProtocol, ResponseProtocol, build_response
 
 # Define payloads
 class GetUserRequest(RequestProtocol):
@@ -93,10 +93,10 @@ class GetUserHandler(EventHandler):
         # Business logic: query user
         user = await db.get_user(payload.user_id)
 
-        # Build response payload (session_id and request_id must be echoed back)
-        response = GetUserResponse(
-            session_id=payload.session_id,
-            request_id=payload.request_id,
+        # Build response payload: build_response echoes session_id / request_id back
+        response = build_response(
+            payload,
+            GetUserResponse,
             success=user is not None,
             error_msg=None if user else "User not found",
             user_name=user.name if user else "",
@@ -158,6 +158,32 @@ async def request(
 
 **Returns**: A `ResponseProtocol` instance (concrete type determined by the response
 event's `payload_type`).
+
+---
+
+## build_response Helper
+
+Helper for building response payloads on the server side: echoes the request's
+`session_id` / `request_id` back automatically, while the remaining fields come from `kargs`.
+
+```python
+def build_response(
+    request: RequestProtocol,
+    response_type: type[ResponseProtocol],
+    **kargs: Any,
+) -> ResponseProtocol
+```
+
+| Parameter | Type | Description |
+| - | - | - |
+| `request` | `RequestProtocol` | The corresponding request payload (source of truth for `session_id` / `request_id`). |
+| `response_type` | `type[ResponseProtocol]` | The response payload class. |
+| `kargs` | `Any` | Remaining business fields, passed to the response model's `model_validate`. |
+
+**Returns**: An instance of `response_type`.
+
+- Conflicting `session_id` / `request_id` in `kargs` are **overridden** by the request values (the request is the single source of truth) — no manual echo-back needed.
+- `ServiceHandler`'s automatic response construction uses this same function (see [handlers/service.md](handlers/service.md)).
 
 ---
 
